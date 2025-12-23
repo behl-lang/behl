@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=@CMAKE_INSTALL_PREFIX@
+libdir=@CMAKE_INSTALL_FULL_LIBDIR@
+includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
+
+Name: behl
+Description: Embeddable scripting language with C syntax
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lbehl
+Cflags: -I${includedir}

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="wasl::Vector&lt;*&gt;">
+    <DisplayString>{{ size={size_} }}</DisplayString>
+    <Expand>
+      <Item Name="[size]">size_</Item>
+      <Item Name="[capacity]">capacity_</Item>
+      <ArrayItems>
+        <Size>size_</Size>
+        <ValuePointer>data_</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="wasl::GCString">
+    <DisplayString Condition="(storage.sso.len &amp; 0x80) == 0">"{storage.sso.buffer,s}"</DisplayString>
+    <DisplayString Condition="(storage.sso.len &amp; 0x80) != 0">"{storage.heap.ptr,s}"</DisplayString>
+    <Expand>
+      <Item Name="[size]" Condition="(storage.sso.len &amp; 0x80) == 0">storage.sso.len</Item>
+      <Item Name="[size]" Condition="(storage.sso.len &amp; 0x80) != 0" Optional="true">storage.heap.len</Item>
+      <Item Name="[is_sso]">(storage.sso.len &amp; 0x80) == 0</Item>
+      <Item Name="[data]" Condition="(storage.sso.len &amp; 0x80) == 0" Optional="true">storage.sso.buffer,s</Item>
+      <Item Name="[data]" Condition="(storage.sso.len &amp; 0x80) != 0" Optional="true">storage.heap.ptr,s</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="wasl::Value">
+    <DisplayString Condition="type_ == wasl::Type::kNil">nil</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kNullOpt">nullopt</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kBoolean">{bool_}</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kInteger">{int_}</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kNumber">{float_}</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kString">{*string_}</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kTable">table: {table_}</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kClosure">closure: {closure_}</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kCFunction">cfunction: {cfunction_}</DisplayString>
+    <DisplayString Condition="type_ == wasl::Type::kUserdata">userdata: {userdata_}</DisplayString>
+    <Expand>
+      <Item Name="[type]">type_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kBoolean" Optional="true">bool_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kInteger" Optional="true">int_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kNumber" Optional="true">float_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kString" Optional="true">string_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kTable" Optional="true">table_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kClosure" Optional="true">closure_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kFunction" Optional="true">cfunction_</Item>
+      <Item Name="[value]" Condition="type_ == wasl::Type::kUserdata" Optional="true">userdata_</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="wasl::HashMap&lt;*,*,*&gt;">
+    <Intrinsic Name="size" Expression="size_" />
+    <Intrinsic Name="capacity" Expression="capacity_" />
+    <DisplayString>{{ size={size()} }}</DisplayString>
+    <Expand>
+      <Item Name="[size]">size_</Item>
+      <Item Name="[capacity]">capacity_</Item>
+      <CustomListItems>
+        <Variable Name="i" InitialValue="0" />
+        <Size>size_</Size>
+        <Loop>
+          <Break Condition="i &gt;= capacity_" />
+          <If Condition="ctrl_[i] != -128 &amp;&amp; ctrl_[i] != -2">
+            <Item Name="[{slots_[i].first}]">slots_[i].second</Item>
+          </If>
+          <Exec>i++</Exec>
+        </Loop>
+      </CustomListItems>
+    </Expand>
+  </Type>
+
+  <Type Name="wasl::HashMap&lt;*,*,*&gt;::iterator">
+    <DisplayString Condition="ctrl_ == ctrl_end_">end()</DisplayString>
+    <DisplayString Condition="ctrl_ != ctrl_end_">[{slot_->first}] = {slot_->second}</DisplayString>
+    <Expand>
+      <Item Name="[key]" Condition="ctrl_ != ctrl_end_">slot_->first</Item>
+      <Item Name="[value]" Condition="ctrl_ != ctrl_end_">slot_->second</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="wasl::HashMap&lt;*,*,*&gt;::const_iterator">
+    <DisplayString Condition="ctrl_ == ctrl_end_">end()</DisplayString>
+    <DisplayString Condition="ctrl_ != ctrl_end_">[{slot_->first}] = {slot_->second}</DisplayString>
+    <Expand>
+      <Item Name="[key]" Condition="ctrl_ != ctrl_end_">slot_->first</Item>
+      <Item Name="[value]" Condition="ctrl_ != ctrl_end_">slot_->second</Item>
+    </Expand>
+  </Type>
+</AutoVisualizer>
