@@ -1,0 +1,43 @@
+# Jekyll Configuration for behl Language Documentation
+title: Behl Language
+description: A Lua-API-like scripting language with C-like syntax
+baseurl: "/behl" # the subpath of your site, e.g. /blog
+url: "https://behl-lang.github.io" # the base hostname & protocol for your site
+
+# Build settings
+theme: just-the-docs
+
+# Theme settings
+color_scheme: dark
+search_enabled: true
+heading_anchors: true
+
+# Navigation structure
+nav_order: 1
+
+# Footer
+footer_content: "Copyright &copy; 2025 behl Project. Distributed under MIT License."
+
+# Aux links for the upper right navigation
+aux_links:
+  "behl on GitHub":
+    - "//github.com/behl-lang/behl"
+
+# Makes Aux links open in a new tab
+aux_links_new_tab: true
+
+# Code highlighting
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+
+# Collections
+collections:
+  docs:
+    output: true
+
+# Plugins
+plugins:
+  - jekyll-seo-tag

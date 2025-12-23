@@ -1,0 +1,63 @@
+{
+  "name": "behl-language",
+  "displayName": "Behl Language Support",
+  "description": "Syntax highlighting and language support for Behl scripting language",
+  "version": "0.1.0",
+  "publisher": "behl",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/behl-lang/behl"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:behl"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "behl",
+        "aliases": [
+          "behl",
+          "BEHL"
+        ],
+        "extensions": [
+          ".behl"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icon.png",
+          "dark": "./icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "behl",
+        "scopeName": "source.behl",
+        "path": "./syntaxes/behl.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./ && node copy-wasm.js",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.x",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "eslint": "^8.x",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {}
+}

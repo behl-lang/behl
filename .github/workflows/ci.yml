@@ -1,0 +1,314 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+  workflow_dispatch:
+
+jobs:
+  # Windows builds with MSVC
+  windows-msvc:
+    name: Windows MSVC ${{ matrix.arch }} ${{ matrix.config }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, Win32]
+        config: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure CMake
+      run: cmake -B build -A ${{ matrix.arch }} -DBEHL_BUILD_TESTS=ON
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.config }} -j
+    
+    - name: Run Tests
+      working-directory: build
+      run: ctest -C ${{ matrix.config }} --output-on-failure --timeout 30
+
+  # Shared Library builds
+  shared-library:
+    name: Shared Library - ${{ matrix.os }} ${{ matrix.config }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        config: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
+      run: cmake -B build -DBUILD_SHARED_LIBS=ON -DBEHL_BUILD_TESTS=ON
+    
+    - name: Configure CMake (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DBUILD_SHARED_LIBS=ON -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+    
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      run: cmake --build build --config ${{ matrix.config }} -j
+    
+    - name: Build (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: cmake --build build -j
+    
+    - name: Run Tests (Windows)
+      if: runner.os == 'Windows'
+      working-directory: build
+      run: ctest -C ${{ matrix.config }} --output-on-failure --timeout 30
+    
+    - name: Run Tests (Linux/macOS)
+      if: runner.os != 'Windows'
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+
+  # Windows builds with MinGW
+  windows-mingw:
+    name: Windows MinGW ${{ matrix.arch }} ${{ matrix.config }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [64, 32]
+        config: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup MinGW
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ${{ matrix.arch == '64' && 'MINGW64' || 'MINGW32' }}
+        update: true
+        install: >-
+          ${{ matrix.arch == '64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja' ||
+                                      'mingw-w64-i686-gcc mingw-w64-i686-cmake mingw-w64-i686-ninja' }}
+    
+    - name: Configure CMake
+      shell: msys2 {0}
+      run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+    
+    - name: Build
+      shell: msys2 {0}
+      run: cmake --build build -j
+    
+    - name: Run Tests
+      shell: msys2 {0}
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+
+  # Linux builds with GCC
+  linux-gcc:
+    name: Linux GCC-${{ matrix.gcc }} ${{ matrix.arch }} ${{ matrix.config }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [11, 12, 13]
+        arch: [x64, x86]
+        config: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install GCC
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }}
+        if [ "${{ matrix.arch }}" = "x86" ]; then
+          sudo apt-get install -y gcc-${{ matrix.gcc }}-multilib g++-${{ matrix.gcc }}-multilib
+        fi
+    
+    - name: Configure CMake
+      env:
+        CC: gcc-${{ matrix.gcc }}
+        CXX: g++-${{ matrix.gcc }}
+        CFLAGS: ${{ matrix.arch == 'x86' && '-m32' || '' }}
+        CXXFLAGS: ${{ matrix.arch == 'x86' && '-m32' || '' }}
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+    
+    - name: Build
+      run: cmake --build build -j
+    
+    - name: Run Tests
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+
+  # Linux builds with Clang
+  linux-clang:
+    name: Linux Clang-${{ matrix.clang }} ${{ matrix.arch }} ${{ matrix.config }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        clang: [14, 15, 16, 17]
+        arch: [x64, x86]
+        config: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Clang
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh ${{ matrix.clang }}
+        sudo apt-get install -y clang-${{ matrix.clang }}
+        if [ "${{ matrix.arch }}" = "x86" ]; then
+          sudo apt-get install -y gcc-multilib g++-multilib
+        fi
+    
+    - name: Configure CMake
+      env:
+        CC: clang-${{ matrix.clang }}
+        CXX: clang++-${{ matrix.clang }}
+        CFLAGS: ${{ matrix.arch == 'x86' && '-m32' || '' }}
+        CXXFLAGS: ${{ matrix.arch == 'x86' && '-m32' || '' }}
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+    
+    - name: Build
+      run: cmake --build build -j
+    
+    - name: Run Tests
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+
+  # macOS builds with AppleClang
+  macos:
+    name: macOS ${{ matrix.config }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+    
+    - name: Build
+      run: cmake --build build -j
+    
+    - name: Run Tests
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+
+  # Sanitizers (AddressSanitizer, UndefinedBehaviorSanitizer)
+  sanitizers:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sanitizer: address
+            name: ASan (Clang)
+          - sanitizer: undefined
+            name: UBSan (Clang)
+          - sanitizer: thread
+            name: TSan (Clang)
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Clang
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 17
+        sudo apt-get install -y clang-17
+    
+    - name: Configure CMake
+      env:
+        CC: clang-17
+        CXX: clang++-17
+        CFLAGS: -fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer
+        CXXFLAGS: -fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer
+        LDFLAGS: -fsanitize=${{ matrix.sanitizer }}
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+    
+    - name: Build
+      run: cmake --build build -j
+    
+    - name: Run Tests
+      working-directory: build
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1
+        UBSAN_OPTIONS: print_stacktrace=1
+        TSAN_OPTIONS: second_deadlock_stack=1
+      run: ctest --output-on-failure --timeout 60
+
+  # Code coverage
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lcov
+    
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF -DCMAKE_CXX_FLAGS="--coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+    
+    - name: Build
+      run: cmake --build build -j
+    
+    - name: Run Tests
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+    
+    - name: Generate Coverage Report
+      run: |
+        lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
+        lcov --remove coverage.info '/usr/*' '*/thirdparty/*' '*/tests/*' '*/benchmarks/*' '*/_deps/*' --output-file coverage.info --ignore-errors mismatch,unused
+        lcov --list coverage.info
+    
+    - name: Generate Coverage Summary
+      run: |
+        echo "## Code Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Parse coverage data
+        SUMMARY=$(lcov --summary coverage.info 2>&1)
+        
+        LINE_HIT=$(echo "$SUMMARY" | grep "lines" | sed -E 's/.*lines......: ([0-9.]+)%.*/\1/')
+        LINE_TOTAL=$(echo "$SUMMARY" | grep "lines" | sed -E 's/.*\(([0-9]+) of ([0-9]+).*/\2/')
+        LINE_COVERED=$(echo "$SUMMARY" | grep "lines" | sed -E 's/.*\(([0-9]+) of ([0-9]+).*/\1/')
+        
+        FUNC_HIT=$(echo "$SUMMARY" | grep "functions" | sed -E 's/.*functions..: ([0-9.]+)%.*/\1/')
+        FUNC_TOTAL=$(echo "$SUMMARY" | grep "functions" | sed -E 's/.*\(([0-9]+) of ([0-9]+).*/\2/')
+        FUNC_COVERED=$(echo "$SUMMARY" | grep "functions" | sed -E 's/.*\(([0-9]+) of ([0-9]+).*/\1/')
+        
+        # Create summary table
+        echo "| Metric | Coverage | Covered | Total |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|----------|---------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Lines | ${LINE_HIT}% | ${LINE_COVERED} | ${LINE_TOTAL} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Functions | ${FUNC_HIT}% | ${FUNC_COVERED} | ${FUNC_TOTAL} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+    
+    - name: Generate HTML Coverage Report
+      run: |
+        genhtml coverage.info --output-directory coverage-html --ignore-errors mismatch,source
+    
+    - name: Upload Coverage Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          coverage.info
+          coverage-html/
+        retention-days: 30
