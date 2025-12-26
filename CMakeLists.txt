@@ -47,6 +47,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         /w45038 # Narrowing conversion
         /wd4251 # Disable 'class needs dll-interface' (common in libs)
         /wd4275 # Disable non-dll-interface base class
+        /utf-8  # Warning C4819 utf-8 source file
         $<$<CONFIG:Release>:/Oi> # Enable intrinsic functions
         $<$<CONFIG:Release>:/GS-> # Disable security checks
         $<$<CONFIG:Release>:/Zi> # Debug info in release
