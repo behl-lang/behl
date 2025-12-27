@@ -49,9 +49,9 @@ function test() {
 // Output: Cleaning up..., x was: 100
 ```
 
-## Variable Capture
+## Variable Access
 
-Deferred statements capture variables by reference and see all mutations:
+Deferred statements execute at scope exit and see the final values of variables. Conceptually, the deferred code block is moved to just before the scope exits:
 
 ```javascript
 function test() {
@@ -62,6 +62,15 @@ function test() {
     counter = counter + 10;
 }
 // Output: Final count: 11
+
+// Equivalent to:
+function test_equivalent() {
+    let counter = 0;
+    // ... deferred statement moved here ...
+    counter = counter + 1;
+    counter = counter + 10;
+    print("Final count: " + tostring(counter));  // Executes at scope exit
+}
 ```
 
 ## Early Returns
@@ -165,7 +174,7 @@ function measureTime() {
 ## Important Notes
 
 1. **LIFO Order**: Defers execute in reverse order of declaration
-2. **Reference Capture**: Variables are captured by reference, not by value
+2. **Final Values**: Variables have their final values when defer executes
 3. **Scope-Based**: Executes at scope end (function or block)
 4. **Return Safety**: Runs before return statements
 5. **No Error Recovery**: Defer does NOT catch errors - use `pcall` for error handling
@@ -196,11 +205,28 @@ function safeOperation() {
 
 ## Comparison with Other Languages
 
-| Language | Syntax | Execution |
-|----------|--------|-----------|
-| Behl | `defer stmt;` | Scope end, LIFO |
-| Go | `defer stmt()` | Function end, LIFO |
-| Swift | `defer { }` | Scope end, LIFO |
-| Zig | `defer stmt;` | Scope end, LIFO |
+| Language | Syntax | Execution | Notes |
+|----------|--------|-----------|-------|
+| Behl | `defer stmt;` | Scope end, LIFO | Executes at block/function end |
+| Zig | `defer stmt;` | Scope end, LIFO | Nearly identical to Behl |
+| Swift | `defer { }` | Scope end, LIFO | Same scope semantics |
+| C 2Y (TS) | `defer { }` | Scope end, LIFO | Proposed C standard |
+| Go | `defer stmt()` | **Function end**, LIFO | Accumulates all defers until function exit |
 
-Behl's defer is closest to Go's implementation but with block-level scope support similar to Swift.
+**Key difference from Go**: Behl's defer executes at scope exit (like Zig/Swift/C), not function exit. In a loop, Go accumulates all defers and executes them when the function returns, which can cause resource exhaustion. Behl executes each iteration's defer when that iteration's scope ends:
+
+```javascript
+// Behl/Zig/Swift behavior:
+for (let i = 0; i < 3; i++) {
+    let file = open("file" + tostring(i));
+    defer close(file);  // Closes at end of THIS iteration
+}
+
+// Go behavior:
+// for i := 0; i < 3; i++ {
+//     file := open("file" + i)
+//     defer close(file)  // All 3 files stay open until function returns!
+// }
+```
+
+Behl's defer is semantically closest to Zig, Swift, and the proposed C 2Y defer.
