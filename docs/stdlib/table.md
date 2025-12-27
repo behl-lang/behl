@@ -149,8 +149,8 @@ table.print(mixed);
 
 ## Notes
 
-- `table["insert"]` with one argument appends to the end
-- `table["insert"]` with position shifts elements to make room
-- `table["remove"]` shifts remaining elements down
+- `table.insert` with one argument appends to the end
+- `table.insert` with position shifts elements to make room
+- `table.remove` shifts remaining elements down
 - All positions are **0-indexed** (unlike Lua's 1-indexed)
 - These functions work on the array part of tables (consecutive integer keys from 0)

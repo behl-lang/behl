@@ -114,10 +114,10 @@ int main() {
     const char* script = R"(
         const mathops = import("mathops");
         
-        print("Version: " + tostring(mathops["VERSION"]));
-        print("5 + 3 = " + tostring(mathops["add"](5, 3)));
-        print("10 - 4 = " + tostring(mathops["sub"](10, 4)));
-        print("6 * 7 = " + tostring(mathops["mul"](6, 7)));
+        print("Version: " + tostring(mathops.VERSION));
+        print("5 + 3 = " + tostring(mathops.add(5, 3)));
+        print("10 - 4 = " + tostring(mathops.sub(10, 4)));
+        print("6 * 7 = " + tostring(mathops.mul(6, 7)));
     )";
     
     if (behl::load_string(S, script)) {
@@ -219,7 +219,7 @@ behl::create_module(S, "math", module_def);
 
 // In script:
 const math = import("math");
-let result = math["add"](5, 3);
+let result = math.add(5, 3);
 ```
 
 **Use when:** You have many related functions or want to avoid global namespace pollution.
@@ -283,8 +283,8 @@ void register_network_module(behl::State* S) {
 ```javascript
 const net = import("network");
 
-let sock = net["connect"]("example.com", 80);
-net["send"](sock, "GET / HTTP/1.0\r\n\r\n");
+let sock = net.connect("example.com", 80);
+net.send(sock, "GET / HTTP/1.0\r\n\r\n");
 ```
 
 ---
