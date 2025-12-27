@@ -14,6 +14,13 @@ if(BEHL_BUILD_TESTS)
         # For Windows: Prevent overriding the parent project's compiler/linker settings
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)  # Disable gmock
+        
+        # Override GoogleTest's output directories before fetching
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug CACHE PATH "" FORCE)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release CACHE PATH "" FORCE)
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug CACHE PATH "" FORCE)
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release CACHE PATH "" FORCE)
+        
         FetchContent_MakeAvailable(googletest)
 
         set_target_properties(gtest PROPERTIES FOLDER "thirdparty")
@@ -45,6 +52,12 @@ if(BEHL_BUILD_BENCHMARKS AND NOT EMSCRIPTEN)
 
         set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
         set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+        
+        # Override Google Benchmark's output directories before fetching
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug CACHE PATH "" FORCE)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release CACHE PATH "" FORCE)
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug CACHE PATH "" FORCE)
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release CACHE PATH "" FORCE)
 
         FetchContent_MakeAvailable(googlebenchmark)
         set_target_properties(benchmark PROPERTIES FOLDER "thirdparty")
