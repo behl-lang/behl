@@ -370,7 +370,7 @@ function riskyOperation(x) {
     if (x < 0) {
         error("Negative value not allowed!");
     }
-    return math["sqrt"](x);
+    return math.sqrt(x);
 }
 
 function safeCall(value) {

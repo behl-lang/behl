@@ -358,8 +358,8 @@ print(math.sqrt(16))
 **behl:**
 ```cpp
 const math = import("math");
-print(math.PI);       // Or math["PI"]
-print(math.sqrt(16)); // Or math["sqrt"](16)
+print(math.PI);
+print(math.sqrt(16));
 ```
 
 - Behl uses `import()` instead of `require()`
@@ -465,8 +465,8 @@ Behl supports both `key = value` shorthand (for identifiers) and `["key"] = valu
 | `type()` | `typeof()` | Type introspection |
 | `#t` | `rawlen(t)` | Table length |
 | `t[#t+1]` | `t[rawlen(t)]` | Append (0-indexed) |
-| `math.pi` | `math["PI"]` | Constants in uppercase |
-| `string.len(s)` | `string["len"](s)` | Bracket notation required |
+| `math.pi` | `math.PI` | Constants in uppercase |
+| `string.len(s)` | `string.len(s)` | Dot notation supported |
 
 ### Missing Features
 

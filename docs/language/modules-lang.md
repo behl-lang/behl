@@ -26,8 +26,8 @@ Use the `import()` function to load modules:
 
 ```cpp
 const math = import("math");
-print(math["PI"]);        // 3.14159...
-print(math["sqrt"](16));  // 4
+print(math.PI);        // 3.14159...
+print(math.sqrt(16));  // 4
 ```
 
 ### Module Assignment
@@ -36,7 +36,7 @@ The `import()` function returns a table containing the module's exports:
 
 ```cpp
 const string = import("string");
-let upper = string["upper"];
+let upper = string.upper;
 
 print(upper("hello"));  // "HELLO"
 ```
@@ -62,12 +62,12 @@ When using `load_stdlib(S, true)`, modules are globally accessible:
 
 ```cpp
 // With global modules (load_stdlib second parameter = true)
-print(math["PI"]);
+print(math.PI);
 print(string.upper("hello"));
 
 // Without global modules (second parameter = false)
 const math = import("math");
-print(math["PI"]);
+print(math.PI);
 ```
 
 See [Standard Library](../standard-library) for complete module documentation.
@@ -93,8 +93,8 @@ Import only what you need:
 
 ```cpp
 const math = import("math");
-let sqrt = math["sqrt"];
-let pow = math["pow"];
+let sqrt = math.sqrt;
+let pow = math.pow;
 
 print(sqrt(16));    // 4
 print(pow(2, 10));  // 1024
@@ -108,8 +108,8 @@ Give modules shorter names:
 const m = import("math");
 const s = import("string");
 
-print(m["PI"]);
-print(s["upper"]("hello"));
+print(m.PI);
+print(s.upper("hello"));
 ```
 
 ### Conditional Import
@@ -119,7 +119,7 @@ Import modules only when needed:
 ```cpp
 function useAdvancedMath() {
     const math = import("math");
-    return math["sin"](math["PI"] / 2);
+    return math.sin(math.PI / 2);
 }
 ```
 
@@ -151,8 +151,8 @@ void register_mymodule(behl::State* S) {
 
 ```cpp
 const mymodule = import("mymodule");
-print(mymodule["ANSWER"]);       // 42
-mymodule["myFunction"]();
+print(mymodule.ANSWER);       // 42
+mymodule.myFunction();
 ```
 
 ## Module Organization
@@ -165,8 +165,8 @@ Organize related functionality:
 // In C++: create a module with sub-tables
 const graphics = import("graphics");
 
-graphics["2d"]["drawCircle"](x, y, radius);
-graphics["3d"]["drawCube"](x, y, z, size);
+graphics["2d"].drawCircle(x, y, radius);
+graphics["3d"].drawCube(x, y, z, size);
 ```
 
 ### Constants Module
@@ -176,9 +176,9 @@ Group related constants:
 ```cpp
 const colors = import("colors");
 
-print(colors["RED"]);     // 0xFF0000
-print(colors["GREEN"]);   // 0x00FF00
-print(colors["BLUE"]);    // 0x0000FF
+print(colors.RED);     // 0xFF0000
+print(colors.GREEN);   // 0x00FF00
+print(colors.BLUE);    // 0x0000FF
 ```
 
 ### Utility Module
@@ -188,9 +188,9 @@ Collection of helper functions:
 ```cpp
 const utils = import("utils");
 
-utils["clamp"](value, min, max);
-utils["lerp"](a, b, t);
-utils["randomRange"](min, max);
+utils.clamp(value, min, max);
+utils.lerp(a, b, t);
+utils.randomRange(min, max);
 ```
 
 ## Best Practices
@@ -207,8 +207,8 @@ const math = import("math");
 const string = import("string");
 
 function processData(input) {
-    let cleaned = string["trim"](input);
-    let result = math["sqrt"](tonumber(cleaned));
+    let cleaned = string.trim(input);
+    let result = math.sqrt(tonumber(cleaned));
     return result;
 }
 
@@ -216,7 +216,7 @@ function processData(input) {
 function badExample() {
     for (let i = 0; i < 1000; i++) {
         const math = import("math");  // Don't do this!
-        print(math["sqrt"](i));
+        print(math.sqrt(i));
     }
 }
 ```
@@ -252,14 +252,14 @@ for (name, value in pairs(math)) {
 
 ### Module Caching
 
-Once imported, modules are cached in the registry. Modifications to the returned table don't affect other importers:
+Once imported, modules are cached in the registry. All importers receive the same table reference:
 
 ```cpp
 const math1 = import("math");
 math1["custom"] = 42;  // Add custom field
 
 const math2 = import("math");
-print(math2["custom"]);  // nil (different table copy)
+print(math2.custom);  // 42 (same table reference)
 ```
 
 ## Advanced Patterns
@@ -272,7 +272,7 @@ Modules can have initialization logic:
 const config = import("config");
 
 function initialize() {
-    config["setup"]({
+    config.setup({
         ["debug"] = true,
         ["logLevel"] = 3
     });
@@ -294,7 +294,7 @@ function getModule() {
 }
 
 // Only imports when first called
-getModule()["doSomething"]();
+getModule().doSomething();
 ```
 
 ### Module Versioning
@@ -310,7 +310,7 @@ behl::set_field(S, -2, "version");
 ```cpp
 // Behl usage
 const mymodule = import("mymodule");
-print("Module version: " + mymodule["version"]);
+print("Module version: " + mymodule.version);
 ```
 
 ## Related Documentation
