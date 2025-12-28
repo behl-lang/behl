@@ -42,7 +42,7 @@ namespace behl
     // Creates a module table, registers the functions and constants, and adds it to the module cache
     // After this, the module can be imported via: import "module_name".
     // If make_global is true, also registers the module as a global variable.
-    BEHL_API void create_module(State* S, std::string_view module_name, const ModuleDef& module_def, bool make_global);
+    BEHL_API void create_module(State* S, std::string_view module_name, const ModuleDef& module_def);
 
     // Stack manipulation
     ///////////////////////////////////////////////////////////////////////////
@@ -263,18 +263,16 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
 
     // Loads all standard libraries (core, table, gc, debug, math, os, string).
-    // - make_global: If true, modules are registered as global variables (e.g., string.upper()).
-    //                If false, modules are only cached and require explicit import().
-    BEHL_API void load_stdlib(State* S, bool make_global);
+    BEHL_API void load_stdlib(State* S);
 
-    BEHL_API void load_lib_core(State* S);                      // Core functions (print, typeof, tonumber, tostring, etc.)
-    BEHL_API void load_lib_table(State* S, bool make_global);   // Table manipulation functions
-    BEHL_API void load_lib_gc(State* S, bool make_global);      // Garbage collector controls
-    BEHL_API void load_lib_debug(State* S, bool make_global);   // Debug utilities
-    BEHL_API void load_lib_math(State* S, bool make_global);    // Math functions
-    BEHL_API void load_lib_os(State* S, bool make_global);      // OS functions (time, exit, etc.)
-    BEHL_API void load_lib_string(State* S, bool make_global);  // String manipulation functions
-    BEHL_API void load_lib_fs(State* S, bool make_global);      // Filesystem operations (security-sensitive, opt-in)
-    BEHL_API void load_lib_process(State* S, bool make_global); // Process spawning and management (security-sensitive, opt-in)
+    BEHL_API void load_lib_core(State* S);    // Core functions (print, typeof, tonumber, tostring, etc.)
+    BEHL_API void load_lib_table(State* S);   // Table manipulation functions
+    BEHL_API void load_lib_gc(State* S);      // Garbage collector controls
+    BEHL_API void load_lib_debug(State* S);   // Debug utilities
+    BEHL_API void load_lib_math(State* S);    // Math functions
+    BEHL_API void load_lib_os(State* S);      // OS functions (time, exit, etc.)
+    BEHL_API void load_lib_string(State* S);  // String manipulation functions
+    BEHL_API void load_lib_fs(State* S);      // Filesystem operations (security-sensitive, opt-in)
+    BEHL_API void load_lib_process(State* S); // Process spawning and management (security-sensitive, opt-in)
 
 } // namespace behl

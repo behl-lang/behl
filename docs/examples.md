@@ -366,6 +366,8 @@ print("Removed: " + tostring(removed));
 ### Protected Call Example
 
 ```cpp
+const math = import("math");
+
 function riskyOperation(x) {
     if (x < 0) {
         error("Negative value not allowed!");

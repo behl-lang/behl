@@ -9,7 +9,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
-        behl::load_stdlib(S, true);
+        behl::load_stdlib(S);
     }
 
     void TearDown() override
@@ -233,6 +233,7 @@ TEST_F(TableTest, DenseArrayFollowedBySparseKey)
 TEST_F(TableTest, UnpackBasic)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let a, b, c = table.unpack({1, 2, 3})
         return a, b, c
     )";
@@ -247,6 +248,7 @@ TEST_F(TableTest, UnpackBasic)
 TEST_F(TableTest, UnpackSingleElement)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let x = table.unpack({42})
         return x
     )";
@@ -259,6 +261,7 @@ TEST_F(TableTest, UnpackSingleElement)
 TEST_F(TableTest, UnpackEmptyTable)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let result = table.unpack({})
         return result == nil
     )";
@@ -271,6 +274,7 @@ TEST_F(TableTest, UnpackEmptyTable)
 TEST_F(TableTest, UnpackWithRange)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let t = {10, 20, 30, 40, 50}
         let a, b = table.unpack(t, 1, 2)
         return a, b
@@ -285,6 +289,7 @@ TEST_F(TableTest, UnpackWithRange)
 TEST_F(TableTest, UnpackWithStartOnly)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let t = {10, 20, 30, 40}
         let a, b, c = table.unpack(t, 1)
         return a, b, c
@@ -300,6 +305,7 @@ TEST_F(TableTest, UnpackWithStartOnly)
 TEST_F(TableTest, UnpackMixedTypes)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let a, b, c, d = table.unpack({1, "hello", true, 3.14})
         return a, b, c, d
     )";
@@ -315,6 +321,7 @@ TEST_F(TableTest, UnpackMixedTypes)
 TEST_F(TableTest, UnpackInvalidRange)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let t = {1, 2, 3}
         let result = table.unpack(t, 5, 2)  // end < start
         return result == nil
@@ -328,6 +335,7 @@ TEST_F(TableTest, UnpackInvalidRange)
 TEST_F(TableTest, UnpackZeroIndex)
 {
     constexpr std::string_view code = R"(
+        const table = import("table")
         let t = {"a", "b", "c"}  // 0-indexed: [0]="a", [1]="b", [2]="c"
         let a, b, c = table.unpack(t, 0, 2)
         return a, b, c

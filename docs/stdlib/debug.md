@@ -21,13 +21,9 @@ Debugging utilities.
 
 ## Overview
 
-The debug module provides utilities for debugging and introspection. It's available as a global or can be explicitly imported:
+The debug module provides utilities for debugging and introspection. It must be explicitly imported:
 
 ```cpp
-// Direct access (implicit global)
-print(debug.stacktrace());
-
-// Or explicit import
 const debug = import("debug");
 print(debug.stacktrace());
 ```

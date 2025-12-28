@@ -105,7 +105,7 @@ void register_math_module(behl::State* S) {
 
 int main() {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     // Register custom module
     register_math_module(S);

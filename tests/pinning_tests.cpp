@@ -11,7 +11,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
-        load_stdlib(S, true);
+        load_stdlib(S);
 
         ASSERT_NE(S, nullptr);
         set_top(S, 0);

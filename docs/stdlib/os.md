@@ -21,13 +21,9 @@ Operating system interface.
 
 ## Overview
 
-The os module provides access to operating system functions. It's available as a global or can be explicitly imported:
+The os module provides access to operating system functions. It must be explicitly imported:
 
 ```cpp
-// Direct access (implicit global)
-let t = os.time();
-
-// Or explicit import
 const os = import("os");
 let t = os.time();
 ```

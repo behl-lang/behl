@@ -6,20 +6,20 @@ using namespace behl;
 class RegisterTest : public ::testing::Test
 {
 protected:
-    State* L = nullptr;
+    State* S = nullptr;
 
     void SetUp() override
     {
-        L = behl::new_state();
-        behl::load_stdlib(L, true);
+        S = behl::new_state();
+        behl::load_stdlib(S);
     }
 
     void TearDown() override
     {
-        if (L)
+        if (S)
         {
-            behl::close(L);
-            L = nullptr;
+            behl::close(S);
+            S = nullptr;
         }
     }
 };
@@ -43,10 +43,10 @@ TEST_F(RegisterTest, OuterScopeVariableNotCorruptedByNestedTable)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kTable);
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, MultipleOuterVariablesPreservedAcrossLoops)
@@ -68,11 +68,11 @@ TEST_F(RegisterTest, MultipleOuterVariablesPreservedAcrossLoops)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(6, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(6, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, NestedLoopsPreserveOuterScopeVariables)
@@ -98,11 +98,11 @@ TEST_F(RegisterTest, NestedLoopsPreserveOuterScopeVariables)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(400, behl::to_integer(L, -1)); // 100 * 4 iterations
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(400, behl::to_integer(S, -1)); // 100 * 4 iterations
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, ComplexExpressionsWithOuterScope)
@@ -127,11 +127,11 @@ TEST_F(RegisterTest, ComplexExpressionsWithOuterScope)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(60, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(60, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, DeeplyNestedTablesPreserveOuter)
@@ -159,11 +159,11 @@ TEST_F(RegisterTest, DeeplyNestedTablesPreserveOuter)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(999, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(999, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, FunctionCallsPreserveOuterVariables)
@@ -188,11 +188,11 @@ TEST_F(RegisterTest, FunctionCallsPreserveOuterVariables)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(50, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(50, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, ClosuresAccessingOuterScope)
@@ -216,11 +216,11 @@ TEST_F(RegisterTest, ClosuresAccessingOuterScope)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(30, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(30, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, TableFieldAdditionsPreserveBase)
@@ -240,11 +240,11 @@ TEST_F(RegisterTest, TableFieldAdditionsPreserveBase)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(100, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(100, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, ManyLocalsInSingleScope)
@@ -270,11 +270,11 @@ TEST_F(RegisterTest, ManyLocalsInSingleScope)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(55, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(55, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, ComplexNestedScopeInteractions)
@@ -311,11 +311,11 @@ TEST_F(RegisterTest, ComplexNestedScopeInteractions)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(3, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(3, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, TableArrayPreservesOuterScope)
@@ -336,11 +336,11 @@ TEST_F(RegisterTest, TableArrayPreservesOuterScope)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(123, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(123, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, ConditionalBranchesPreserveRegisters)
@@ -367,11 +367,11 @@ TEST_F(RegisterTest, ConditionalBranchesPreserveRegisters)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(168, behl::to_integer(L, -1)); // 42 * 4
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(168, behl::to_integer(S, -1)); // 42 * 4
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, OriginalBugReportCase)
@@ -407,11 +407,11 @@ TEST_F(RegisterTest, OriginalBugReportCase)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(75, behl::to_integer(L, -1)); // Last i % 25 == 0 is at i=75
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(75, behl::to_integer(S, -1)); // Last i % 25 == 0 is at i=75
+    behl::pop(S, 1);
 }
 
 TEST_F(RegisterTest, ExtremeRegisterPressure)
@@ -452,9 +452,9 @@ TEST_F(RegisterTest, ExtremeRegisterPressure)
         return test();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(L, source));
-    ASSERT_NO_THROW(behl::call(L, 0, 1));
-    ASSERT_EQ(behl::type(L, -1), behl::Type::kInteger);
-    ASSERT_EQ(15, behl::to_integer(L, -1));
-    behl::pop(L, 1);
+    ASSERT_NO_THROW(behl::load_string(S, source));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(15, behl::to_integer(S, -1));
+    behl::pop(S, 1);
 }

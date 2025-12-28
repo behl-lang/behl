@@ -54,20 +54,19 @@ print(math1 == math2);  // true (same table reference)
 
 ## Built-in Modules
 
-Behl includes several built-in modules:
+Behl includes several built-in modules that must be explicitly imported:
 
 ### Standard Library Modules
 
-When using `load_stdlib(S, true)`, modules are globally accessible:
+All modules require explicit import:
 
 ```cpp
-// With global modules (load_stdlib second parameter = true)
+// Import modules explicitly
+const math = import("math");
+const string = import("string");
+
 print(math.PI);
 print(string.upper("hello"));
-
-// Without global modules (second parameter = false)
-const math = import("math");
-print(math.PI);
 ```
 
 See [Standard Library](../standard-library) for complete module documentation.

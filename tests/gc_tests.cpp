@@ -10,7 +10,7 @@ namespace behl
         void SetUp() override
         {
             S = new_state();
-            load_stdlib(S, true);
+            load_stdlib(S);
         }
         void TearDown() override
         {
@@ -21,6 +21,7 @@ namespace behl
     TEST_F(GCTest, CollectGarbageFreesUnreachableObjects)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let before = gc.count();
             
             function createGarbage() {
@@ -47,6 +48,7 @@ namespace behl
     TEST_F(GCTest, ReachableObjectsNotCollected)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let keeper = {data = "important"};
             let before = gc.count();
             
@@ -67,6 +69,7 @@ namespace behl
     TEST_F(GCTest, UpvaluesPreservedAcrossCollection)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeClosure() {
                 let captured = 42;
                 return function() {
@@ -93,6 +96,7 @@ namespace behl
     TEST_F(GCTest, MultipleClosuresShareUpvalue)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeClosures() {
                 let shared = 100;
                 let inc = function() {
@@ -125,6 +129,7 @@ namespace behl
     TEST_F(GCTest, TableWithCircularReferenceCollected)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let before_count = gc.count();
             
             function makeCircle() {
@@ -151,6 +156,7 @@ namespace behl
     TEST_F(GCTest, StringInterningSurvivesCollection)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let s1 = "test";
             
             for (let i = 0; i < 50; i++) {
@@ -172,6 +178,7 @@ namespace behl
     TEST_F(GCTest, NestedUpvaluesPreserved)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function outer() {
                 let a = 10;
                 function middle() {
@@ -203,6 +210,7 @@ namespace behl
     TEST_F(GCTest, TableInClosurePreserved)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeTableClosure() {
                 let data = {x = 5, y = 10};
                 return function() {
@@ -225,6 +233,7 @@ namespace behl
     TEST_F(GCTest, LargeObjectAllocationAndCollection)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeHugeTable() {
                 let t = {};
                 for (let i = 0; i < 500; i++) {
@@ -253,6 +262,7 @@ namespace behl
     TEST_F(GCTest, IncrementalGCMakesProgress)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             for (let i = 0; i < 100; i++) {
                 let temp = {i, i * 2, i * 3};
             }
@@ -276,6 +286,7 @@ namespace behl
     TEST_F(GCTest, GCDuringTableConstruction)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function buildLarge() {
                 let t = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
                 gc.step();
@@ -298,6 +309,7 @@ namespace behl
     TEST_F(GCTest, ClosureArraySurvivesCollection)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeCounters() {
                 let counters = {};
                 let c0 = 0;
@@ -328,6 +340,7 @@ namespace behl
     TEST_F(GCTest, TemporaryClosuresCollected)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeTempClosure() {
                 let temp = {1, 2, 3};
                 return function() {
@@ -355,6 +368,7 @@ namespace behl
     TEST_F(GCTest, MutuallyRecursiveClosuresPreserved)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let even, odd;
             
             even = function(n) {
@@ -384,6 +398,7 @@ namespace behl
     TEST_F(GCTest, TableMetatablePreservedDuringGC)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let t = {a = 1, b = 2, c = 3};
             
             for (let i = 0; i < 50; i++) {
@@ -403,6 +418,7 @@ namespace behl
     TEST_F(GCTest, FunctionPrototypesReusedCorrectly)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function factory() {
                 function inner() {
                     return 42;
@@ -426,6 +442,7 @@ namespace behl
     TEST_F(GCTest, GCThresholdCanBeAdjusted)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let original = gc.threshold();
             gc.setthreshold(50);
             let new_val = gc.threshold();
@@ -448,6 +465,7 @@ namespace behl
     TEST_F(GCTest, EmptyTableStillCollected)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let before = gc.count();
             
             for (let i = 0; i < 50; i++) {
@@ -468,6 +486,7 @@ namespace behl
     TEST_F(GCTest, GCDuringRecursion)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function sum(n) {
                 if (n == 0) {
                     return 0;
@@ -492,6 +511,7 @@ namespace behl
     TEST_F(GCTest, MultipleGCCyclesStable)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let keeper = {value = 100};
             
             for (let round = 0; round < 5; round++) {
@@ -512,6 +532,7 @@ namespace behl
     TEST_F(GCTest, GCCountAllReportsCorrectly)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let count_in_use = gc.count();
             let count_all = gc.countall();
             let count_free = gc.countfree();
@@ -527,6 +548,7 @@ namespace behl
     TEST_F(GCTest, FreedObjectsReportedCorrectly)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             for (let i = 0; i < 20; i++) {
                 let temp = {i};
             }
@@ -545,6 +567,7 @@ namespace behl
     TEST_F(GCTest, GCPhaseReturnsValidValue)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             for (let i = 0; i < 100; i++) {
                 let temp = {i, i * 2};
             }
@@ -562,6 +585,7 @@ namespace behl
     TEST_F(GCTest, ComplexNestedStructurePreserved)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let root = {
                 level1 = {
                     level2 = {
@@ -589,6 +613,7 @@ namespace behl
     TEST_F(GCTest, FunctionArgumentsNotPrematurelyCollected)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function process(t) {
                 gc.step();
                 gc.step();
@@ -608,6 +633,7 @@ namespace behl
     TEST_F(GCTest, TableArrayResizeDoesntLeak)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let t = {};
             
             for (let i = 0; i < 100; i++) {
@@ -634,6 +660,7 @@ namespace behl
     TEST_F(GCTest, ClosureModifyingUpvalueAcrossGC)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeModifier() {
                 let value = 0;
                 return function(n) {
@@ -661,6 +688,7 @@ namespace behl
     TEST_F(GCTest, GlobalsNotCollectedDuringAgressiveGC)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             important_data = {x = 1, y = 2, z = 3};
             
             gc.setthreshold(1);
@@ -686,6 +714,7 @@ namespace behl
     TEST_F(GCTest, DeepCallStackWithGC)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function deep(n) {
                 if (n == 0) {
                     gc.collect();
@@ -708,6 +737,7 @@ namespace behl
     TEST_F(GCTest, MultipleStringConcatenationsWithGC)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let s = "start";
             
             for (let i = 0; i < 50; i++) {

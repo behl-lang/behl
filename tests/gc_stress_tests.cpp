@@ -10,7 +10,7 @@ namespace behl
         void SetUp() override
         {
             S = new_state();
-            load_stdlib(S, true);
+            load_stdlib(S);
         }
         void TearDown() override
         {
@@ -73,6 +73,7 @@ namespace behl
     TEST_F(GCStressTest, TableChurnWithGC)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let before = gc.count();
             
             for (let i = 0; i < 100; i++) {
@@ -96,6 +97,7 @@ namespace behl
     TEST_F(GCStressTest, ClosureRetentionAcrossGC)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function makeCounter(start) {
                 let count = start;
                 return function() {
@@ -126,6 +128,7 @@ namespace behl
     TEST_F(GCStressTest, GlobalTablesNotCollected)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             global_table = {1, 2, 3, 4, 5};
             
             for (let i = 0; i < 100; i++) {
@@ -145,6 +148,7 @@ namespace behl
     TEST_F(GCStressTest, LargeTableArray)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let big = {};
             for (let i = 0; i < 1000; i++) {
                 big[i] = i * i;
@@ -163,6 +167,7 @@ namespace behl
     TEST_F(GCStressTest, IncrementalGCSteps)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let initial_count = gc.count();
             
             for (let i = 0; i < 100; i++) {
@@ -188,6 +193,7 @@ namespace behl
     TEST_F(GCStressTest, CircularReferences)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function createCircle() {
                 let a = {name = "a"};
                 let b = {name = "b"};
@@ -216,6 +222,7 @@ namespace behl
     TEST_F(GCStressTest, MixedAllocationPattern)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let keepers = {};
             
             for (let i = 0; i < 100; i++) {
@@ -241,6 +248,7 @@ namespace behl
     TEST_F(GCStressTest, GCThresholdAdjustment)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let original = gc.threshold();
             gc.setthreshold(10);
             let new_threshold = gc.threshold();
@@ -263,6 +271,7 @@ namespace behl
     TEST_F(GCStressTest, DeepRecursionWithAllocation)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             function recurse(n) {
                 if (n == 0) {
                     return {base = true};
@@ -285,6 +294,7 @@ namespace behl
     TEST_F(GCStressTest, TableMetadataPreservation)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let data = {};
             for (let i = 0; i < 100; i++) {
                 data["key" + tostring(i)] = i * i;
@@ -307,6 +317,7 @@ namespace behl
     TEST_F(GCStressTest, FreePoolReuse)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             for (let round = 0; round < 10; round++) {
                 for (let i = 0; i < 20; i++) {
                     let temp = {i, i * 2};
@@ -325,6 +336,7 @@ namespace behl
     TEST_F(GCStressTest, GCPhaseCycle)
     {
         constexpr std::string_view code = R"(
+            const gc = import("gc");
             let phase1 = gc.phase();
             
             for (let i = 0; i < 50; i++) {

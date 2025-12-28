@@ -663,7 +663,7 @@ namespace behl
         return 1;
     }
 
-    void load_lib_fs(State* S, bool make_global)
+    void load_lib_fs(State* S)
     {
         static constexpr ModuleReg fs_funcs[] = {
             { "open", fs_open },
@@ -692,7 +692,7 @@ namespace behl
 
         ModuleDef fs_module = { .funcs = fs_funcs };
 
-        create_module(S, "fs", fs_module, make_global);
+        create_module(S, "fs", fs_module);
     }
 
 } // namespace behl

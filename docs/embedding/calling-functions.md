@@ -95,7 +95,7 @@ try {
 
 ```cpp
 behl::State* S = behl::new_state();
-behl::load_stdlib(S, true);
+behl::load_stdlib(S);
 
 const char* script = "print('Hello from Behl!')";
 

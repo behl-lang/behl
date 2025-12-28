@@ -333,9 +333,9 @@ int main(int argc, char* argv[])
     const Options& opts = *opts_result;
 
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
-    behl::load_lib_fs(S, false);
-    behl::load_lib_process(S, false);
+    behl::load_stdlib(S);
+    behl::load_lib_fs(S);
+    behl::load_lib_process(S);
 
     int exit_code = 0;
     try

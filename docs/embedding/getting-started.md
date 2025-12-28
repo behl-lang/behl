@@ -56,13 +56,10 @@ behl::State* S = behl::new_state();
 Load all standard library modules (core, table, gc, debug, math, os, string, fs):
 
 ```cpp
-behl::load_stdlib(S, true);   // Modules available globally
-behl::load_stdlib(S, false);  // Modules require explicit import()
+behl::load_stdlib(S);
 ```
 
-**Parameters:**
-- `make_global` - If `true`, modules are registered as global variables (e.g., `string.upper()`).
-  If `false`, modules must be explicitly imported (e.g., `let str = import("string")`).
+All modules must be explicitly imported using `import()`.
 
 ### Cleaning Up
 
@@ -84,7 +81,7 @@ S = nullptr;  // Good practice
 int main() {
     // Create state
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     // Load and run a script
     const char* script = R"(

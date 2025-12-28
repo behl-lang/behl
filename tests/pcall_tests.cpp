@@ -12,7 +12,7 @@ protected:
     {
         S = new_state();
         ASSERT_NE(S, nullptr);
-        load_stdlib(S, true);
+        load_stdlib(S);
         set_top(S, 0);
     }
 

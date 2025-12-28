@@ -36,7 +36,7 @@ namespace behl
         return 1;
     }
 
-    void load_lib_os(State* S, bool make_global)
+    void load_lib_os(State* S)
     {
         static constexpr ModuleReg os_funcs[] = {
             { "hrtime", os_hrtime },
@@ -46,7 +46,7 @@ namespace behl
 
         ModuleDef os_module = { .funcs = os_funcs };
 
-        create_module(S, "os", os_module, make_global);
+        create_module(S, "os", os_module);
     }
 
 } // namespace behl

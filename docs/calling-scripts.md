@@ -33,7 +33,7 @@ int main() {
     behl::State* S = behl::new_state();
     
     // Load standard library
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     // Your code here
     
@@ -131,7 +131,7 @@ bool call(State* S, int32_t nargs, int32_t nresults);
 
 int main() {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     // Load and execute a script
     const char* script = R"(
@@ -311,7 +311,7 @@ behl::pop(S, 1);
 
 ```cpp
 behl::State* S = behl::new_state();
-behl::load_stdlib(S, true);
+behl::load_stdlib(S);
 
 // First script sets up data
 behl::load_string(S, R"(
@@ -337,7 +337,7 @@ Scripts can import modules if the standard library is loaded:
 
 ```cpp
 behl::State* S = behl::new_state();
-behl::load_stdlib(S, true);
+behl::load_stdlib(S);
 
 const char* script = R"(
     const math = import("math");
@@ -386,7 +386,7 @@ Creating a new state is expensive. Reuse states when possible:
 
 ```cpp
 behl::State* S = behl::new_state();
-behl::load_stdlib(S, true);
+behl::load_stdlib(S);
 
 for (const auto& script : scripts) {
     behl::load_string(S, script.c_str());
@@ -404,7 +404,7 @@ behl::close(S);
 ```cpp
 bool load_config(const char* path, Config& config) {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     try {
         behl::load_file(S, path);

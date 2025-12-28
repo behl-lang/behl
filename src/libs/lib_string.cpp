@@ -400,7 +400,7 @@ namespace behl
         return 1;
     }
 
-    void load_lib_string(State* S, bool make_global)
+    void load_lib_string(State* S)
     {
         static constexpr ModuleReg string_funcs[] = {
             { "len", str_len },
@@ -418,7 +418,7 @@ namespace behl
 
         ModuleDef string_module = { .funcs = string_funcs };
 
-        create_module(S, "string", string_module, make_global);
+        create_module(S, "string", string_module);
     }
 
 } // namespace behl

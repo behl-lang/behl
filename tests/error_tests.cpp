@@ -11,7 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
-        behl::load_stdlib(S, true);
+        behl::load_stdlib(S);
     }
 
     void TearDown() override

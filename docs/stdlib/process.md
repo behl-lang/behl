@@ -17,23 +17,15 @@ The `process` module provides cross-platform process spawning and management cap
 #include <behl/behl.hpp>
 
 behl::State* S = behl::new_state();
-behl::load_stdlib(S, true);           // Load standard library
-behl::load_lib_process(S, true);      // Load process module as global
-
-// process module is now available as global: process.spawn(...)
-
-// Or load without global access:
-behl::load_lib_process(S, false);     // Requires explicit import()
+behl::load_stdlib(S);           // Load standard library
+behl::load_lib_process(S);      // Load process module
 ```
 
 ### Behl Script
 
 ```javascript
-// After load_lib_process(S, true) is called in C++
-let proc = process.spawn("echo", {"hello"});
-
-// Or with load_lib_process(S, false):
-let process = import("process");
+// Import the process module
+const process = import("process");
 let proc = process.spawn("echo", {"hello"});
 ```
 

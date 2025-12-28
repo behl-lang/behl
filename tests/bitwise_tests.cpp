@@ -8,7 +8,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
-        behl::load_stdlib(S, true);
+        behl::load_stdlib(S);
 
         ASSERT_NE(S, nullptr);
         behl::set_top(S, 0);

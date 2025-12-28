@@ -429,7 +429,7 @@ namespace behl
         return 0;
     }
 
-    void load_lib_table(State* S, bool make_global)
+    void load_lib_table(State* S)
     {
         static constexpr ModuleReg table_funcs[] = {
             { "rawlen", tbl_rawlen },
@@ -444,7 +444,7 @@ namespace behl
 
         ModuleDef table_module = { .funcs = table_funcs };
 
-        create_module(S, "table", table_module, make_global);
+        create_module(S, "table", table_module);
     }
 
 } // namespace behl

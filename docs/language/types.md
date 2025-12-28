@@ -229,6 +229,8 @@ let x = "Value: " + tostring(42); // OK
 Use the `#` operator (via rawlen) or `string.len()`:
 
 ```cpp
+const string = import("string");
+
 let s = "hello";
 print(rawlen(s));        // 5
 print(string.len(s));    // 5

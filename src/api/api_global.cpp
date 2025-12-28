@@ -19,7 +19,7 @@ namespace behl
         set_global(S, name);
     }
 
-    void create_module(State* S, std::string_view module_name, const ModuleDef& module_def, bool make_global)
+    void create_module(State* S, std::string_view module_name, const ModuleDef& module_def)
     {
         assert(S != nullptr && "State can not be null");
 
@@ -75,13 +75,6 @@ namespace behl
         // Register in module cache so it can be imported
         auto* cached_module_name = gc_new_string(S, module_name);
         S->module_cache.insert_or_assign(S, cached_module_name, module_table);
-
-        // If make_global is true, also register as a global variable
-        if (make_global)
-        {
-            dup(S, -1); // Duplicate the module table
-            set_global(S, module_name);
-        }
 
         // Pop the module table from stack (it's now cached and possibly global)
         pop(S, 1);

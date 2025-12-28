@@ -160,7 +160,7 @@ int safe_operation(behl::State* S) {
 
 int main() {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     behl::register_function(S, "safe_div", safe_operation);
     
     // Test 1: Compile error

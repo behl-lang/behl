@@ -43,12 +43,11 @@ void close(State* S)
 ```
 Closes and cleans up the interpreter state.
 
-### `load_stdlib(State*, bool)`
+### `load_stdlib(State*)`
 ```cpp
-void load_stdlib(State* S, bool make_global)
+void load_stdlib(State* S)
 ```
-Loads all standard library modules.
-- `make_global` - If `true`, modules are global; if `false`, require `import()`.
+Loads all standard library modules. Modules must be explicitly imported using `import()`.
 
 ---
 

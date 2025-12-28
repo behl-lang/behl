@@ -21,13 +21,9 @@ String manipulation utilities.
 
 ## Overview
 
-The string module provides utilities for string manipulation. It's available as a global or can be explicitly imported:
+The string module provides utilities for string manipulation. It must be explicitly imported:
 
 ```cpp
-// Direct access (implicit global)
-let upper = string.upper("hello");
-
-// Or explicit import
 const string = import("string");
 let upper = string.upper("hello");
 ```

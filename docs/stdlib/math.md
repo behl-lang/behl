@@ -21,13 +21,9 @@ Mathematical functions and constants.
 
 ## Overview
 
-The math module provides mathematical functions and constants. It's available as a global or can be explicitly imported:
+The math module provides mathematical functions and constants. It must be explicitly imported:
 
 ```cpp
-// Direct access (implicit global)
-print(math.PI);
-
-// Or explicit import
 const math = import("math");
 print(math.PI);
 ```

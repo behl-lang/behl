@@ -247,11 +247,11 @@ Load the standard library for access to built-in functions and modules:
 behl::State* S = behl::new_state();
 
 // Option 1: Make modules globally accessible
-behl::load_stdlib(S, true);
+behl::load_stdlib(S);
 // Usage: string.upper("hello"), math.sqrt(16)
 
 // Option 2: Require explicit import() for better control
-behl::load_stdlib(S, false);
+behl::load_stdlib(S);
 // Usage: let str = import("string"); str.upper("hello")
 ```
 

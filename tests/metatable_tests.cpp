@@ -15,7 +15,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
-        load_stdlib(S, true);
+        load_stdlib(S);
     }
 
     void TearDown() override
@@ -496,6 +496,7 @@ TEST_F(MetatableTest, LenMetamethod)
 TEST_F(MetatableTest, RawGetBypassesMetatable)
 {
     constexpr std::string_view code = R"(
+        const table = import("table");
         let t = {a = 1}
         let mt = {
             __index = function(table, key) {
@@ -513,6 +514,7 @@ TEST_F(MetatableTest, RawGetBypassesMetatable)
 TEST_F(MetatableTest, RawSetBypassesMetatable)
 {
     constexpr std::string_view code = R"(
+        const table = import("table");
         let called = false
         let t = {}
         let mt = {

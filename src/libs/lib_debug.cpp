@@ -16,7 +16,7 @@ namespace behl
         return 1;
     }
 
-    void load_lib_debug(State* S, bool make_global)
+    void load_lib_debug(State* S)
     {
         static constexpr ModuleReg debug_funcs[] = {
             { "stacktrace", debug_stacktrace },
@@ -24,7 +24,7 @@ namespace behl
 
         ModuleDef debug_module = { .funcs = debug_funcs };
 
-        create_module(S, "debug", debug_module, make_global);
+        create_module(S, "debug", debug_module);
     }
 
 } // namespace behl

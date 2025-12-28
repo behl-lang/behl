@@ -431,7 +431,7 @@ namespace behl
         return 1;
     }
 
-    void load_lib_math(State* S, bool make_global)
+    void load_lib_math(State* S)
     {
         static constexpr ModuleReg math_funcs[] = {
             { "abs", math_abs },
@@ -485,7 +485,7 @@ namespace behl
 
         ModuleDef math_module = { .funcs = math_funcs, .consts = math_consts };
 
-        create_module(S, "math", math_module, make_global);
+        create_module(S, "math", math_module);
     }
 
 } // namespace behl

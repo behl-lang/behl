@@ -152,7 +152,7 @@ for (k, v in pairs(person)) {
 
 int main() {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);  // true = modules globally accessible
+    behl::load_stdlib(S);
     
     // Load and run a script
     behl::load_string(S, "return 2 + 3");

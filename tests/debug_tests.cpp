@@ -104,7 +104,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
-        load_stdlib(S, true);
+        load_stdlib(S);
         harness.setup(S);
     }
 
@@ -298,7 +298,7 @@ TEST_F(DebugTest, ClearAllBreakpoints)
 TEST(DebugStandaloneTest, GetLocation)
 {
     State* S = new_state();
-    load_stdlib(S, true);
+    load_stdlib(S);
 
     debug_enable(S, true);
     debug_set_event_callback(S, [](State* state, DebugEvent) {

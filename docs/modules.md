@@ -127,7 +127,7 @@ module;
 - **No global scope access** - Cannot read/write global variables
 - **Local by default** - Functions and variables are private unless exported
 - **Must export explicitly** - Use `export` keyword (returns are automatically added)
-- **Must import ALL modules** - Standard library modules (math, string, table, os, gc, debug) must be imported with `import("math")`, regardless of `make_global` setting
+- **Must import all modules** - Standard library modules (math, string, table, os, gc, debug) must be imported with `import("math")`
 - **Only builtins accessible** - Core functions like `print`, `typeof`, `tostring`, `tonumber`, `import`, `error`, `pcall`, etc. are available without import
 
 ### Script Mode vs Module Mode
@@ -350,7 +350,7 @@ return {
 
 ## Built-in Modules
 
-Behl provides standard modules that are registered when `load_stdlib(S, make_global)` is called:
+Behl provides standard modules that are registered when `load_stdlib(S)` is called:
 
 - `math` - Mathematical functions and constants
 - `string` - String manipulation utilities  
@@ -359,47 +359,28 @@ Behl provides standard modules that are registered when `load_stdlib(S, make_glo
 - `gc` - Garbage collector control
 - `debug` - Debugging utilities
 
-### Global vs Import-Only Access
+### Accessing Standard Modules
 
-The `make_global` parameter in `load_stdlib(S, make_global)` controls how modules are exposed **in script mode only**:
+All standard library modules must be explicitly imported, regardless of whether you're in script mode or module mode:
 
 **Script Mode (no `module;` declaration):**
-
-With `make_global = true`:
 ```cpp
-// Direct access - no import needed
+// Must explicitly import
+const math = import("math");
+const string = import("string");
 print(math.pi);              // 3.14159
 let upper = string.upper("hello");
-table.insert(arr, 10);
 ```
 
-With `make_global = false`:
+**Module Mode (with `module;` declaration):**
 ```cpp
-// Explicit import required
+module;
+
+// Must explicitly import
 const math = import("math");
 const string = import("string");
 print(math.pi);              // 3.14159
 ```
-
-**Module Mode (with `module;` declaration):**
-
-Regardless of `make_global`, standard library modules **must always be imported**:
-
-```cpp
-module;
-
-// This ALWAYS fails, even with make_global = true
-// print(math.pi);  // Error: Variable 'math' is not declared
-
-// Must import explicitly
-const math = import("math");
-print(math.pi);  // OK
-```
-
-**Why this design?**
-- **Script mode with globals** (`true`) is convenient for quick scripts, REPL, and prototyping
-- **Script mode import-only** (`false`) provides better control and clearer dependencies  
-- **Module mode** enforces isolation and explicit dependencies, making code more maintainable and preventing accidental global access
 
 See [Standard Library](standard-library) for complete API documentation.
 

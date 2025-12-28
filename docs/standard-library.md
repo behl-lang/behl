@@ -15,7 +15,7 @@ Built-in modules and core functions available in Behl.
 
 ## Overview
 
-The Behl standard library provides core functionality through global functions and modules. When `load_stdlib(S, make_global)` is called, it loads:
+The Behl standard library provides core functionality through global functions and modules. When `load_stdlib(S)` is called, it loads:
 
 - **Core Functions** - Global functions like `print()`, `typeof()`, `import()`
 - **Standard Modules** - `math`, `string`, `table`, `os`, `gc`, `debug`
@@ -25,55 +25,32 @@ The Behl standard library provides core functionality through global functions a
 ```cpp
 // When embedding in C++
 behl::State* S = behl::new_state();
-
-// Make modules globally accessible (convenient for quick scripts)
-behl::load_stdlib(S, true);
-// Usage: string.upper("hello"), math.sqrt(16)
-
-// Or require explicit import() for better control/sandboxing
-behl::load_stdlib(S, false);
-// Usage: let str = import("string"); str.upper("hello")
+behl::load_stdlib(S);
 ```
 
-### Global vs Import-Only Modules
+### Accessing Modules
 
-**With `make_global = true`**, modules are automatically available as global variables:
+All standard library modules must be explicitly imported using `import()`:
 
+```cpp
+// Import modules explicitly
+const math = import("math");
+const string = import("string");
+const table = import("table");
+
+// Then use them
+print(math.PI);
+let upper = string.upper("hello");
+table.insert(arr, value);
+```
+
+**Available modules:**
 - `math` - Mathematical functions and constants
 - `string` - String manipulation utilities
 - `table` - Table operations
 - `os` - Operating system functions
 - `gc` - Garbage collector control
 - `debug` - Debugging utilities
-
-These can be accessed directly:
-
-```cpp
-print(math.PI);           // Access directly
-let upper = string.upper("hello");
-table.insert(arr, value);
-```
-
-**With `make_global = false`**, modules must be explicitly imported:
-
-```cpp
-const math = import("math");     // Same as global math
-print(math.PI);
-```
-
-### Module Mode
-
-In module mode (files starting with `module;`), globals are not accessible. You must explicitly import:
-
-```cpp
-module;
-
-const math = import("math");
-const string = import("string");
-
-// Now use them
-print(math.PI);
-```
 
 See [Module System](modules) for details.
 
@@ -101,17 +78,17 @@ See [Module System](modules) for details.
 print("Hello, World!");
 let t = typeof(42);  // "integer"
 
-// Using modules directly (implicit globals)
-let angle = math.PI / 4;
-let upper = string.upper("hello");
-table.insert(arr, 10);
-
-// Or with explicit imports
+// Import modules explicitly
 const math = import("math");
 const string = import("string");
+const table = import("table");
 
+// Use imported modules
+let angle = math.PI / 4;
+let upper = string.upper("hello");
 let sine = math.sin(angle);
 let reversed = string.reverse(upper);
+table.insert(arr, 10);
 
 // Error handling
 function safeDivide(a, b) {

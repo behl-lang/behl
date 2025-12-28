@@ -536,7 +536,7 @@ namespace behl
         return 1;
     }
 
-    void load_lib_process(State* S, bool make_global)
+    void load_lib_process(State* S)
     {
         static constexpr ModuleReg process_funcs[] = {
             { "spawn", process_spawn },
@@ -588,7 +588,7 @@ namespace behl
 
         ModuleDef process_module = { .funcs = process_funcs, .consts = process_consts };
 
-        create_module(S, "process", process_module, make_global);
+        create_module(S, "process", process_module);
     }
 
 } // namespace behl

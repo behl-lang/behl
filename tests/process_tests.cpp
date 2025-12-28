@@ -23,8 +23,8 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
-        behl::load_stdlib(S, true);
-        behl::load_lib_process(S, true);
+        behl::load_stdlib(S);
+        behl::load_lib_process(S);
     }
 
     void TearDown() override
@@ -36,6 +36,7 @@ protected:
 TEST_F(ProcessTest, BasicSpawnAndWait)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "exit 0"}});
         let exitcode = proc:wait();
         return exitcode;
@@ -50,6 +51,7 @@ TEST_F(ProcessTest, BasicSpawnAndWait)
 TEST_F(ProcessTest, CustomExitCode)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "exit 42"}});
         let exitcode = proc:wait();
         return exitcode;
@@ -64,6 +66,7 @@ TEST_F(ProcessTest, CustomExitCode)
 TEST_F(ProcessTest, CaptureStdout)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo test_output"}}, {{stdout = "pipe"}});
         proc:wait();
         let output = proc:read(100);
@@ -81,6 +84,7 @@ TEST_F(ProcessTest, CaptureStdout)
 TEST_F(ProcessTest, ExecCapturesOutput)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let result = process.exec("{}", {{"{}", "echo hello"}});
         return result["stdout"];
     )",
@@ -96,6 +100,7 @@ TEST_F(ProcessTest, ExecCapturesOutput)
 TEST_F(ProcessTest, ExecReturnsExitCode)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let result = process.exec("{}", {{"{}", "exit 7"}});
         return result["exitcode"];
     )",
@@ -109,6 +114,7 @@ TEST_F(ProcessTest, ExecReturnsExitCode)
 TEST_F(ProcessTest, GetPid)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "exit 0"}});
         let pid = proc:get_pid();
         proc:wait();
@@ -125,6 +131,7 @@ TEST_F(ProcessTest, IsRunning)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "2"}}, {{stdout = "null"}});
         let running_before = proc:is_running();
         proc:kill();
@@ -135,6 +142,7 @@ TEST_F(ProcessTest, IsRunning)
         TEST_SLEEP_CMD, TEST_SLEEP_ARG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"2"}}, {{stdout = "null"}});
         let running_before = proc:is_running();
         proc:kill();
@@ -154,6 +162,7 @@ TEST_F(ProcessTest, ForceKillExitCode)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "10"}}, {{stdout = "null"}});
         proc:kill();
         let exitcode = proc:wait();
@@ -162,6 +171,7 @@ TEST_F(ProcessTest, ForceKillExitCode)
         TEST_SLEEP_CMD, TEST_SLEEP_ARG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"10"}}, {{stdout = "null"}});
         proc:kill();
         let exitcode = proc:wait();
@@ -180,6 +190,7 @@ TEST_F(ProcessTest, SignalTermExitCode)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "10"}}, {{stdout = "null"}});
         proc:signal(process.SIGTERM);
         let exitcode = proc:wait();
@@ -188,6 +199,7 @@ TEST_F(ProcessTest, SignalTermExitCode)
         TEST_SLEEP_CMD, TEST_SLEEP_ARG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"10"}}, {{stdout = "null"}});
         proc:signal(process.SIGTERM);
         let exitcode = proc:wait();
@@ -204,6 +216,7 @@ TEST_F(ProcessTest, SignalTermExitCode)
 TEST_F(ProcessTest, PlatformConstant)
 {
     constexpr std::string_view code = R"(
+        const process = import("process");
         let platform = process.platform();
         return platform;
     )";
@@ -224,6 +237,7 @@ TEST_F(ProcessTest, PlatformConstant)
 TEST_F(ProcessTest, SignalConstants)
 {
     constexpr std::string_view code = R"(
+        const process = import("process");
         return process.SIGTERM;
     )";
 
@@ -235,6 +249,7 @@ TEST_F(ProcessTest, SignalConstants)
 TEST_F(ProcessTest, StdinPipe)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "exit 0"}}, {{stdin = "pipe"}});
         let written = proc:write("test data\n");
         proc:wait();
@@ -250,6 +265,7 @@ TEST_F(ProcessTest, StdinPipe)
 TEST_F(ProcessTest, NullStdio)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo test"}}, {{stdout = "null", stderr = "null"}});
         let exitcode = proc:wait();
         return exitcode;
@@ -265,6 +281,7 @@ TEST_F(ProcessTest, NullStdio)
 TEST_F(ProcessTest, CloseHandle)
 {
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "exit 0"}});
         proc:wait();
         let result = proc:close();
@@ -280,6 +297,7 @@ TEST_F(ProcessTest, CloseHandle)
 TEST_F(ProcessTest, InvalidCommand)
 {
     constexpr std::string_view code = R"(
+        const process = import("process");
         let result = process.spawn("nonexistent_command_xyz123", {});
         return typeof(result) == "boolean" && result == false;
     )";
@@ -293,6 +311,7 @@ TEST_F(ProcessTest, CustomEnvironmentVariable)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo %CUSTOM_VAR%"}}, {{stdout = "pipe", env = {{CUSTOM_VAR = "test_value"}}}});
         proc:wait();
         let output = proc:read(1000);
@@ -301,6 +320,7 @@ TEST_F(ProcessTest, CustomEnvironmentVariable)
         TEST_SHELL, TEST_SHELL_FLAG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo $CUSTOM_VAR"}}, {{stdout = "pipe", env = {{CUSTOM_VAR = "test_value"}}}});
         proc:wait();
         let output = proc:read(1000);
@@ -320,6 +340,7 @@ TEST_F(ProcessTest, CustomEnvironmentMultipleVariables)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo %VAR1%-%VAR2%"}}, {{stdout = "pipe", env = {{VAR1 = "hello", VAR2 = "world"}}}});
         proc:wait();
         let output = proc:read(1000);
@@ -328,6 +349,7 @@ TEST_F(ProcessTest, CustomEnvironmentMultipleVariables)
         TEST_SHELL, TEST_SHELL_FLAG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo $VAR1-$VAR2"}}, {{stdout = "pipe", env = {{VAR1 = "hello", VAR2 = "world"}}}});
         proc:wait();
         let output = proc:read(1000);
@@ -348,6 +370,7 @@ TEST_F(ProcessTest, InheritedEnvironment)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo %PATH%"}}, {{stdout = "pipe"}});
         proc:wait();
         let output = proc:read(1000);
@@ -356,6 +379,7 @@ TEST_F(ProcessTest, InheritedEnvironment)
         TEST_SHELL, TEST_SHELL_FLAG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo $PATH"}}, {{stdout = "pipe"}});
         proc:wait();
         let output = proc:read(1000);
@@ -376,12 +400,14 @@ TEST_F(ProcessTest, ExecWithCustomEnvironment)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let result = process.exec("{}", {{"{}", "echo %TEST_ENV%"}}, {{env = {{TEST_ENV = "exec_value"}}}});
         return result["stdout"];
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let result = process.exec("{}", {{"{}", "echo $TEST_ENV"}}, {{env = {{TEST_ENV = "exec_value"}}}});
         return result["stdout"];
     )",
@@ -399,6 +425,7 @@ TEST_F(ProcessTest, CustomEnvironmentIsolatesFromParent)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo %ONLY_VAR%"}}, {{stdout = "pipe", env = {{ONLY_VAR = "isolated"}}}});
         proc:wait();
         let output = proc:read(1000);
@@ -407,6 +434,7 @@ TEST_F(ProcessTest, CustomEnvironmentIsolatesFromParent)
         TEST_SHELL, TEST_SHELL_FLAG);
 #else
     auto code = behl::format(R"(
+        const process = import("process");
         let proc = process.spawn("{}", {{"{}", "echo $ONLY_VAR"}}, {{stdout = "pipe", env = {{ONLY_VAR = "isolated"}}}});
         proc:wait();
         let output = proc:read(1000);

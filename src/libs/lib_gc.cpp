@@ -80,7 +80,7 @@ namespace behl
         return 1;
     }
 
-    void load_lib_gc(State* S, bool make_global)
+    void load_lib_gc(State* S)
     {
         static constexpr ModuleReg gc_funcs[] = {
             { "collect", gc_collect_fn },
@@ -95,7 +95,7 @@ namespace behl
 
         ModuleDef gc_module = { .funcs = gc_funcs };
 
-        create_module(S, "gc", gc_module, make_global);
+        create_module(S, "gc", gc_module);
     }
 
 } // namespace behl

@@ -21,13 +21,9 @@ Garbage collector control.
 
 ## Overview
 
-The gc module provides control over Behl's incremental garbage collector. It's available as a global or can be explicitly imported:
+The gc module provides control over Behl's incremental garbage collector. It must be explicitly imported:
 
 ```cpp
-// Direct access (implicit global)
-gc.collect();
-
-// Or explicit import
 const gc = import("gc");
 gc.collect();
 ```

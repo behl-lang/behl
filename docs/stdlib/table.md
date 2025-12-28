@@ -21,13 +21,9 @@ Table manipulation utilities.
 
 ## Overview
 
-The table module provides utilities for manipulating tables. It's available as a global or can be explicitly imported:
+The table module provides utilities for manipulating tables. It must be explicitly imported:
 
 ```cpp
-// Direct access (implicit global)
-table.insert(arr, 10);
-
-// Or explicit import
 const table = import("table");
 table.insert(arr, 10);
 ```

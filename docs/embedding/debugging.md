@@ -259,7 +259,7 @@ public:
 ```cpp
 int main() {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     SimpleDebugger debugger(S);
     

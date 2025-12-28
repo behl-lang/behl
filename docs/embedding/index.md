@@ -16,7 +16,7 @@ Learn how to embed the Behl scripting language in your C++ application.
 
 int main() {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     behl::load_string(S, "print('Hello from Behl!')");
     behl::call(S, 0, 0);

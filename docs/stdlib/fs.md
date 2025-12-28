@@ -17,18 +17,15 @@ The `fs` module provides cross-platform filesystem operations. It is **not** loa
 #include <behl/behl.hpp>
 
 behl::State* S = behl::new_state();
-behl::load_stdlib(S, true);       // Load standard library
-behl::load_lib_fs(S, true);       // Load filesystem module as global
-
-// fs module is now available as global: fs.read("file.txt")
-
-// Or load without global access:
-behl::load_lib_fs(S, false);      // Requires explicit import()
+behl::load_stdlib(S);       // Load standard library
+behl::load_lib_fs(S);       // Load filesystem module
 ```
 
 ### Behl Script
 
 ```javascript
+// Import the fs module
+const fs = import("fs");
 // After load_lib_fs(S, true) is called in C++
 let content = fs.read("file.txt");
 

@@ -69,7 +69,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
-        behl::load_stdlib(S, true);
+        behl::load_stdlib(S);
         behl::register_function(S, "create_test_userdata", create_test_userdata);
         behl::register_function(S, "get_userdata_value", get_userdata_value);
         behl::register_function(S, "set_userdata_value", set_userdata_value);
@@ -288,6 +288,7 @@ TEST_F(UserdataTest, UserdataMetatableToString)
 TEST_F(UserdataTest, UserdataGCFinalizerCalled)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_counter;
         let ud = create_test_userdata();
@@ -303,6 +304,7 @@ TEST_F(UserdataTest, UserdataGCFinalizerCalled)
 TEST_F(UserdataTest, UserdataGCMultipleFinalizersCalled)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_counter;
         for (let i = 0; i < 10; i++) {
@@ -319,6 +321,7 @@ TEST_F(UserdataTest, UserdataGCMultipleFinalizersCalled)
 TEST_F(UserdataTest, UserdataGCFinalizerModifiesData)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_modify;
         let ud = create_test_userdata();
@@ -333,6 +336,7 @@ TEST_F(UserdataTest, UserdataGCFinalizerModifiesData)
 TEST_F(UserdataTest, UserdataWithoutFinalizerNoError)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let ud = create_test_userdata();
         ud = nil;
         gc.collect();
@@ -344,6 +348,7 @@ TEST_F(UserdataTest, UserdataWithoutFinalizerNoError)
 TEST_F(UserdataTest, UserdataReferencedNotCollected)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_counter;
         
@@ -366,6 +371,7 @@ TEST_F(UserdataTest, UserdataReferencedNotCollected)
 TEST_F(UserdataTest, UserdataInClosurePreserved)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_counter;
         
@@ -558,6 +564,7 @@ TEST_F(UserdataTest, UserdataMetatableLen)
 TEST_F(UserdataTest, UserdataGCWithTableReferences)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_counter;
         
@@ -580,6 +587,7 @@ TEST_F(UserdataTest, UserdataGCWithTableReferences)
 TEST_F(UserdataTest, UserdataStressTestManyAllocations)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_counter;
         
@@ -598,6 +606,7 @@ TEST_F(UserdataTest, UserdataStressTestManyAllocations)
 TEST_F(UserdataTest, UserdataCircularReferenceWithTable)
 {
     constexpr std::string_view code = R"(
+        const gc = import("gc");
         let mt = {};
         mt["__gc"] = finalizer_counter;
         mt["__index"] = mt;

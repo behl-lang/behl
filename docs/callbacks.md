@@ -199,7 +199,7 @@ public:
 // Register the event system
 int main() {
     behl::State* S = behl::new_state();
-    behl::load_stdlib(S, true);
+    behl::load_stdlib(S);
     
     // Create event system
     EventSystem events(S);
