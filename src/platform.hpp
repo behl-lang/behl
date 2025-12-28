@@ -1,5 +1,16 @@
 #pragma once
 
+// Platform detection
+#if defined(_WIN32) || defined(_WIN64)
+#    define BEHL_PLATFORM_WINDOWS 1
+#    define BEHL_PLATFORM_POSIX 0
+#elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
+#    define BEHL_PLATFORM_POSIX 1
+#    define BEHL_PLATFORM_WINDOWS 0
+#else
+#    error "Unsupported platform"
+#endif
+
 // MSVC doesn't report __cplusplus correctly unless /Zc:__cplusplus is set
 // Use _MSVC_LANG instead for MSVC, which is always set correctly
 #if defined(_MSVC_LANG)

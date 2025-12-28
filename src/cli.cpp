@@ -335,6 +335,7 @@ int main(int argc, char* argv[])
     behl::State* S = behl::new_state();
     behl::load_stdlib(S, true);
     behl::load_lib_fs(S, false);
+    behl::load_lib_process(S, false);
 
     int exit_code = 0;
     try

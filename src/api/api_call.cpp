@@ -1,5 +1,3 @@
-#include <behl/behl.hpp>
-
 #include "gc/gc.hpp"
 #include "gc/gc_object.hpp"
 #include "gc/gco_string.hpp"
@@ -7,6 +5,7 @@
 #include "vm/value.hpp"
 #include "vm/vm.hpp"
 
+#include <behl/behl.hpp>
 #include <cassert>
 #include <exception>
 

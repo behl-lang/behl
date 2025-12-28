@@ -2,8 +2,8 @@
 
 #include "common/string.hpp"
 #include "common/vector.hpp"
-#include <behl/export.hpp>
 
+#include <behl/export.hpp>
 #include <string>
 #include <string_view>
 

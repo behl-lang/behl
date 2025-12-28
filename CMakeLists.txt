@@ -124,9 +124,13 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_gc.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_math.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_os.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_process.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_string.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_table.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/libs.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/process/process_platform.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/process/process_posix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/process/process_win32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/memory.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/modules.cpp
@@ -265,6 +269,7 @@ if(BEHL_BUILD_TESTS)
         tests/parser_tests.cpp
         tests/pcall_tests.cpp
         tests/pinning_tests.cpp
+        tests/process_tests.cpp
         tests/recursion_tests.cpp
         tests/register_tests.cpp
         tests/regression_tests.cpp

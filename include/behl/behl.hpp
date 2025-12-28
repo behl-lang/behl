@@ -267,13 +267,14 @@ namespace behl
     //                If false, modules are only cached and require explicit import().
     BEHL_API void load_stdlib(State* S, bool make_global);
 
-    BEHL_API void load_lib_core(State* S);                     // Core functions (print, typeof, tonumber, tostring, etc.)
-    BEHL_API void load_lib_table(State* S, bool make_global);  // Table manipulation functions
-    BEHL_API void load_lib_gc(State* S, bool make_global);     // Garbage collector controls
-    BEHL_API void load_lib_debug(State* S, bool make_global);  // Debug utilities
-    BEHL_API void load_lib_math(State* S, bool make_global);   // Math functions
-    BEHL_API void load_lib_os(State* S, bool make_global);     // OS functions (time, exit, etc.)
-    BEHL_API void load_lib_string(State* S, bool make_global); // String manipulation functions
-    BEHL_API void load_lib_fs(State* S, bool make_global);     // Filesystem operations (security-sensitive, opt-in)
+    BEHL_API void load_lib_core(State* S);                      // Core functions (print, typeof, tonumber, tostring, etc.)
+    BEHL_API void load_lib_table(State* S, bool make_global);   // Table manipulation functions
+    BEHL_API void load_lib_gc(State* S, bool make_global);      // Garbage collector controls
+    BEHL_API void load_lib_debug(State* S, bool make_global);   // Debug utilities
+    BEHL_API void load_lib_math(State* S, bool make_global);    // Math functions
+    BEHL_API void load_lib_os(State* S, bool make_global);      // OS functions (time, exit, etc.)
+    BEHL_API void load_lib_string(State* S, bool make_global);  // String manipulation functions
+    BEHL_API void load_lib_fs(State* S, bool make_global);      // Filesystem operations (security-sensitive, opt-in)
+    BEHL_API void load_lib_process(State* S, bool make_global); // Process spawning and management (security-sensitive, opt-in)
 
 } // namespace behl

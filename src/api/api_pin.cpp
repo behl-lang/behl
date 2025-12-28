@@ -1,9 +1,8 @@
-#include <behl/behl.hpp>
-
 #include "state.hpp"
 #include "vm/value.hpp"
 
 #include <algorithm>
+#include <behl/behl.hpp>
 #include <cassert>
 #include <ranges>
 

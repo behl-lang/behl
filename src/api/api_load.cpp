@@ -1,5 +1,3 @@
-#include <behl/behl.hpp>
-
 #include "ast/ast.hpp"
 #include "ast/ast_holder.hpp"
 #include "backend/compiler.hpp"
@@ -16,6 +14,7 @@
 #include "state.hpp"
 #include "vm/value.hpp"
 
+#include <behl/behl.hpp>
 #include <cassert>
 
 namespace behl

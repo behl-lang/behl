@@ -1,8 +1,8 @@
 #pragma once
 
 #include "common/vector.hpp"
-#include <behl/export.hpp>
 
+#include <behl/export.hpp>
 #include <cstddef>
 #include <memory>
 #include <string_view>
