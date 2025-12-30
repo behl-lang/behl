@@ -173,7 +173,72 @@ namespace behl
         S->debug.step_completed = false;
     }
 
-    std::string build_stacktrace_internal(State* S)
+    inline std::string get_function_name(State* S, const CallFrame& frame)
+    {
+        // Get function name
+        if (frame.proto && frame.proto->name && frame.proto->name->size() > 0)
+        {
+            return std::string{ frame.proto->name->view() };
+        }
+
+        const Value& closure = S->stack[frame.base];
+        if (closure.is_cfunction())
+        {
+            CFunction called_func = closure.get_cfunction();
+
+            // Traverse globals to find matching C function.
+            assert(S->globals_table.is_table());
+
+            auto* globals = S->globals_table.get_table();
+            for (const auto& [key, val] : globals->hash)
+            {
+                if (val.is_cfunction())
+                {
+                    CFunction candidate = val.get_cfunction();
+                    if (candidate == called_func)
+                    {
+                        if (!key.is_string())
+                        {
+                            continue;
+                        }
+                        auto* str = key.get_string();
+                        return std::string{ str->view() };
+                    }
+                }
+            }
+
+            // Traverse modules.
+            for (const auto& [mod_name, mod_table_val] : S->module_cache)
+            {
+                if (!mod_table_val.is_table())
+                {
+                    continue;
+                }
+
+                auto* mod_table = mod_table_val.get_table();
+                for (const auto& [key, val] : mod_table->hash)
+                {
+                    if (val.is_cfunction())
+                    {
+                        CFunction candidate = val.get_cfunction();
+                        if (candidate == called_func)
+                        {
+                            if (!key.is_string())
+                            {
+                                continue;
+                            }
+                            auto* str = key.get_string();
+                            return behl::format("{}.{}", mod_name->view(), str->view());
+                        }
+                    }
+                }
+            }
+        }
+
+        return "<unknown>";
+    }
+
+    inline std::string build_stacktrace_internal(State* S)
     {
         std::string result;
         result.reserve(512);
@@ -193,42 +258,7 @@ namespace behl
             const auto loc = get_current_location(frame);
 
             // Get function name
-            std::string_view func_name = "<unknown>";
-            const Value& closure = S->stack[frame.base];
-            if (closure.is_cfunction())
-            {
-                // Try to find the C function name by searching globals
-                assert(S->globals_table.is_table());
-                auto* globals = S->globals_table.get_table();
-
-                CFunction target_func = *closure.get_cfunction();
-                for (const auto& [key, val] : globals->hash)
-                {
-                    if (val.is_cfunction())
-                    {
-                        CFunction candidate = *val.get_cfunction();
-                        if (candidate == target_func)
-                        {
-                            if (!key.is_string())
-                            {
-                                continue;
-                            }
-
-                            auto* str = key.get_string();
-                            func_name = str->view();
-                            break;
-                        }
-                    }
-                }
-                if (func_name[0] == '<') // Still unknown
-                {
-                    func_name = "<native>";
-                }
-            }
-            else if (frame.proto && frame.proto->name && frame.proto->name->size() > 0)
-            {
-                func_name = frame.proto->name->data();
-            }
+            const auto func_name = get_function_name(S, frame);
 
             // Format: filename(line,col): at function
             if (!loc.filename.empty() && loc.line > 0 && loc.column > 0)
@@ -241,11 +271,11 @@ namespace behl
             }
             else if (!loc.filename.empty())
             {
-                result += behl::format("  {}: at {}", loc.filename, func_name);
+                result += behl::format<"  {}: at {}">(loc.filename, func_name);
             }
             else
             {
-                result += behl::format("  at {}", func_name);
+                result += behl::format<"  at {}">(func_name);
             }
 
             if (i > 0)

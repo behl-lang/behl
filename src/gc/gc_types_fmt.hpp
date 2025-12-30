@@ -1,99 +1,63 @@
 #pragma once
 
-#include "common/format.hpp"
 #include "gc_types.hpp"
+
+#include <string_view>
 
 namespace behl
 {
-
-    template<>
-    struct formatter<GCType>
+    inline std::string_view to_string(GCType gc_type)
     {
-        void format(const GCType& gc_type, std::string& out, [[maybe_unused]] const format_spec& spec) const
+        switch (gc_type)
         {
-            const char* type_str;
-            switch (gc_type)
-            {
-                case GCType::kDead:
-                    type_str = "Dead";
-                    break;
-                case GCType::kTable:
-                    type_str = "Table";
-                    break;
-                case GCType::kString:
-                    type_str = "String";
-                    break;
-                case GCType::kClosure:
-                    type_str = "Closure";
-                    break;
-                case GCType::kProto:
-                    type_str = "Proto";
-                    break;
-                case GCType::kUserdata:
-                    type_str = "Userdata";
-                    break;
-                default:
-                    type_str = "Unknown";
-                    break;
-            }
-            out += type_str;
+            case GCType::kDead:
+                return "Dead";
+            case GCType::kTable:
+                return "Table";
+            case GCType::kString:
+                return "String";
+            case GCType::kClosure:
+                return "Closure";
+            case GCType::kProto:
+                return "Proto";
+            case GCType::kUserdata:
+                return "Userdata";
+            default:
+                return "Unknown";
         }
-    };
+    }
 
-    template<>
-    struct formatter<GCColor>
+    inline std::string_view to_string(GCColor color)
     {
-        void format(const GCColor& gc_color, std::string& out, [[maybe_unused]] const format_spec& spec) const
+        switch (color)
         {
-            const char* color_str;
-            switch (gc_color)
-            {
-                case GCColor::kWhite:
-                    color_str = "White";
-                    break;
-                case GCColor::kGray:
-                    color_str = "Gray";
-                    break;
-                case GCColor::kBlack:
-                    color_str = "Black";
-                    break;
-                case GCColor::kFree:
-                    color_str = "Free";
-                    break;
-                default:
-                    color_str = "Unknown";
-                    break;
-            }
-            out += color_str;
+            case GCColor::kWhite:
+                return "White";
+            case GCColor::kGray:
+                return "Gray";
+            case GCColor::kBlack:
+                return "Black";
+            case GCColor::kFree:
+                return "Free";
+            default:
+                return "Unknown";
         }
-    };
+    }
 
-    template<>
-    struct formatter<GCPhase>
+    inline std::string_view to_string(GCPhase phase)
     {
-        void format(const GCPhase& gc_phase, std::string& out, [[maybe_unused]] const format_spec& spec) const
+        switch (phase)
         {
-            const char* phase_str;
-            switch (gc_phase)
-            {
-                case GCPhase::kIdle:
-                    phase_str = "Idle";
-                    break;
-                case GCPhase::kMark:
-                    phase_str = "Mark";
-                    break;
-                case GCPhase::kSweep:
-                    phase_str = "Sweep";
-                    break;
-                case GCPhase::kFinalize:
-                    phase_str = "Finalize";
-                    break;
-                default:
-                    phase_str = "Unknown";
-                    break;
-            }
-            out += phase_str;
+            case GCPhase::kIdle:
+                return "Idle";
+            case GCPhase::kMark:
+                return "Mark";
+            case GCPhase::kSweep:
+                return "Sweep";
+            case GCPhase::kFinalize:
+                return "Finalize";
+            default:
+                return "Unknown";
         }
-    };
-
+    }
 } // namespace behl

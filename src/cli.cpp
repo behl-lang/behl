@@ -1,3 +1,4 @@
+#include "common/format.hpp"
 #include "common/print.hpp"
 #include "gc/gco_closure.hpp"
 #include "state.hpp"
@@ -34,20 +35,17 @@ struct Options
 };
 
 template<typename... TArgs>
-static void print_error(behl::format_string<TArgs...> fmt, TArgs&&... args)
+static void print_error(behl::format_string<std::type_identity_t<TArgs>...> format_str, TArgs&&... args)
 {
-    println("{}", ::behl::format(fmt, std::forward<TArgs>(args)...));
+    behl::println("{}", behl::format(format_str, std::forward<TArgs>(args)...));
 }
 
 template<typename... TArgs>
-[[noreturn]] static void fatal_error(behl::format_string<TArgs...> fmt, TArgs&&... args)
+[[noreturn]] static void fatal_error(behl::format_string<std::type_identity_t<TArgs>...> format_str, TArgs&&... args)
 {
-    println("{}", ::behl::format(fmt, std::forward<TArgs>(args)...));
-    println("--- ABORT ---");
+    behl::println("{}", behl::format(format_str, std::forward<TArgs>(args)...));
 
     std::flush(std::cout);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::exit(EXIT_FAILURE);
 }
 
@@ -63,7 +61,7 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         {
             if (mode_set)
             {
-                error_msg = ::behl::format("cannot combine -i with other modes");
+                error_msg = behl::format("cannot combine -i with other modes");
                 return std::nullopt;
             }
             opts.mode = Mode::Interactive;
@@ -73,7 +71,7 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         {
             if (mode_set)
             {
-                error_msg = ::behl::format("cannot combine -b with other modes");
+                error_msg = behl::format("cannot combine -b with other modes");
                 return std::nullopt;
             }
             opts.mode = Mode::Dump;
@@ -83,12 +81,12 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         {
             if (mode_set)
             {
-                error_msg = ::behl::format("cannot combine -e with other modes");
+                error_msg = behl::format("cannot combine -e with other modes");
                 return std::nullopt;
             }
             if (i + 1 >= argc)
             {
-                error_msg = ::behl::format("'-e' requires an argument");
+                error_msg = behl::format("'-e' requires an argument");
                 return std::nullopt;
             }
             opts.mode = Mode::Execute;
@@ -97,7 +95,7 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         }
         else if (arg.starts_with('-'))
         {
-            error_msg = ::behl::format("unrecognized option '{}'", arg);
+            error_msg = behl::format("unrecognized option '{}'", arg);
             return std::nullopt;
         }
         else
@@ -123,18 +121,18 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         // Mode was explicitly set, apply it to scripts
         if (opts.mode == Mode::Interactive)
         {
-            error_msg = ::behl::format("-i flag does not work with script files");
+            error_msg = behl::format("-i flag does not work with script files");
             return std::nullopt;
         }
         if (opts.mode == Mode::Execute)
         {
-            error_msg = ::behl::format("-e flag does not work with script files");
+            error_msg = behl::format("-e flag does not work with script files");
             return std::nullopt;
         }
     }
     else if (opts.mode == Mode::Dump)
     {
-        error_msg = ::behl::format("-b requires a script file or -e code");
+        error_msg = behl::format("-b requires a script file or -e code");
         return std::nullopt;
     }
 
@@ -146,7 +144,7 @@ bool load_file(behl::State* S, std::string_view filename, std::string& error_msg
     std::ifstream file(filename.data(), std::ios::binary);
     if (!file)
     {
-        error_msg = ::behl::format("cannot open {}: No such file or directory", filename);
+        error_msg = behl::format("cannot open {}: No such file or directory", filename);
         return false;
     }
 

@@ -8,11 +8,11 @@ namespace behl
     {
         if (line > 0 && column > 0)
         {
-            return format("{}:{}:{}", filename, line, column);
+            return behl::format("{}:{}:{}", filename, line, column);
         }
         else if (line > 0)
         {
-            return format("{}:{}", filename, line);
+            return behl::format("{}:{}", filename, line);
         }
         else
         {
@@ -35,19 +35,19 @@ namespace behl
     {
         if (!location.filename.empty() && location.line > 0 && location.column > 0)
         {
-            return format("{}({},{}): {}: {}", location.filename, location.line, location.column, type, message);
+            return behl::format("{}({},{}): {}: {}", location.filename, location.line, location.column, type, message);
         }
         else if (!location.filename.empty() && location.line > 0)
         {
-            return format("{}({}): {}: {}", location.filename, location.line, type, message);
+            return behl::format("{}({}): {}: {}", location.filename, location.line, type, message);
         }
         else if (!location.filename.empty())
         {
-            return format("{}: {}: {}", location.filename, type, message);
+            return behl::format("{}: {}: {}", location.filename, type, message);
         }
         else
         {
-            return format("{}: {}", type, message);
+            return behl::format("{}: {}", type, message);
         }
     }
 

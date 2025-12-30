@@ -89,6 +89,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv_compat.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/hash_map.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/print.cpp
@@ -252,6 +253,7 @@ if(BEHL_BUILD_TESTS)
         tests/edge_case_tests.cpp
         tests/error_tests.cpp
         tests/format_tests.cpp
+        tests/string_format_tests.cpp
         tests/function_tests.cpp
         tests/gc_list_tests.cpp
         tests/gc_stress_tests.cpp
@@ -303,9 +305,9 @@ if(BEHL_BUILD_TESTS)
 
     target_link_libraries(behl_tests
         PRIVATE
+            compiler_opts
             libbehl
             GTest::gtest_main
-            compiler_opts
     )
 
     include(CTest)
@@ -380,7 +382,6 @@ if(BEHL_BUILD_BENCHMARKS AND NOT EMSCRIPTEN)
         benchmarks/semantic_benchmarks.cpp
         benchmarks/compiler_benchmarks.cpp
         benchmarks/scriptcall_benchmarks.cpp
-        benchmarks/format_benchmarks.cpp
     )
 
     add_executable(benchmarks)
@@ -397,9 +398,9 @@ if(BEHL_BUILD_BENCHMARKS AND NOT EMSCRIPTEN)
 
     target_link_libraries(benchmarks
         PRIVATE
+            compiler_opts
             libbehl
             benchmark::benchmark_main
-            compiler_opts
     )
 endif()
 

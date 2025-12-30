@@ -161,7 +161,7 @@ namespace behl
         // In module mode, disallow bare assignments (globals) except to stdlib
         if (state.is_module && !is_local(state, var_name) && !is_upvalue(state, var_name))
         {
-            const auto msg = format(
+            const auto msg = behl::format(
                 "Cannot assign to undeclared variable '{}' in module mode. Use 'let' or 'const' to declare variables.",
                 var_name);
 
@@ -383,8 +383,8 @@ namespace behl
             // In module mode, any non-local, non-upvalue, non-builtin variable is an error
             if (state.is_module && !is_local(state, name) && !is_upvalue(state, name) && !is_builtin_function(name))
             {
-                const auto msg = format("Variable '{}' is not declared. Use 'let' or 'const' to declare local variables, "
-                                        "or 'import()' to load modules.",
+                const auto msg = behl::format("Variable '{}' is not declared. Use 'let' or 'const' to declare local variables, "
+                                              "or 'import()' to load modules.",
                     name);
                 throw SemanticError(msg);
             }

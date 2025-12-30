@@ -1,5 +1,6 @@
 #include "gc.hpp"
 
+#include "common/format.hpp"
 #include "common/print.hpp"
 #include "config_internal.hpp"
 #include "gc_object.hpp"
@@ -31,7 +32,7 @@ namespace behl
                 case GCType::kString:
                 {
                     auto* str = static_cast<GCString*>(obj);
-                    type_info = ::behl::format("String['{}']", str->view());
+                    type_info = behl::format<"String['{}']">(str->view());
                     break;
                 }
                 case GCType::kTable:
@@ -39,12 +40,12 @@ namespace behl
                     auto* table = static_cast<GCTable*>(obj);
                     if (table->has_name())
                     {
-                        type_info = ::behl::format(
-                            "Table['{}', arr={}, hash={}]", table->get_name(), table->array.size(), table->hash.size());
+                        type_info = behl::format<"Table['{}', arr={}, hash={}]">(
+                            table->get_name(), table->array.size(), table->hash.size());
                     }
                     else
                     {
-                        type_info = ::behl::format("Table[arr={}, hash={}]", table->array.size(), table->hash.size());
+                        type_info = behl::format<"Table[arr={}, hash={}}]">(table->array.size(), table->hash.size());
                     }
                     break;
                 }
@@ -57,15 +58,15 @@ namespace behl
                 case GCType::kUserdata:
                 {
                     auto* userdata = static_cast<UserdataData*>(obj);
-                    type_info = ::behl::format("Userdata[{}b]", userdata->size);
+                    type_info = behl::format<"Userdata[{}b]">(userdata->size);
                     break;
                 }
                 default:
-                    type_info = ::behl::format("Unknown[type={}]", obj->type);
+                    type_info = behl::format<"Unknown[type={}]">(obj->type);
                     break;
             }
 
-            return ::behl::format("{{ color={}, {:p} {} }}", obj->color, static_cast<void*>(obj), type_info);
+            return behl::format<"{{ color={}, {:p} {} }}">(to_string(obj->color), static_cast<const void*>(obj), type_info);
         }
         else
         {
@@ -74,11 +75,12 @@ namespace behl
     }
 
     template<typename... TArgs>
-    static void gc_log([[maybe_unused]] behl::format_string<TArgs...> fmt, [[maybe_unused]] TArgs&&... args)
+    static void gc_log(
+        [[maybe_unused]] behl::format_string<std::type_identity_t<TArgs>...> fmt, [[maybe_unused]] TArgs&&... args)
     {
         if constexpr (kGCLoggingEnabled)
         {
-            println("[GC] {}", ::behl::format(fmt, std::forward<TArgs>(args)...));
+            println<"[GC] {}">(behl::format(fmt, std::forward<TArgs>(args)...));
         }
     }
 
@@ -871,7 +873,7 @@ namespace behl
                             // This userdata has a finalizer - resurrect it and queue for finalization
                             if constexpr (kGCLoggingEnabled)
                             {
-                                println("[GC] Queueing userdata {:p} for finalization", static_cast<void*>(userdata));
+                                println("[GC] Queueing userdata {:p} for finalization", static_cast<const void*>(userdata));
                             }
                             // Mark both the userdata AND its metatable to keep them alive
                             mark_gray(S, userdata);
@@ -1092,7 +1094,7 @@ namespace behl
                 Value gc_method = metatable_get_method<MetaMethodType::kGC>(Value(userdata));
                 if (gc_method.is_callable())
                 {
-                    gc_log("Calling finalizer for userdata {:p}", static_cast<void*>(userdata));
+                    gc_log("Calling finalizer for userdata {:p}", static_cast<const void*>(userdata));
 
                     metatable_call_method(S, gc_method, Value(userdata));
                 }
@@ -1102,7 +1104,7 @@ namespace behl
             // (it was kept BLACK to survive this cycle's sweep)
             userdata->color = GCColor::kWhite;
 
-            gc_log("Marked finalized userdata {:p} WHITE for next cycle", static_cast<void*>(userdata));
+            gc_log("Marked finalized userdata {:p} WHITE for next cycle", static_cast<const void*>(userdata));
             ++work_done;
         }
 

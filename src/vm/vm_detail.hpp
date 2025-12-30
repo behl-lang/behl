@@ -19,7 +19,7 @@ namespace behl
     {
         if (!frame.proto)
         {
-            return SourceLocation("<unknown>");
+            return SourceLocation("<native>");
         }
 
         int line = 0;
@@ -104,7 +104,7 @@ namespace behl
                 {
                     return vm_makestring(S, std::string_view(buffer, static_cast<size_t>(result.ptr - buffer)));
                 }
-                return vm_makestring(S, format("{}", val.get_integer()));
+                return vm_makestring(S, behl::format<"{}">(val.get_integer()));
             }
             case Type::kNumber:
             {
@@ -115,14 +115,14 @@ namespace behl
                 {
                     return vm_makestring(S, std::string_view(buffer, static_cast<size_t>(result.ptr - buffer)));
                 }
-                return vm_makestring(S, format("{}", d));
+                return vm_makestring(S, behl::format<"{}">(d));
             }
             case Type::kString:
                 return vm_makestring(S, val.get_string()->view());
             case Type::kClosure:
-                return vm_makestring(S, format("function:{:p}", static_cast<const void*>(val.get_closure())));
+                return vm_makestring(S, behl::format<"function:{:p}">(static_cast<const void*>(val.get_closure())));
             case Type::kCFunction:
-                return vm_makestring(S, format("cfunction:{:p}", reinterpret_cast<const void*>(val.get_cfunction())));
+                return vm_makestring(S, behl::format<"cfunction:{:p}">(reinterpret_cast<const void*>(val.get_cfunction())));
             default:
                 break;
         }
@@ -146,11 +146,11 @@ namespace behl
         // If no metamethod or not callable, return the default string representation
         if (type == Type::kTable)
         {
-            return vm_makestring(S, format("table:{:p}", static_cast<const void*>(val.get_table())));
+            return vm_makestring(S, behl::format<"table:{:p}">(static_cast<const void*>(val.get_table())));
         }
         else if (type == Type::kUserdata)
         {
-            return vm_makestring(S, format("userdata:{:p}", static_cast<const void*>(val.get_userdata())));
+            return vm_makestring(S, behl::format<"userdata:{:p}">(static_cast<const void*>(val.get_userdata())));
         }
         else
         {

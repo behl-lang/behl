@@ -120,7 +120,71 @@ let escaped = string.format("Braces: {{ and }}");
 print(escaped);  // "Braces: { and }"
 ```
 
-**Note:** Uses `{}` placeholder syntax (like Python/Rust), not printf-style `%d/%s/%f`.
+**Supported Format Specifications:**
+
+```cpp
+// Argument indexing and reordering
+let s = string.format("{1} {0}", "world", "hello");  // "hello world"
+
+// Hex formatting
+let hex = string.format("Hex: {:x}", 255);           // "Hex: ff"
+let HEX = string.format("HEX: {:X}", 255);           // "HEX: FF"
+
+// Width and alignment
+let padded = string.format("Padded: {:5}", 42);      // "Padded:    42"
+let left = string.format("Left: {:<5}", 42);         // "Left: 42   "
+let right = string.format("Right: {:>5}", 42);       // "Right:    42"
+let center = string.format("Center: {:^5}", 42);     // "Center:  42  "
+
+// Float precision
+let precise = string.format("Pi: {:.2}", 3.14159);   // "Pi: 3.14"
+let fixed = string.format("Fixed: {:.4}", 2.5);      // "Fixed: 2.5000"
+
+// Combined specifiers
+let combo = string.format("{:>8.2}", 3.14159);       // "    3.14"
+```
+
+**Format Syntax:**
+- `{}` - Automatic argument
+- `{n}` - Indexed argument (0-based)
+- `{:x}` / `{:X}` - Hexadecimal (lowercase/uppercase)
+- `{:d}` - Decimal (explicit)
+- `{:f}` - Float fixed-point
+- `{:fill<width}` - Left align with fill character
+- `{:fill>width}` - Right align with fill character
+- `{:fill^width}` - Center align with fill character
+- `{:<width}` - Left align (space fill)
+- `{:>width}` - Right align (space fill)
+- `{:^width}` - Center align (space fill)
+- `{:width}` - Minimum width (right-aligned by default for numbers)
+- `{:.precision}` - Float precision
+- `{:width.precision}` - Combined width and precision
+- `{:{}}` - Dynamic width from next argument (sequential)
+- `{:.{}}` - Dynamic precision from next argument (sequential)
+- `{:{}.{}}` - Dynamic width and precision (sequential)
+- `{0:{1}}` - Indexed dynamic width (arg 1 is width for arg 0)
+- `{0:.{1}}` - Indexed dynamic precision
+- `{0:{1}.{2}}` - Indexed dynamic width and precision
+- `{{` / `}}` - Escaped braces
+
+**Example with dynamic parameters:**
+```cpp
+// Sequential consumption
+let value = 42;
+let w = 8;
+let s = string.format("{:{}}", value, w);  // "      42" (width 8)
+
+// Indexed parameters
+let pi = 3.14159;
+let width = 10;
+let prec = 2;
+let formatted = string.format("{0:{1}.{2}}", pi, width, prec);  // "      3.14"
+
+// Out of order
+let greeting = string.format("{1:{0}}", 10, "Hello");  // "     Hello"
+```
+
+**UTF-8 Support:** Format strings and arguments handle UTF-8 transparently. Multi-byte UTF-8 sequences are preserved in literal text and string arguments
 
 ---
 

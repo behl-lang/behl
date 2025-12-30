@@ -126,7 +126,7 @@ namespace behl
         assert(S != nullptr && "State can not be null");
 
         std::string trace = build_stacktrace_internal(S);
-        std::string full_message = ::behl::format("{},\n{}", msg, trace);
+        std::string full_message = behl::format("{}\n{}", msg, trace);
 
         throw RuntimeError(full_message);
     }
@@ -219,7 +219,7 @@ namespace behl
 
         const auto arg_idx = one_based_arg_index(S, idx);
         const auto received_type = value_typename(S, idx);
-        const auto msg = ::behl::format("bad argument #{} (expected {}, got {})", arg_idx, expected, received_type);
+        const auto msg = behl::format("bad argument #{} (expected {}, got {})", arg_idx, expected, received_type);
         return TypeError(msg);
     }
 

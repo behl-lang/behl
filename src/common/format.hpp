@@ -3,582 +3,1011 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
-#include <cmath>
-#include <concepts>
+#include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <type_traits>
+#include <variant>
+#include <vector>
 
 namespace behl
 {
+    // Compile-time string literal wrapper (C++20 NTTP)
+    template<size_t N>
+    struct format_string_literal
+    {
+        char data[N];
+
+        constexpr format_string_literal(const char (&str)[N])
+        {
+            for (size_t i = 0; i < N; ++i)
+            {
+                data[i] = str[i];
+            }
+        }
+
+        constexpr std::string_view view() const
+        {
+            return std::string_view(data, N - 1);
+        }
+    };
+
     struct format_spec
     {
         enum class type : char
         {
-            none = '\0',
+            none = 0,
             decimal = 'd',
             hex_lower = 'x',
             hex_upper = 'X',
-            floating = 'f',
-            string = 's',
-            pointer = 'p',
-            character = 'c'
+            float_fixed = 'f',
+            float_exp = 'e',
+            float_general = 'g'
         };
 
-        type spec_type = type::none;
-        int width = -1;
+        int width = 0;
         int precision = -1;
+        int width_arg_index = -1;
+        int precision_arg_index = -1;
+        type spec_type = type::none;
         char fill = ' ';
-        char align = '\0';
+        char align = '<';
+        bool dynamic_width = false;
+        bool dynamic_precision = false;
+        bool explicit_align = false;
+
+        constexpr format_spec() = default;
     };
 
-    constexpr format_spec parse_spec(std::string_view spec)
+    struct format_part
     {
-        format_spec result;
-        if (spec.empty())
+        std::string_view literal;
+        size_t arg_index = static_cast<size_t>(-1);
+        format_spec spec;
+        bool is_literal = true;
+
+        constexpr format_part() = default;
+        constexpr format_part(std::string_view lit)
+            : literal(lit)
+            , is_literal(true)
         {
-            return result;
+        }
+    };
+
+    template<size_t N>
+    struct format_parts
+    {
+        std::array<format_part, N> parts{};
+        size_t count = 0;
+        size_t arg_count = 0;
+
+        constexpr format_parts() = default;
+    };
+
+    constexpr format_spec parse_format_spec(std::string_view spec_str)
+    {
+        format_spec spec;
+        if (spec_str.empty())
+        {
+            return spec;
         }
 
-        size_t pos = 0;
+        size_t i = 0;
 
-        // Check for alignment and fill: [[fill]align]
-        // align can be '<' (left), '>' (right), '^' (center)
-        if (pos + 1 < spec.size() && (spec[pos + 1] == '<' || spec[pos + 1] == '>' || spec[pos + 1] == '^'))
+        if (i < spec_str.size() && (spec_str[i] == '<' || spec_str[i] == '>' || spec_str[i] == '^'))
         {
-            result.fill = spec[pos];
-            result.align = spec[pos + 1];
-            pos += 2;
-        }
-        else if (pos < spec.size() && (spec[pos] == '<' || spec[pos] == '>' || spec[pos] == '^'))
-        {
-            result.align = spec[pos];
-            pos++;
+            spec.align = spec_str[i++];
+            spec.explicit_align = true;
         }
 
-        // Check for width
-        if (pos < spec.size() && spec[pos] >= '0' && spec[pos] <= '9')
+        // Check for dynamic width: {} or {N}
+        if (i < spec_str.size() && spec_str[i] == '{')
         {
-            int w = 0;
-            while (pos < spec.size() && spec[pos] >= '0' && spec[pos] <= '9')
+            ++i; // consume '{'
+            if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
             {
-                w = w * 10 + (spec[pos] - '0');
-                pos++;
+                // Parse indexed dynamic width: {N}
+                int index = 0;
+                while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+                {
+                    index = index * 10 + (spec_str[i++] - '0');
+                }
+                spec.width_arg_index = index;
+                spec.dynamic_width = true;
             }
-            result.width = w;
-        }
-
-        // Check for precision
-        if (pos < spec.size() && spec[pos] == '.')
-        {
-            pos++;
-            int p = 0;
-            while (pos < spec.size() && spec[pos] >= '0' && spec[pos] <= '9')
+            else if (i < spec_str.size() && spec_str[i] == '}')
             {
-                p = p * 10 + (spec[pos] - '0');
-                pos++;
+                // Sequential dynamic width: {}
+                spec.dynamic_width = true;
             }
-            result.precision = p;
+
+            if (i < spec_str.size() && spec_str[i] == '}')
+            {
+                ++i; // consume '}'
+            }
+        }
+        else if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+        {
+            int width = 0;
+            while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+            {
+                width = width * 10 + (spec_str[i++] - '0');
+            }
+            spec.width = width;
         }
 
-        // Check for type (last char or next char)
-        if (pos < spec.size())
+        // Check for dynamic precision: .{} or .{N}
+        if (i < spec_str.size() && spec_str[i] == '.')
         {
-            char type_char = spec[pos];
+            ++i;
+            if (i < spec_str.size() && spec_str[i] == '{')
+            {
+                ++i; // consume '{'
+                if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+                {
+                    // Parse indexed dynamic precision: .{N}
+                    int index = 0;
+                    while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+                    {
+                        index = index * 10 + (spec_str[i++] - '0');
+                    }
+                    spec.precision_arg_index = index;
+                    spec.dynamic_precision = true;
+                }
+                else if (i < spec_str.size() && spec_str[i] == '}')
+                {
+                    // Sequential dynamic precision: .{}
+                    spec.dynamic_precision = true;
+                }
+
+                if (i < spec_str.size() && spec_str[i] == '}')
+                {
+                    ++i; // consume '}'
+                }
+            }
+            else if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+            {
+                int precision = 0;
+                while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+                {
+                    precision = precision * 10 + (spec_str[i++] - '0');
+                }
+                spec.precision = precision;
+            }
+        }
+
+        if (i < spec_str.size())
+        {
+            char type_char = spec_str[i];
             switch (type_char)
             {
                 case 'd':
-                    result.spec_type = format_spec::type::decimal;
+                    spec.spec_type = format_spec::type::decimal;
                     break;
                 case 'x':
-                    result.spec_type = format_spec::type::hex_lower;
+                    spec.spec_type = format_spec::type::hex_lower;
                     break;
                 case 'X':
-                    result.spec_type = format_spec::type::hex_upper;
+                    spec.spec_type = format_spec::type::hex_upper;
                     break;
                 case 'f':
-                    result.spec_type = format_spec::type::floating;
+                    spec.spec_type = format_spec::type::float_fixed;
                     break;
-                case 's':
-                    result.spec_type = format_spec::type::string;
+                case 'e':
+                    spec.spec_type = format_spec::type::float_exp;
                     break;
-                case 'p':
-                    result.spec_type = format_spec::type::pointer;
-                    break;
-                case 'c':
-                    result.spec_type = format_spec::type::character;
+                case 'g':
+                    spec.spec_type = format_spec::type::float_general;
                     break;
             }
         }
 
-        return result;
+        return spec;
     }
 
-    template<typename T, int Base = 10>
-    inline void int_to_string(T value, std::string& out, bool uppercase = false)
+    constexpr size_t count_format_parts(std::string_view fmt)
     {
-        if (value == 0)
-        {
-            out += '0';
-            return;
-        }
+        size_t count = 0;
+        size_t i = 0;
+        size_t literal_start = 0;
 
-        bool negative = false;
-        if constexpr (std::is_signed_v<T>)
+        while (i < fmt.size())
         {
-            if (value < 0)
+            if (fmt[i] == '{')
             {
-                negative = true;
-                value = -value;
-            }
-        }
-
-        // Fast path for base 10 using std::to_chars
-        if constexpr (Base == 10)
-        {
-            char buffer[32];
-            using SignedT = std::make_signed_t<T>;
-            auto result = std::to_chars(
-                buffer, buffer + sizeof(buffer), negative ? static_cast<T>(-static_cast<SignedT>(value)) : value);
-            if (result.ec == std::errc{})
-            {
-                out.append(buffer, static_cast<size_t>(result.ptr - buffer));
-                return;
-            }
-        }
-
-        // Fast path for hex using std::to_chars
-        if constexpr (Base == 16)
-        {
-            char buffer[32];
-            auto result = std::to_chars(buffer, buffer + sizeof(buffer), value, 16);
-            if (result.ec == std::errc{})
-            {
-                if (negative)
+                if (i + 1 < fmt.size() && fmt[i + 1] == '{')
                 {
-                    out += '-';
-                }
-                // Handle uppercase if needed
-                if (uppercase)
-                {
-                    for (char* p = buffer; p < result.ptr; ++p)
-                    {
-                        if (*p >= 'a' && *p <= 'f')
-                        {
-                            *p = *p - 'a' + 'A';
-                        }
-                    }
-                }
-                out.append(buffer, static_cast<size_t>(result.ptr - buffer));
-                return;
-            }
-        }
-
-        // Fallback for other bases
-        constexpr size_t buf_size = 32;
-        char buffer[buf_size];
-        char* ptr = buffer + buf_size;
-
-        const char* digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
-
-        while (value > 0)
-        {
-            *--ptr = digits[value % Base];
-            value /= Base;
-        }
-
-        if (negative)
-        {
-            *--ptr = '-';
-        }
-
-        out.append(ptr, static_cast<size_t>(buffer + buf_size - ptr));
-    }
-
-    inline void double_to_string(double value, std::string& out, int precision = -1)
-    {
-        // Special values
-        if (std::isnan(value))
-        {
-            out += "nan";
-            return;
-        }
-        if (std::isinf(value))
-        {
-            out += value < 0 ? "-inf" : "inf";
-            return;
-        }
-        if (value == 0.0)
-        {
-            out += "0";
-            return;
-        }
-
-        // Use std::to_chars - it's already highly optimized (uses Ryu internally in modern implementations)
-        char buffer[64];
-        std::to_chars_result result;
-
-        if (precision < 0)
-        {
-            result = std::to_chars(buffer, buffer + sizeof(buffer), value);
-        }
-        else
-        {
-            result = std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::fixed, precision);
-        }
-
-        if (result.ec == std::errc{})
-        {
-            out.append(buffer, static_cast<size_t>(result.ptr - buffer));
-        }
-        else
-        {
-            out += "error";
-        }
-    }
-
-    // Forward declaration for formatter template
-    template<typename T, typename CharT = char>
-    struct formatter;
-
-    namespace detail
-    {
-        // Concept to check if a formatter<T> specialization exists and is usable
-        template<typename T>
-        concept has_formatter = requires(formatter<T> f, std::string& out, const T& value, const format_spec& spec) {
-            { f.format(value, out, spec) } -> std::same_as<void>;
-        };
-
-        template<typename T>
-        inline void format_one(std::string& out, const T& value, const format_spec& spec)
-        {
-            // Format the value first into a temporary string if we need to apply width/alignment
-            std::string temp;
-            std::string* target = (spec.width > 0) ? &temp : &out;
-
-            // Check if a custom formatter<T> exists
-            if constexpr (has_formatter<T>)
-            {
-                formatter<T> f;
-                f.format(value, *target, spec);
-            }
-            else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char>)
-            {
-                if (spec.spec_type == format_spec::type::hex_lower)
-                {
-                    int_to_string<T, 16>(value, *target, false);
-                }
-                else if (spec.spec_type == format_spec::type::hex_upper)
-                {
-                    int_to_string<T, 16>(value, *target, true);
-                }
-                else
-                {
-                    int_to_string<T, 10>(value, *target, false);
-                }
-            }
-            else if constexpr (std::is_floating_point_v<T>)
-            {
-                int precision = spec.precision >= 0 ? spec.precision : -1;
-                double_to_string(static_cast<double>(value), *target, precision);
-            }
-            else if constexpr (std::is_same_v<T, bool>)
-            {
-                *target += value ? "true" : "false";
-            }
-            else if constexpr (std::is_same_v<T, char>)
-            {
-                *target += value;
-            }
-            else if constexpr (std::is_convertible_v<T, const char*>)
-            {
-                const char* str = value;
-                *target += str ? str : "(null)";
-            }
-            else if constexpr (std::is_same_v<T, std::string_view>)
-            {
-                *target += value;
-            }
-            else if constexpr (std::is_same_v<T, std::string>)
-            {
-                *target += value;
-            }
-            else if constexpr (std::is_pointer_v<T>)
-            {
-                *target += "0x";
-                int_to_string<uintptr_t, 16>(reinterpret_cast<uintptr_t>(value), *target, false);
-            }
-            else
-            {
-                *target += "(unsupported)";
-            }
-
-            // Apply width and alignment if needed
-            if (spec.width > 0 && target == &temp)
-            {
-                size_t len = temp.size();
-                if (len < static_cast<size_t>(spec.width))
-                {
-                    size_t padding = static_cast<size_t>(spec.width) - len;
-                    char fill_char = spec.fill != '\0' ? spec.fill : ' ';
-                    char align = spec.align != '\0' ? spec.align : '<'; // Default to left align
-
-                    if (align == '<') // Left align
-                    {
-                        out += temp;
-                        out.append(padding, fill_char);
-                    }
-                    else if (align == '>') // Right align
-                    {
-                        out.append(padding, fill_char);
-                        out += temp;
-                    }
-                    else if (align == '^') // Center align
-                    {
-                        size_t left_pad = padding / 2;
-                        size_t right_pad = padding - left_pad;
-                        out.append(left_pad, fill_char);
-                        out += temp;
-                        out.append(right_pad, fill_char);
-                    }
-                    else
-                    {
-                        out += temp; // Fallback
-                    }
-                }
-                else
-                {
-                    out += temp;
-                }
-            }
-        }
-
-        template<typename Tuple, size_t... Is>
-        inline void format_arg_at_index(
-            std::string& result, Tuple&& args, size_t index, const format_spec& spec, std::index_sequence<Is...>)
-        {
-            (void)((index == Is ? (format_one(result, std::get<Is>(args), spec), true) : false) || ...);
-        }
-    } // namespace detail
-
-    template<typename... TArgs>
-    struct basic_format_string
-    {
-    private:
-        struct Segment
-        {
-            enum class Type
-            {
-                Text,
-                Arg
-            } type
-                = Type::Text;
-
-            int text_start = 0;
-            int text_length = 0;
-
-            uint16_t arg_index = 0;
-            int16_t arg_width = 0;
-            int16_t arg_precision = 0;
-            char arg_type = 0;
-            char arg_fill = 0;
-            char arg_align = 0;
-        };
-
-        static constexpr size_t MAX_SEGMENTS = 64;
-        std::array<Segment, MAX_SEGMENTS> segments{};
-        size_t segment_count = 0;
-        std::string_view str;
-
-    public:
-        template<size_t N>
-        consteval basic_format_string(const char (&s)[N])
-            : str(s, N - 1)
-        {
-            parse();
-        }
-
-        basic_format_string(const basic_format_string&) = default;
-        basic_format_string& operator=(const basic_format_string&) = default;
-
-        constexpr void parse()
-        {
-            size_t pos = 0;
-            size_t arg_idx = 0;
-
-            while (pos < str.size())
-            {
-                size_t brace = str.find_first_of("{}", pos);
-                if (brace == std::string_view::npos)
-                {
-                    add_literal(pos, str.size() - pos);
-                    break;
-                }
-
-                if (brace > pos)
-                {
-                    add_literal(pos, brace - pos);
-                }
-
-                char ch = str[brace];
-                if (brace + 1 < str.size() && str[brace + 1] == ch)
-                {
-                    add_literal(brace, 1);
-                    pos = brace + 2;
+                    i += 2;
                     continue;
                 }
 
-                if (ch == '}')
+                if (i > literal_start)
                 {
-                    throw "Unmatched closing brace '}'";
+                    ++count;
                 }
 
-                // Found '{'
-                size_t close = str.find('}', brace);
-                if (close == std::string_view::npos)
+                while (i < fmt.size() && fmt[i] != '}')
                 {
-                    throw "Unclosed format placeholder";
+                    ++i;
                 }
 
-                std::string_view content = str.substr(brace + 1, close - brace - 1);
-                format_spec spec;
-                if (!content.empty() && content[0] == ':')
+                if (i >= fmt.size())
                 {
-                    spec = parse_spec(content.substr(1));
+                    throw std::runtime_error("unmatched '{' in format string");
                 }
 
-                if (arg_idx >= sizeof...(TArgs))
+                ++count;
+                ++i;
+                literal_start = i;
+            }
+            else if (fmt[i] == '}')
+            {
+                if (i + 1 < fmt.size() && fmt[i + 1] == '}')
                 {
-                    throw "Too many format placeholders for provided arguments";
+                    i += 2;
+                    continue;
                 }
-
-                add_arg(arg_idx, spec);
-                arg_idx++;
-                pos = close + 1;
+                throw std::runtime_error("unmatched '}' in format string");
+            }
+            else
+            {
+                ++i;
             }
         }
 
-        constexpr void add_literal(size_t start, size_t length)
+        if (i > literal_start)
         {
-            if (segment_count >= MAX_SEGMENTS)
-            {
-                throw "Format string too complex (too many segments)";
-            }
-            if (start > std::numeric_limits<uint16_t>::max() || length > std::numeric_limits<uint16_t>::max())
-            {
-                throw "Format string too long";
-            }
-
-            segments[segment_count] = Segment{
-                .type = Segment::Type::Text, .text_start = static_cast<int>(start), .text_length = static_cast<int>(length)
-            };
-            segment_count++;
+            ++count;
         }
 
-        constexpr void add_arg(size_t index, format_spec spec)
-        {
-            if (segment_count >= MAX_SEGMENTS)
-            {
-                throw "Format string too complex (too many segments)";
-            }
-            if (index > std::numeric_limits<uint16_t>::max())
-            {
-                throw "Too many arguments";
-            }
+        return count > 0 ? count : 1;
+    }
 
-            segments[segment_count] = Segment{ .type = Segment::Type::Arg,
-                .arg_index = static_cast<uint16_t>(index),
-                .arg_width = static_cast<int16_t>(spec.width),
-                .arg_precision = static_cast<int16_t>(spec.precision),
-                .arg_type = static_cast<char>(spec.spec_type),
-                .arg_fill = spec.fill,
-                .arg_align = spec.align };
-            segment_count++;
-        }
-
-        template<typename... As>
-        friend std::string format(basic_format_string<std::type_identity_t<As>...> fmt, As&&... Args);
-
-        template<typename OutputIt, typename... As>
-        friend OutputIt format_to(OutputIt out, basic_format_string<std::type_identity_t<As>...> fmt, As&&... Args);
-    };
-
-    template<typename... TArgs>
-    using format_string = basic_format_string<std::type_identity_t<TArgs>...>;
-
-    template<typename... TArgs>
-    inline std::string format(format_string<TArgs...> fmt, TArgs&&... args)
+    template<size_t N>
+    constexpr format_parts<N> parse_format_string_sized(std::string_view fmt)
     {
-        using FmtType = format_string<TArgs...>;
+        format_parts<N> result;
+        size_t i = 0;
+        size_t literal_start = 0;
+        size_t arg_index = 0;
 
-        // Fast path for single argument with simple format
-        if constexpr (sizeof...(TArgs) == 1)
+        while (i < fmt.size())
         {
-            if (fmt.segment_count == 2 && fmt.segments[1].type == FmtType::Segment::Type::Arg
-                && fmt.segments[1].arg_precision < 0)
+            if (fmt[i] == '{')
             {
-                std::string result;
-                result.reserve(static_cast<size_t>(fmt.segments[0].text_length) + 16);
-                result.append(fmt.str.data() + fmt.segments[0].text_start, static_cast<size_t>(fmt.segments[0].text_length));
-                format_spec spec{};
-                spec.spec_type = static_cast<format_spec::type>(fmt.segments[1].arg_type);
-                detail::format_one(result, std::forward<TArgs>(args)..., spec);
-                return result;
+                if (i + 1 < fmt.size() && fmt[i + 1] == '{')
+                {
+                    i += 2;
+                    continue;
+                }
+
+                if (i > literal_start)
+                {
+                    result.parts[result.count++] = format_part(fmt.substr(literal_start, i - literal_start));
+                }
+
+                size_t spec_start = i + 1;
+                while (i < fmt.size() && fmt[i] != '}')
+                {
+                    ++i;
+                }
+
+                if (i >= fmt.size())
+                {
+                    throw std::runtime_error("unmatched '{' in format string");
+                }
+
+                std::string_view spec_str = fmt.substr(spec_start, i - spec_start);
+
+                // Parse argument index if present
+                size_t current_arg_index = arg_index;
+                size_t colon_pos = spec_str.find(':');
+
+                if (!spec_str.empty())
+                {
+                    std::string_view index_part = (colon_pos != std::string_view::npos) ? spec_str.substr(0, colon_pos)
+                                                                                        : spec_str;
+
+                    // Check if it's a numeric index
+                    if (!index_part.empty() && index_part[0] >= '0' && index_part[0] <= '9')
+                    {
+                        size_t parsed_index = 0;
+                        for (char c : index_part)
+                        {
+                            if (c >= '0' && c <= '9')
+                            {
+                                parsed_index = parsed_index * 10 + static_cast<size_t>(c - '0');
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        current_arg_index = parsed_index;
+
+                        // Extract format spec after colon (if any)
+                        if (colon_pos != std::string_view::npos && colon_pos + 1 < spec_str.size())
+                        {
+                            spec_str = spec_str.substr(colon_pos + 1);
+                        }
+                        else
+                        {
+                            spec_str = std::string_view();
+                        }
+                    }
+                    else if (colon_pos != std::string_view::npos)
+                    {
+                        // No index, just spec after colon (e.g., "{:.2f}")
+                        spec_str = spec_str.substr(colon_pos + 1);
+                        current_arg_index = arg_index++;
+                    }
+                    else
+                    {
+                        // No colon, no numeric index - auto-increment
+                        current_arg_index = arg_index++;
+                        spec_str = std::string_view();
+                    }
+                }
+                else
+                {
+                    // Empty spec - auto-increment
+                    current_arg_index = arg_index++;
+                }
+
+                format_part part;
+                part.is_literal = false;
+                part.arg_index = current_arg_index;
+                part.spec = parse_format_spec(spec_str);
+                result.parts[result.count++] = part;
+
+                ++i;
+                literal_start = i;
             }
-        }
-
-        std::string result;
-
-        // Better size estimation
-        size_t estimated_size = 0;
-        for (size_t i = 0; i < fmt.segment_count; ++i)
-        {
-            if (fmt.segments[i].type == FmtType::Segment::Type::Text)
+            else if (fmt[i] == '}')
             {
-                estimated_size += static_cast<size_t>(fmt.segments[i].text_length);
+                if (i + 1 < fmt.size() && fmt[i + 1] == '}')
+                {
+                    i += 2;
+                    continue;
+                }
+                throw std::runtime_error("unmatched '}' in format string");
             }
             else
             {
-                // More accurate estimates based on type
-                estimated_size += 16; // Reasonable default for most types
+                ++i;
             }
         }
-        result.reserve(estimated_size);
 
-        auto TArgs_tuple = std::forward_as_tuple(args...);
-
-        for (size_t i = 0; i < fmt.segment_count; ++i)
+        if (i > literal_start)
         {
-            const auto& seg = fmt.segments[i];
-            if (seg.type == FmtType::Segment::Type::Text)
-            {
-                result.append(fmt.str.data() + seg.text_start, static_cast<size_t>(seg.text_length));
-            }
-            else
-            {
-                format_spec spec;
-                spec.spec_type = static_cast<format_spec::type>(seg.arg_type);
-                spec.width = seg.arg_width;
-                spec.precision = seg.arg_precision;
-                spec.fill = seg.arg_fill;
-                spec.align = seg.arg_align;
-                detail::format_arg_at_index(result, TArgs_tuple, seg.arg_index, spec, std::index_sequence_for<TArgs...>{});
-            }
+            result.parts[result.count++] = format_part(fmt.substr(literal_start, i - literal_start));
         }
 
+        result.arg_count = arg_index;
         return result;
     }
 
-    template<typename OutputIt, typename... TArgs>
-    inline OutputIt format_to(OutputIt out, format_string<TArgs...> fmt, TArgs&&... args)
+    class format_arg
     {
-        std::string result = format(fmt, std::forward<TArgs>(args)...);
-        return std::copy(result.begin(), result.end(), out);
+    public:
+        using value_type = std::variant<std::monostate, bool, long long, double, std::string_view, std::string, const void*>;
+
+        constexpr format_arg()
+            : value_(std::monostate{})
+        {
+        }
+        constexpr format_arg(bool v)
+            : value_(v)
+        {
+        }
+        constexpr format_arg(int v)
+            : value_(static_cast<long long>(v))
+        {
+        }
+        constexpr format_arg(long v)
+            : value_(static_cast<long long>(v))
+        {
+        }
+        constexpr format_arg(long long v)
+            : value_(v)
+        {
+        }
+        constexpr format_arg(unsigned int v)
+            : value_(static_cast<long long>(v))
+        {
+        }
+        constexpr format_arg(unsigned long v)
+            : value_(static_cast<long long>(v))
+        {
+        }
+        constexpr format_arg(unsigned long long v)
+            : value_(static_cast<long long>(v))
+        {
+        }
+        constexpr format_arg(float v)
+            : value_(static_cast<double>(v))
+        {
+        }
+        constexpr format_arg(double v)
+            : value_(v)
+        {
+        }
+        constexpr format_arg(const char* v)
+            : value_(std::string_view(v))
+        {
+        }
+        constexpr format_arg(std::string_view v)
+            : value_(v)
+        {
+        }
+        format_arg(std::string v)
+            : value_(std::move(v))
+        {
+        }
+        constexpr format_arg(const void* v)
+            : value_(v)
+        {
+        }
+        constexpr format_arg(void* v)
+            : value_(static_cast<const void*>(v))
+        {
+        }
+
+        constexpr const value_type& value() const
+        {
+            return value_;
+        }
+
+    private:
+        value_type value_;
+    };
+
+    namespace detail
+    {
+        inline std::string to_hex(long long value, bool uppercase)
+        {
+            if (value == 0)
+            {
+                return "0";
+            }
+
+            const char* digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
+            std::string result;
+            auto uvalue = static_cast<unsigned long long>(value);
+
+            while (uvalue > 0)
+            {
+                result += digits[uvalue % 16];
+                uvalue /= 16;
+            }
+
+            std::reverse(result.begin(), result.end());
+            return result;
+        }
+
+        inline std::string constexpr_double_to_string(double value, size_t precision)
+        {
+            // Simple double to string for fixed precision
+            bool negative = value < 0;
+            if (negative)
+            {
+                value = -value;
+            }
+
+            // Round to precision
+            double multiplier = 1.0;
+            for (size_t i = 0; i < precision; ++i)
+            {
+                multiplier *= 10.0;
+            }
+            value = (value * multiplier + 0.5); // Round
+            long long rounded = static_cast<long long>(value);
+
+            // Split into integer and fractional parts
+            long long int_part = rounded;
+            for (size_t i = 0; i < precision; ++i)
+            {
+                int_part /= 10;
+            }
+            long long frac_part = rounded - static_cast<long long>(static_cast<double>(int_part) * multiplier);
+
+            std::string result;
+            if (negative)
+            {
+                result += '-';
+            }
+
+            // Convert integer part
+            if (int_part == 0)
+            {
+                result += '0';
+            }
+            else
+            {
+                std::string int_str;
+                long long temp = int_part;
+                while (temp > 0)
+                {
+                    int_str += static_cast<char>('0' + (temp % 10));
+                    temp /= 10;
+                }
+                std::reverse(int_str.begin(), int_str.end());
+                result += int_str;
+            }
+
+            // Only add decimal point and fraction if precision > 0
+            if (precision > 0)
+            {
+                result += '.';
+
+                // Convert fractional part with leading zeros
+                std::string frac_str;
+                for (size_t i = 0; i < precision; ++i)
+                {
+                    frac_str += static_cast<char>('0' + (frac_part % 10));
+                    frac_part /= 10;
+                }
+                std::reverse(frac_str.begin(), frac_str.end());
+                result += frac_str;
+            }
+
+            return result;
+        }
+
+        inline std::string to_string_with_precision(double value, int precision)
+        {
+            return constexpr_double_to_string(value, static_cast<size_t>(precision));
+        }
+
+        inline std::string apply_width_and_align(std::string str, int width, char align, char fill)
+        {
+            if (width <= 0 || static_cast<size_t>(width) <= str.size())
+            {
+                return str;
+            }
+
+            size_t padding = static_cast<size_t>(width) - str.size();
+            switch (align)
+            {
+                case '<':
+                    return str + std::string(padding, fill);
+                case '>':
+                    return std::string(padding, fill) + str;
+                case '^':
+                {
+                    size_t left_pad = padding / 2;
+                    size_t right_pad = padding - left_pad;
+                    return std::string(left_pad, fill) + str + std::string(right_pad, fill);
+                }
+                default:
+                    return str;
+            }
+        }
+    } // namespace detail
+
+    inline std::string format_value(const format_arg& arg, const format_spec& spec)
+    {
+        return std::visit(
+            [&spec](auto&& value) -> std::string {
+                using T = std::decay_t<decltype(value)>;
+
+                if constexpr (std::is_same_v<T, std::monostate>)
+                {
+                    return "";
+                }
+                else if constexpr (std::is_same_v<T, bool>)
+                {
+                    std::string result = value ? "true" : "false";
+                    char align = spec.align == '<' && spec.width > 0 ? '<' : spec.align;
+                    return detail::apply_width_and_align(result, spec.width, align, spec.fill);
+                }
+                else if constexpr (std::is_same_v<T, long long>)
+                {
+                    std::string result;
+
+                    switch (spec.spec_type)
+                    {
+                        case format_spec::type::hex_lower:
+                            result = detail::to_hex(value, false);
+                            break;
+                        case format_spec::type::hex_upper:
+                            result = detail::to_hex(value, true);
+                            break;
+                        case format_spec::type::decimal:
+                        case format_spec::type::none:
+                        default:
+                            result = std::to_string(value);
+                            break;
+                    }
+
+                    char align = spec.align;
+                    if (!spec.explicit_align && align == '<' && spec.width > 0)
+                    {
+                        align = '>';
+                    }
+                    return detail::apply_width_and_align(result, spec.width, align, spec.fill);
+                }
+                else if constexpr (std::is_same_v<T, double>)
+                {
+                    std::string result;
+
+                    if (spec.precision != -1)
+                    {
+                        result = detail::to_string_with_precision(value, spec.precision);
+                    }
+                    else
+                    {
+                        result = std::to_string(value);
+                        while (!result.empty() && result.back() == '0')
+                        {
+                            result.pop_back();
+                        }
+                        if (!result.empty() && result.back() == '.')
+                        {
+                            result.pop_back();
+                        }
+                        if (result.empty())
+                        {
+                            result = "0";
+                        }
+                    }
+
+                    char align = spec.align;
+                    if (!spec.explicit_align && align == '<' && spec.width > 0)
+                    {
+                        align = '>';
+                    }
+                    return detail::apply_width_and_align(result, spec.width, align, spec.fill);
+                }
+                else if constexpr (std::is_same_v<T, std::string_view>)
+                {
+                    std::string result(value);
+                    return detail::apply_width_and_align(result, spec.width, spec.align, spec.fill);
+                }
+                else if constexpr (std::is_same_v<T, std::string>)
+                {
+                    return detail::apply_width_and_align(value, spec.width, spec.align, spec.fill);
+                }
+                else if constexpr (std::is_same_v<T, const void*>)
+                {
+                    // Pointer formatting - convert to hex address
+                    auto addr = reinterpret_cast<uintptr_t>(value);
+                    return "0x" + detail::to_hex(static_cast<long long>(addr), false);
+                }
+                else
+                {
+                    return "";
+                }
+            },
+            arg.value());
     }
+
+    template<typename... Args>
+    struct format_string
+    {
+        const char* str;
+        size_t len;
+
+        template<size_t N>
+        constexpr format_string(const char (&s)[N])
+            : str(s)
+            , len(N - 1)
+        {
+        }
+
+        constexpr std::string_view view() const
+        {
+            return std::string_view(str, len);
+        }
+        constexpr operator std::string_view() const
+        {
+            return view();
+        }
+    };
+
+    namespace detail
+    {
+        inline std::string process_literal(std::string_view lit)
+        {
+            std::string result;
+            result.reserve(lit.size());
+            for (size_t i = 0; i < lit.size(); ++i)
+            {
+                if (lit[i] == '{' && i + 1 < lit.size() && lit[i + 1] == '{')
+                {
+                    result += '{';
+                    ++i;
+                }
+                else if (lit[i] == '}' && i + 1 < lit.size() && lit[i + 1] == '}')
+                {
+                    result += '}';
+                    ++i;
+                }
+                else
+                {
+                    result += lit[i];
+                }
+            }
+            return result;
+        }
+
+        template<typename T>
+        inline std::string format_arg_value(T&& arg, const format_spec& spec)
+        {
+            return format_value(format_arg(std::forward<T>(arg)), spec);
+        }
+
+        template<typename Tuple, size_t... Is>
+        inline int get_integer_arg(const Tuple& args, size_t index, std::index_sequence<Is...>)
+        {
+            int result = 0;
+            [[maybe_unused]] auto extract = [&]<size_t I>() {
+                if (index == I)
+                {
+                    auto&& arg = std::get<I>(args);
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_integral_v<T>)
+                    {
+                        result = static_cast<int>(arg);
+                    }
+                    else if constexpr (std::is_floating_point_v<T>)
+                    {
+                        result = static_cast<int>(arg);
+                    }
+                }
+            };
+            (extract.template operator()<Is>(), ...);
+            return result;
+        }
+
+        // Dynamic array-based format impl (determines size at runtime)
+        template<typename Tuple, size_t... Is>
+        std::string format_impl_dynamic(std::string_view fmt, const Tuple& args, std::index_sequence<Is...>)
+        {
+            std::string result;
+            size_t i = 0;
+            size_t arg_index = 0;
+
+            while (i < fmt.size())
+            {
+                if (fmt[i] == '{')
+                {
+                    if (i + 1 < fmt.size() && fmt[i + 1] == '{')
+                    {
+                        result += '{';
+                        i += 2;
+                        continue;
+                    }
+
+                    size_t spec_start = i + 1;
+                    size_t brace_end = i + 1;
+                    int brace_depth = 0;
+                    while (brace_end < fmt.size())
+                    {
+                        if (fmt[brace_end] == '{')
+                        {
+                            ++brace_depth;
+                        }
+                        else if (fmt[brace_end] == '}')
+                        {
+                            if (brace_depth == 0)
+                            {
+                                break;
+                            }
+                            --brace_depth;
+                        }
+                        ++brace_end;
+                    }
+
+                    if (brace_end >= fmt.size())
+                    {
+                        throw std::runtime_error("unmatched '{' in format string");
+                    }
+
+                    std::string_view spec_str = fmt.substr(spec_start, brace_end - spec_start);
+
+                    // Parse argument index if present
+                    size_t current_arg_index = arg_index;
+                    size_t colon_pos = spec_str.find(':');
+
+                    if (!spec_str.empty())
+                    {
+                        std::string_view index_part = (colon_pos != std::string_view::npos) ? spec_str.substr(0, colon_pos)
+                                                                                            : spec_str;
+
+                        // Check if it's a numeric index
+                        if (!index_part.empty() && index_part[0] >= '0' && index_part[0] <= '9')
+                        {
+                            size_t parsed_index = 0;
+                            for (char c : index_part)
+                            {
+                                if (c >= '0' && c <= '9')
+                                {
+                                    parsed_index = parsed_index * 10 + static_cast<size_t>(c - '0');
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
+                            current_arg_index = parsed_index;
+
+                            // Extract format spec after colon (if any)
+                            if (colon_pos != std::string_view::npos && colon_pos + 1 < spec_str.size())
+                            {
+                                spec_str = spec_str.substr(colon_pos + 1);
+                            }
+                            else
+                            {
+                                spec_str = std::string_view();
+                            }
+                        }
+                        else if (colon_pos != std::string_view::npos)
+                        {
+                            // No index, just spec after colon (e.g., "{:.2f}")
+                            spec_str = spec_str.substr(colon_pos + 1);
+                            current_arg_index = arg_index++;
+                        }
+                        else
+                        {
+                            // No colon, no numeric index - auto-increment
+                            current_arg_index = arg_index++;
+                            spec_str = std::string_view();
+                        }
+                    }
+                    else
+                    {
+                        // Empty spec - auto-increment
+                        current_arg_index = arg_index++;
+                    }
+
+                    format_spec spec = parse_format_spec(spec_str);
+
+                    // Handle dynamic width and precision
+                    if (spec.dynamic_width)
+                    {
+                        constexpr size_t arg_count = sizeof...(Is);
+                        size_t width_index;
+
+                        // Use indexed or sequential width
+                        if (spec.width_arg_index != -1)
+                        {
+                            width_index = static_cast<size_t>(spec.width_arg_index);
+                        }
+                        else
+                        {
+                            width_index = arg_index++;
+                        }
+
+                        if (width_index >= arg_count)
+                        {
+                            throw std::runtime_error("width argument index out of range");
+                        }
+                        spec.width = get_integer_arg(args, width_index, std::index_sequence<Is...>{});
+                    }
+
+                    if (spec.dynamic_precision)
+                    {
+                        constexpr size_t arg_count = sizeof...(Is);
+                        size_t precision_index;
+
+                        // Use indexed or sequential precision
+                        if (spec.precision_arg_index != -1)
+                        {
+                            precision_index = static_cast<size_t>(spec.precision_arg_index);
+                        }
+                        else
+                        {
+                            precision_index = arg_index++;
+                        }
+
+                        if (precision_index >= arg_count)
+                        {
+                            throw std::runtime_error("precision argument index out of range");
+                        }
+                        spec.precision = get_integer_arg(args, precision_index, std::index_sequence<Is...>{});
+                    }
+
+                    // Bounds check
+                    constexpr size_t arg_count = sizeof...(Is);
+                    if (current_arg_index >= arg_count)
+                    {
+                        throw std::runtime_error("not enough arguments for format string");
+                    }
+
+                    (void)((current_arg_index == Is ? (result += format_arg_value(std::get<Is>(args), spec), true) : false)
+                        || ...);
+
+                    i = brace_end + 1;
+                }
+                else if (fmt[i] == '}')
+                {
+                    if (i + 1 < fmt.size() && fmt[i + 1] == '}')
+                    {
+                        result += '}';
+                        i += 2;
+                        continue;
+                    }
+                    throw std::runtime_error("unmatched '}' in format string");
+                }
+                else
+                {
+                    result += fmt[i++];
+                }
+            }
+
+            return result;
+        }
+
+        template<typename ArgsTuple, size_t... Is>
+        std::string format_parts_tuple(const auto& parts_tuple, const ArgsTuple& args, std::index_sequence<Is...>)
+        {
+            std::string result;
+            auto process_part = [&](const auto& part) {
+                if (part.is_literal)
+                {
+                    result += process_literal(part.literal);
+                }
+                else
+                {
+                    ((part.arg_index == Is ? (result += format_arg_value(std::get<Is>(args), part.spec), true) : false) || ...);
+                }
+            };
+            (process_part(std::get<Is>(parts_tuple)), ...);
+            return result;
+        }
+
+        template<size_t N, typename Tuple, size_t... Is>
+        std::string format_impl(const format_parts<N>& parts, const Tuple& args, std::index_sequence<Is...>)
+        {
+            std::string result;
+            for (size_t i = 0; i < parts.count; ++i)
+            {
+                const auto& part = parts.parts[i];
+                if (part.is_literal)
+                {
+                    result += process_literal(part.literal);
+                }
+                else
+                {
+                    (void)((part.arg_index == Is ? (result += format_arg_value(std::get<Is>(args), part.spec), true) : false)
+                        || ...);
+                }
+            }
+            return result;
+        }
+
+        template<size_t N>
+        consteval auto parse_to_tuple(format_string_literal<N> fmt)
+        {
+            constexpr size_t part_count = count_format_parts(fmt.view());
+            constexpr auto parsed = parse_format_string_sized<part_count>(fmt.view());
+
+            // Convert array to tuple
+            return [&]<size_t... Is>(std::index_sequence<Is...>) { return std::make_tuple(parsed.parts[Is]...); }(
+                       std::make_index_sequence<parsed.count>{});
+        }
+
+    } // namespace detail
+
+    template<format_string_literal Fmt, typename... Args>
+    std::string format(Args&&... args)
+    {
+        constexpr size_t part_count = count_format_parts(Fmt.view());
+        constexpr auto parts = parse_format_string_sized<part_count>(Fmt.view());
+        auto args_tuple = std::forward_as_tuple(args...);
+        return detail::format_impl(parts, args_tuple, std::index_sequence_for<Args...>{});
+    }
+
+    template<typename... Args>
+    std::string format(format_string<std::type_identity_t<Args>...> fmt, Args&&... args)
+    {
+        auto args_tuple = std::forward_as_tuple(args...);
+        return detail::format_impl_dynamic(fmt.view(), args_tuple, std::index_sequence_for<Args...>{});
+    }
+
+    std::string vformat(std::string_view fmt, const std::vector<format_arg>& args);
 
 } // namespace behl

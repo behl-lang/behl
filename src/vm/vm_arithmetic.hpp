@@ -32,12 +32,12 @@ namespace behl
 
         if (op_name)
         {
-            msg = format("attempt to {} a '{}' with a '{}'", op_name, a.get_type_string(), b.get_type_string());
+            msg = behl::format<"attempt to {} a '{}' with a '{}'">(op_name, a.get_type_string(), b.get_type_string());
         }
         else
         {
-            msg = format(
-                "attempt to perform arithmetic on a '{}' value and a '{}' value", a.get_type_string(), b.get_type_string());
+            msg = behl::format<"attempt to perform arithmetic on a '{}' value and a '{}' value">(
+                a.get_type_string(), b.get_type_string());
         }
 
         throw TypeError(msg, loc);
@@ -46,7 +46,7 @@ namespace behl
     [[noreturn]] BEHL_FORCEINLINE void throw_bad_arith(const Value& a, const CallFrame& frame)
     {
         const auto loc = get_current_location(frame);
-        const auto msg = format("attempt to perform arithmetic on a {} value", a.get_type_string());
+        const auto msg = behl::format<"attempt to perform arithmetic on a {} value">(a.get_type_string());
 
         throw TypeError(msg, loc);
     }
@@ -412,13 +412,13 @@ namespace behl
                 gc_step(S);
                 return;
             }
-            throw TypeError(format("can only concatenate string with string, not with {}", rhs.get_type_string()),
+            throw TypeError(behl::format("can only concatenate string with string, not with {}", rhs.get_type_string()),
                 get_current_location(frame));
         }
 
         if (rhs.is_string())
         {
-            throw TypeError(format("can only concatenate string with string, not with {}", lhs.get_type_string()),
+            throw TypeError(behl::format("can only concatenate string with string, not with {}", lhs.get_type_string()),
                 get_current_location(frame));
         }
 

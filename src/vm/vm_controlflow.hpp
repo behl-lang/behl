@@ -51,7 +51,7 @@ namespace behl
         }
 
         std::string stacktrace = build_stacktrace_internal(S);
-        std::string full_msg = behl::format("{}\n{}", msg, stacktrace);
+        std::string full_msg = behl::format<"{}\n{}">(msg, stacktrace);
         throw TypeError(full_msg, loc);
     }
 

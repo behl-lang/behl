@@ -262,7 +262,7 @@ namespace behl
         std::ifstream file(resolved_path);
         if (!file.is_open())
         {
-            error(S, ::behl::format("Failed to open module file: {}", resolved_path));
+            error(S, behl::format("Failed to open module file: {}", resolved_path));
         }
 
         std::stringstream buffer;

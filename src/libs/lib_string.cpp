@@ -3,7 +3,9 @@
 #include "common/vector.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_string.hpp"
+#include "gc/gco_table.hpp"
 #include "state.hpp"
+#include "vm/vm_detail.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -144,8 +146,7 @@ namespace behl
             buffer.push_back(static_cast<char>(code));
         }
 
-        auto* result = gc_new_string(S, std::string_view(buffer.data(), buffer.size()));
-        S->stack.push_back(S, Value(result));
+        push_string(S, std::string_view(buffer.data(), buffer.size()));
 
         return 1;
     }
@@ -211,8 +212,7 @@ namespace behl
             }
         }
 
-        auto* result = gc_new_string(S, std::string_view(buffer.data(), buffer.size()));
-        S->stack.push_back(S, Value(result));
+        push_string(S, std::string_view(buffer.data(), buffer.size()));
 
         return 1;
     }
@@ -256,102 +256,73 @@ namespace behl
         return 1;
     }
 
-    // string.format(fmt, ...) - basic string formatting using format
     static int str_format(State* S)
     {
-        check_type(S, 0, Type::kString);
-
-        auto fmt = check_string(S, 0);
+        const auto format_str = check_string(S, 0);
         const int nargs = get_top(S) - 1;
 
-        // Build result in a temporary buffer
-        AutoVector<char> result_buffer(S);
-        result_buffer.reserve(fmt.length() * 2);
+        std::vector<format_arg> args;
+        args.reserve(static_cast<size_t>(nargs));
 
-        size_t fmt_pos = 0;
-        int arg_idx = 0;
-
-        while (fmt_pos < fmt.length())
+        for (int i = 0; i < nargs; ++i)
         {
-            // Look for {}
-            if (fmt_pos + 1 < fmt.length() && fmt[fmt_pos] == '{' && fmt[fmt_pos + 1] == '}')
+            const int stack_idx = i + 1;
+            switch (type(S, stack_idx))
             {
-                if (arg_idx < nargs)
+                case Type::kNil:
+                    args.emplace_back("nil");
+                    break;
+                case Type::kBoolean:
+                    args.emplace_back(to_boolean(S, stack_idx));
+                    break;
+                case Type::kInteger:
+                    args.emplace_back(to_integer(S, stack_idx));
+                    break;
+                case Type::kNumber:
+                    args.emplace_back(to_number(S, stack_idx));
+                    break;
+                case Type::kString:
+                    args.emplace_back(to_string(S, stack_idx));
+                    break;
+                case Type::kUserdata:
+                case Type::kTable:
+                case Type::kClosure:
+                case Type::kCFunction:
                 {
-                    // Format the argument
-                    const int stack_idx = arg_idx + 1;
-                    char temp_buffer[64];
-                    const char* replacement = nullptr;
-                    size_t replacement_len = 0;
-
-                    switch (type(S, stack_idx))
+                    const auto value_idx = resolve_index(S, stack_idx);
+                    const auto& val = S->stack[static_cast<size_t>(value_idx)];
+                    const auto str_val = vm_tostring(S, val, S->call_stack.back());
+                    if (str_val.is_nil())
                     {
-                        case Type::kNil:
-                            replacement = "nil";
-                            replacement_len = 3;
-                            break;
-                        case Type::kBoolean:
-                            if (to_boolean(S, stack_idx))
-                            {
-                                replacement = "true";
-                                replacement_len = 4;
-                            }
-                            else
-                            {
-                                replacement = "false";
-                                replacement_len = 5;
-                            }
-                            break;
-                        case Type::kInteger:
-                        {
-                            auto formatted = format("{}", to_integer(S, stack_idx));
-                            replacement_len = formatted.length();
-                            std::memcpy(temp_buffer, formatted.data(), replacement_len);
-                            replacement = temp_buffer;
-                            break;
-                        }
-                        case Type::kNumber:
-                        {
-                            auto formatted = format("{}", to_number(S, stack_idx));
-                            replacement_len = formatted.length();
-                            std::memcpy(temp_buffer, formatted.data(), replacement_len);
-                            replacement = temp_buffer;
-                            break;
-                        }
-                        case Type::kString:
-                        {
-                            auto str_val = to_string(S, stack_idx);
-                            replacement = str_val.data();
-                            replacement_len = str_val.length();
-                            break;
-                        }
-                        default:
-                            replacement = "?";
-                            replacement_len = 1;
-                            break;
+                        args.emplace_back("nil");
                     }
-
-                    if (replacement)
+                    else if (str_val.is_string())
                     {
-                        for (size_t i = 0; i < replacement_len; ++i)
-                        {
-                            result_buffer.push_back(replacement[i]);
-                        }
+                        args.emplace_back(str_val.get_string()->view());
                     }
-
-                    arg_idx++;
+                    else
+                    {
+                        args.emplace_back("<invalid>");
+                    }
+                    break;
                 }
-                fmt_pos += 2;
-            }
-            else
-            {
-                result_buffer.push_back(fmt[fmt_pos]);
-                fmt_pos++;
+                default:
+                {
+                    break;
+                }
             }
         }
 
-        auto* result = gc_new_string(S, std::string_view(result_buffer.data(), result_buffer.size()));
-        S->stack.push_back(S, Value(result));
+        try
+        {
+            std::string result = vformat(format_str, args);
+            push_string(S, result);
+        }
+        catch (const std::exception& e)
+        {
+            error(S, e.what());
+        }
+
         return 1;
     }
 

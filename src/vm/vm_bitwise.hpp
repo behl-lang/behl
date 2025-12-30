@@ -20,7 +20,7 @@ namespace behl
     [[noreturn]] BEHL_FORCEINLINE static void throw_bad_bitwise(const Value& a, const Value& b, const CallFrame& frame)
     {
         const auto loc = get_current_location(frame);
-        const auto msg = format(
+        const auto msg = behl::format(
             "attempt to perform bitwise operation on a '{}' value and a '{}' value", a.get_type_string(), b.get_type_string());
 
         throw TypeError(msg, loc);
@@ -29,7 +29,7 @@ namespace behl
     [[noreturn]] BEHL_FORCEINLINE static void throw_bad_bitwise(const Value& a, const CallFrame& frame)
     {
         const auto loc = get_current_location(frame);
-        const auto msg = format("attempt to perform bitwise operation on a {} value", a.get_type_string());
+        const auto msg = behl::format<"attempt to perform bitwise operation on a {} value">(a.get_type_string());
 
         throw TypeError(msg, loc);
     }
