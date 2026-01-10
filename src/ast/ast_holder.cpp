@@ -1,6 +1,7 @@
 #include "ast/ast_holder.hpp"
 
 #include "ast/ast.hpp"
+#include "memory.hpp"
 
 #include <algorithm>
 
@@ -9,8 +10,7 @@ namespace behl
     AstHolder::AstHolder(State* state)
         : m_state(state)
     {
-        // Start with one pool
-        m_pools.emplace_back(m_state);
+        m_pools.emplace_back(m_state, m_state);
     }
 
     AstHolder::~AstHolder()
@@ -54,11 +54,11 @@ namespace behl
         // Check if we need a new pool
         if (aligned_offset + size > Pool::POOL_SIZE)
         {
-            m_pools.emplace_back(m_state);
+            m_pools.emplace_back(m_state, m_state);
             return allocate(size, alignment);
         }
 
-        void* ptr = pool.memory.get() + aligned_offset;
+        void* ptr = pool.memory + aligned_offset;
         pool.offset = aligned_offset + size;
         return ptr;
     }
@@ -86,21 +86,10 @@ namespace behl
 
     void AstHolder::destroy_all_nodes()
     {
-        // Destroy in reverse order (similar to stack unwinding)
         for (auto it = m_nodes.rbegin(); it != m_nodes.rend(); ++it)
         {
-            (*it)->~AstNode();
+            std::destroy_at(*it);
         }
-    }
-
-    size_t AstHolder::memory_used() const
-    {
-        size_t total = 0;
-        for (const auto& pool : m_pools)
-        {
-            total += pool.offset;
-        }
-        return total;
     }
 
 } // namespace behl

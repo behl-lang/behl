@@ -1,12 +1,12 @@
 #pragma once
 
 #include "common/vector.hpp"
+#include "memory.hpp"
 
 #include <behl/export.hpp>
 #include <cstddef>
 #include <memory>
 #include <string_view>
-#include <vector>
 
 namespace behl
 {
@@ -34,7 +34,7 @@ namespace behl
             void* mem = allocate(sizeof(T), alignof(T));
 
             // Construct in-place
-            T* node = new (mem) T(std::forward<Args>(args)...);
+            T* node = std::construct_at(static_cast<T*>(mem), std::forward<Args>(args)...);
 
             // Track for destruction
             track_node(node);
@@ -42,15 +42,8 @@ namespace behl
             return node;
         }
 
-        // Allocate string node with string data in pool
+        // Allocate string node with string data (untracked memory)
         AstString* make_string(std::string_view str);
-
-        // Get statistics
-        size_t node_count() const
-        {
-            return m_nodes.size();
-        }
-        size_t memory_used() const;
 
         State* state() const
         {
@@ -61,12 +54,47 @@ namespace behl
         struct Pool
         {
             static constexpr size_t POOL_SIZE = 64 * 1024; // 64KB
-            std::unique_ptr<std::byte[]> memory;
-            size_t offset = 0;
 
-            Pool()
-                : memory(new std::byte[POOL_SIZE])
+            std::byte* memory;
+            size_t offset = 0;
+            State* state;
+
+            Pool(State* s)
+                : memory(mem_alloc_array<std::byte>(s, POOL_SIZE))
+                , state(s)
             {
+            }
+
+            Pool(Pool&& other) noexcept
+                : memory(other.memory)
+                , offset(other.offset)
+                , state(other.state)
+            {
+                other.memory = nullptr;
+            }
+
+            Pool& operator=(Pool&& other) noexcept
+            {
+                if (this != &other)
+                {
+                    if (memory)
+                    {
+                        mem_free_array<std::byte>(state, memory, POOL_SIZE);
+                    }
+                    memory = other.memory;
+                    offset = other.offset;
+                    state = other.state;
+                    other.memory = nullptr;
+                }
+                return *this;
+            }
+
+            ~Pool()
+            {
+                if (memory)
+                {
+                    mem_free_array<std::byte>(state, memory, POOL_SIZE);
+                }
             }
         };
 
@@ -76,7 +104,7 @@ namespace behl
 
         State* m_state;
         Vector<Pool> m_pools;
-        Vector<AstNode*> m_nodes; // Tracked for destruction in reverse order
+        Vector<AstNode*> m_nodes;
     };
 
 } // namespace behl
