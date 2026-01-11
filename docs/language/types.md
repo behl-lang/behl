@@ -292,7 +292,7 @@ Userdata represents opaque C++ objects exposed to Behl scripts through the C++ A
 
 ### Usage from Scripts
 
-```behl
+```js
 // Created from C++ API
 let file = os.open("data.txt", "r");
 print(typeof(file));  // "userdata"
@@ -311,7 +311,7 @@ if (typeof(file) == "userdata") {
 **Metatables:**
 Userdata can have metatables for custom operators and methods:
 
-```behl
+```js
 let v1 = vec2_new(1.0, 2.0);
 let v2 = vec2_new(3.0, 4.0);
 let v3 = v1 + v2;  // Calls __add metamethod
@@ -321,7 +321,7 @@ print(v3);         // Calls __tostring
 **Automatic cleanup:**
 Userdata with `__gc` metamethods are automatically finalized:
 
-```behl
+```js
 function process_file() {
     let f = file_open("data.txt", "r");
     // ... use file ...
@@ -332,7 +332,7 @@ function process_file() {
 **Type safety:**
 The C++ API enforces type checking:
 
-```behl
+```js
 let table = {};
 file_read(table);  // TypeError: bad argument #1 (expected userdata, got table)
 

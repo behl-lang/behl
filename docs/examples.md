@@ -717,7 +717,7 @@ void setup_file_api(behl::State* S) {
 
 **Behl Script:**
 
-```behl
+```js
 // Open and read a file
 let f = file_open("data.txt", "r");
 
@@ -847,7 +847,7 @@ void setup_vector_api(behl::State* S) {
 
 **Behl Script:**
 
-```behl
+```js
 // Create vectors
 let v1 = vec2_new(3.0, 4.0);
 let v2 = vec2_new(1.0, 2.0);
