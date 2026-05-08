@@ -29,8 +29,9 @@ namespace behl
 
         int8_t* ctrl_{};
         KeyValue* slots_{};
-        size_t size_{};     // Number of occupied entries
-        size_t capacity_{}; // Total number of slots
+        size_t size_{};       // Number of occupied entries
+        size_t capacity_{};   // Total number of slots
+        size_t tombstones_{}; // Number of kDeleted slots — counted toward load factor
         [[no_unique_address]] Hash hasher_{};
         [[no_unique_address]] Eq eq_{};
 
@@ -163,6 +164,7 @@ namespace behl
         {
             size_ = 0;
             capacity_ = 0;
+            tombstones_ = 0;
             ctrl_ = nullptr;
             slots_ = nullptr;
 
@@ -205,6 +207,7 @@ namespace behl
             slots_ = nullptr;
             size_ = 0;
             capacity_ = 0;
+            tombstones_ = 0;
         }
 
         BEHL_FORCEINLINE size_t size() const
@@ -277,11 +280,16 @@ namespace behl
                 if (ctrl == kEmpty)
                 {
                     // Empty slot - insert here
-                    size_t insert_index = (first_deleted < capacity_) ? first_deleted : index;
+                    const bool reuse_tombstone = first_deleted < capacity_;
+                    size_t insert_index = reuse_tombstone ? first_deleted : index;
                     ctrl_[insert_index] = h2_val;
                     std::construct_at(&slots_[insert_index].first, std::forward<KeyType>(key));
                     std::construct_at(&slots_[insert_index].second, std::forward<ValueType>(value));
                     size_++;
+                    if (reuse_tombstone)
+                    {
+                        tombstones_--;
+                    }
                     return iterator(ctrl_ + insert_index, ctrl_ + capacity_, slots_ + insert_index);
                 }
 
@@ -357,6 +365,7 @@ namespace behl
                     std::destroy_at(&slots_[index].second);
                     ctrl_[index] = kDeleted;
                     size_--;
+                    tombstones_++;
                     return;
                 }
 
@@ -380,6 +389,7 @@ namespace behl
                 std::memset(ctrl_, kEmpty, capacity_);
             }
             size_ = 0;
+            tombstones_ = 0;
         }
 
         BEHL_FORCEINLINE iterator begin()
@@ -419,6 +429,7 @@ namespace behl
             std::memset(ctrl_, kEmpty, new_capacity);
             capacity_ = new_capacity;
             size_ = 0;
+            tombstones_ = 0; // tombstones don't carry across rehash
 
             // Reinsert all entries
             if (old_ctrl)
@@ -516,7 +527,11 @@ namespace behl
             {
                 return true; // Always need to rehash if capacity is 0
             }
-            return static_cast<double>(size_) > static_cast<double>(capacity_) * kLoadFactor;
+            // Tombstones must factor into the load decision. Without this,
+            // sustained insert/erase churn fills the table with tombstones
+            // until insert_or_assign falls through to the recursive rehash
+            // path — long probe chains in the meantime.
+            return static_cast<double>(size_ + tombstones_) > static_cast<double>(capacity_) * kLoadFactor;
         }
     };
 

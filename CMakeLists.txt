@@ -255,6 +255,7 @@ if(BEHL_BUILD_TESTS)
         tests/format_tests.cpp
         tests/string_format_tests.cpp
         tests/function_tests.cpp
+        tests/hash_map_tests.cpp
         tests/gc_list_tests.cpp
         tests/gc_stress_tests.cpp
         tests/gc_tests.cpp
