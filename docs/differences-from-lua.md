@@ -420,6 +420,32 @@ sum(1, 2, 3, 4);
 
 Behl fully supports varargs with similar semantics. See [Varargs](../language/varargs) for details.
 
+### Self-Recursion Dispatch
+
+Inside a function, a call written as `f(...)` where `f` is the enclosing function's name is dispatched directly to the enclosing function at compile time. Rebinding `f` inside its own body — by reassigning the global, shadowing with a local, or writing through `_G` — does **not** redirect the self-call. This differs from vanilla Lua, where every recursive call goes through the env lookup and respects rebinding.
+
+**Lua (rebinding takes effect):**
+```lua
+function fib(n)
+    if n < 2 then return n end
+    fib = function() return 999 end
+    return fib(n-1) + fib(n-2)  -- calls the rebound function
+end
+print(fib(5))  -- 1998 in Lua
+```
+
+**Behl (self-call optimization keeps the original):**
+```cpp
+function fib(n) {
+    if (n < 2) return n;
+    fib = function() { return 999; };
+    return fib(n-1) + fib(n-2);  // still calls the original fib
+}
+print(fib(5));  // 5 in behl
+```
+
+This is a deliberate trade for recursion performance. To opt out, indirect through a table or local so the call site isn't a bare name match. See [Self-Call Optimization](optimizations.md#self-call-optimization) for the full caveat list.
+
 ---
 
 ## Global Variables

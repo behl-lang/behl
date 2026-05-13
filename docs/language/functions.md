@@ -389,6 +389,33 @@ function factorial(n, acc) {
 
 See [Optimizations](../optimizations.md#tail-call-optimization) for details.
 
+### Self-Call Dispatch
+
+When a function calls itself by name, the call is dispatched directly to the enclosing function — the global lookup is skipped at compile time. This is what makes recursive benchmarks (fib, ackermann) competitive.
+
+**Important semantic consequence:** the self-call is bound to the lexically-enclosing function at compile time, *not* re-resolved against the current value of the name at each call. Rebinding the function's name inside its own body — whether by reassigning the global, by introducing a local that shadows it, or by writing to `_G[name]` — will **not** redirect subsequent self-calls.
+
+```cpp
+function other(n) { return 999; }
+
+function fib(n) {
+    if (n < 2) return n;
+    fib = other;
+    return fib(n - 1) + fib(n - 2);  // Dispatches to fib, not other.
+}
+print(fib(5));  // 5 (not 1998)
+```
+
+If you need state-machine-style self-rebinding, indirect through a table field or local variable so the call site isn't a bare name match:
+
+```cpp
+let state = { handler = nil };
+state.handler = function(n) { ... state.handler = next_handler; ... };
+state.handler(0);  // Goes through state.handler, so rebinding works.
+```
+
+See [Optimizations: Self-Call](../optimizations.md#self-call-optimization) for the full caveat list.
+
 ## Method Call Syntax
 
 Behl supports method call syntax using the colon `:` operator. This automatically passes the table as the first argument:

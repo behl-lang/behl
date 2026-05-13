@@ -1419,8 +1419,23 @@ namespace behl
             C.freereg = C.min_freereg;
         }
 
-        node.func->accept(*this);
-        Reg func_reg = C.freereg - 1;
+        Reg func_reg;
+        if (node.is_self_call)
+        {
+            // Skip the function lookup: the VM's self-call path copies the
+            // caller's closure into this slot, since it's the same function.
+            func_reg = C.freereg;
+            C.freereg = func_reg + 1;
+            if (C.freereg > C.current_proto->max_stack_size)
+            {
+                C.current_proto->max_stack_size = C.freereg;
+            }
+        }
+        else
+        {
+            node.func->accept(*this);
+            func_reg = C.freereg - 1;
+        }
         Reg arg_base = func_reg + 1;
 
         // Count args and find last arg
@@ -3278,8 +3293,23 @@ namespace behl
                 C.freereg = C.min_freereg;
             }
 
-            call_node.func->accept(*this);
-            Reg func_reg = C.freereg - 1;
+            Reg func_reg;
+            if (call_node.is_self_call)
+            {
+                // Skip the function lookup: the VM's self-tail-call path
+                // preserves the caller's closure at frame.base.
+                func_reg = C.freereg;
+                C.freereg = func_reg + 1;
+                if (C.freereg > C.current_proto->max_stack_size)
+                {
+                    C.current_proto->max_stack_size = C.freereg;
+                }
+            }
+            else
+            {
+                call_node.func->accept(*this);
+                func_reg = C.freereg - 1;
+            }
 
             AutoVector<uint8_t> arg_regs(C.S);
 

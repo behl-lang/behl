@@ -405,11 +405,15 @@ namespace behl
 
         if (is_self_call)
         {
-            // Optimize self-recursive calls - we already know we're calling the current function
+            // Self-recursive call: same closure as the caller, so we don't need
+            // to look up the function value. Propagate the caller's closure into
+            // the new frame's function slot — handler_getupval/setupval read the
+            // closure from stack[base], so the slot must hold a valid closure.
             const auto new_base = call_pos;
             const uint32_t actual_num_args = count_actual_args(frame, static_cast<uint32_t>(call_pos), num_args);
 
             const auto* proto = frame.proto;
+            S->stack[call_pos] = S->stack[frame.base];
             setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
             prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
         }
@@ -442,8 +446,13 @@ namespace behl
                 close_upvalues(S, frame.base);
             }
 
-            // Move only arguments to frame.base (overwriting old args)
-            move_tail_call_args(S, func_abs_pos, frame.base, items_to_move);
+            // Preserve the closure at frame.base (same closure on self-call) and
+            // move only the arguments. handler_getupval reads the closure from
+            // stack[base], so we mustn't overwrite that slot with stale data.
+            if (actual_num_args > 0)
+            {
+                move_tail_call_args(S, func_abs_pos + 1, frame.base + 1, actual_num_args);
+            }
             clear_tail_call_locals(S, frame.base + actual_num_args + 1);
 
             // Reset PC to beginning - proto and upvalues stay the same
