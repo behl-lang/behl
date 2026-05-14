@@ -21,8 +21,10 @@
 
 #ifdef _MSC_VER
 #    define BEHL_FORCEINLINE __forceinline
+#    define BEHL_NOINLINE __declspec(noinline)
 #else
 #    define BEHL_FORCEINLINE inline __attribute__((always_inline))
+#    define BEHL_NOINLINE __attribute__((noinline))
 #endif
 
 #if BEHL_CPLUSPLUS >= 202302L

@@ -24,7 +24,7 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
     // Error Throwing Functions
 
-    [[noreturn]] BEHL_FORCEINLINE void throw_bad_arith(
+    [[noreturn]] BEHL_NOINLINE void throw_bad_arith(
         const Value& a, const Value& b, const CallFrame& frame, const char* op_name = nullptr)
     {
         const auto loc = get_current_location(frame);
@@ -43,7 +43,7 @@ namespace behl
         throw TypeError(msg, loc);
     }
 
-    [[noreturn]] BEHL_FORCEINLINE void throw_bad_arith(const Value& a, const CallFrame& frame)
+    [[noreturn]] BEHL_NOINLINE void throw_bad_arith(const Value& a, const CallFrame& frame)
     {
         const auto loc = get_current_location(frame);
         const auto msg = behl::format<"attempt to perform arithmetic on a {} value">(a.get_type_string());

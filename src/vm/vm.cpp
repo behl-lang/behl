@@ -679,10 +679,15 @@ namespace behl
                     break;
 
                 case OpCode::kOpCall:
-                    handler_call(S, *frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
-                    frame = &callstack.back();
-                    code = frame->proto->code.data();
+                {
+                    const bool self_call = instr.flag_bit();
+                    frame = handler_call(S, *frame, instr.a(), instr.b(), instr.c(), self_call);
+                    if (!self_call)
+                    {
+                        code = frame->proto->code.data();
+                    }
                     break;
+                }
 
                 case OpCode::kOpTailCall:
                     if (!handler_tailcall(S, *frame, instr.a(), instr.b(), !!instr.c(), entry_call_depth))
@@ -694,13 +699,19 @@ namespace behl
                     break;
 
                 case OpCode::kOpReturn:
+                {
+                    const GCProto* ret_proto = frame->proto;
                     if (!handler_return(S, *frame, instr.a(), instr.b(), entry_call_depth))
                     {
                         return;
                     }
-                    frame = &callstack.back();
-                    code = frame->proto->code.data();
+                    --frame;
+                    if (frame->proto != ret_proto)
+                    {
+                        code = frame->proto->code.data();
+                    }
                     break;
+                }
 
                 case OpCode::kOpVararg:
                     handler_vararg(S, *frame, instr.a(), instr.b());

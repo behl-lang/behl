@@ -18,7 +18,7 @@
 namespace behl
 {
     // Forward declarations for functions used by control flow handlers
-    [[noreturn]] BEHL_FORCEINLINE void throw_bad_call(const Value& val, const CallFrame& frame, State* S)
+    [[noreturn]] BEHL_NOINLINE void throw_bad_call(const Value& val, const CallFrame& frame, State* S)
     {
         const auto loc = get_current_location(frame);
         std::string msg;
@@ -57,7 +57,7 @@ namespace behl
 
     // Setup a new call frame for any function call
     BEHL_FORCEINLINE
-    void setup_call_frame(
+    CallFrame& setup_call_frame(
         State* S, const GCProto* proto, uint32_t new_base, uint32_t actual_num_args, uint32_t call_pos, uint8_t nresults)
     {
         CallFrame& new_frame = S->call_stack.emplace_back(S);
@@ -68,14 +68,12 @@ namespace behl
         new_frame.call_pos = call_pos;
         new_frame.nresults = nresults;
 
-        if (proto && proto->is_vararg && actual_num_args > proto->num_params)
+        if (proto && proto->is_vararg) [[unlikely]]
         {
-            new_frame.num_varargs = actual_num_args - proto->num_params;
+            new_frame.num_varargs = (actual_num_args > proto->num_params) ? (actual_num_args - proto->num_params) : 0;
         }
-        else
-        {
-            new_frame.num_varargs = 0;
-        }
+
+        return new_frame;
     }
 
     // Prepare stack for a function call (ensure enough space)
@@ -121,9 +119,10 @@ namespace behl
     }
 
     BEHL_FORCEINLINE
-    void move_results(Vector<Value>& stack, State* S, uint32_t src_base, uint32_t dest, uint32_t count, uint32_t available)
+    void move_results(Vector<Value>& stack, State* S, uint32_t src_base, uint32_t dest, uint32_t count, uint32_t available,
+        uint32_t min_final_size = 0)
     {
-        const uint32_t final_size = dest + count;
+        const uint32_t final_size = std::max(dest + count, min_final_size);
 
         if (count == 0)
         {
@@ -229,9 +228,19 @@ namespace behl
             close_upvalues(S, frame.base);
         }
 
+        uint32_t min_final_size = 0;
+        if (call_stack.size() > entry_call_depth + 1)
+        {
+            const auto& caller = call_stack[call_stack.size() - 2];
+            if (caller.proto != nullptr)
+            {
+                min_final_size = caller.base + caller.proto->max_stack_size;
+            }
+        }
+
         // Move/pad results to match what caller expects
         const auto available = (result_base < stack_size) ? std::min(num_available, stack_size - result_base) : 0;
-        move_results(stack, S, result_base, dest, num_to_move, available);
+        move_results(stack, S, result_base, dest, num_to_move, available, min_final_size);
 
         call_stack.pop_back();
 
@@ -245,15 +254,8 @@ namespace behl
         auto& next_frame = call_stack.back();
         next_frame.top = dest + num_to_move;
 
-        const auto* next_proto = next_frame.proto;
-        if (next_proto != nullptr)
+        if (next_frame.proto != nullptr)
         {
-            const auto caller_needs = next_frame.base + next_proto->max_stack_size;
-            if (stack.size() < caller_needs)
-            {
-                stack.resize(S, caller_needs);
-            }
-
             return true;
         }
 
@@ -388,7 +390,7 @@ namespace behl
 
     // Call instruction handler
     BEHL_FORCEINLINE
-    void handler_call(State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
+    CallFrame* handler_call(State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
     {
         if (S->gc.gc_debt > 0)
         {
@@ -413,9 +415,13 @@ namespace behl
             const uint32_t actual_num_args = count_actual_args(frame, static_cast<uint32_t>(call_pos), num_args);
 
             const auto* proto = frame.proto;
-            S->stack[call_pos] = S->stack[frame.base];
-            setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
+            if (proto->has_upvalues)
+            {
+                S->stack[call_pos] = S->stack[frame.base];
+            }
+            CallFrame& new_frame = setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
             prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
+            return &new_frame;
         }
         else
         {
@@ -425,6 +431,7 @@ namespace behl
             const auto stack_after_call = new_frame.base + new_frame.proto->max_stack_size;
 
             S->stack.resize(S, stack_after_call);
+            return &new_frame;
         }
     }
 
