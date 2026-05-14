@@ -62,7 +62,7 @@ TEST_F(HashMapTombstoneTest, TombstonesAreCountedInLoadFactor)
 
     // size_ + tombstones_ = 0 + 7 = 7, which exceeds 0.75 * 8 = 6 — a fixed
     // table must rehash here. The buggy version misses this and keeps cap=8.
-    map.insert_or_assign(S, 100, 100);
+    map.insert_or_assign(S, size_t{100}, 100);
     EXPECT_EQ(map.size(), 1u);
     EXPECT_EQ(map.capacity(), 16u);
 
