@@ -204,9 +204,12 @@ behl/
 │   └── gc/               # Garbage collector
 ├── include/              # Public headers
 ├── tests/                # Unit tests (GoogleTest)
-├── docs/                 # Documentation
-└── vscode-extension/     # VS Code language support
+└── docs/                 # Documentation
 ```
+
+The language server and VS Code extension live in their own repositories:
+[behl-lsp](https://github.com/behl-lang/behl-lsp) and
+[behl-vscode](https://github.com/behl-lang/behl-vscode).
 
 ## Key Differences from Lua
 

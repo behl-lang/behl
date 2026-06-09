@@ -341,40 +341,6 @@ if(BEHL_BUILD_CLI AND NOT EMSCRIPTEN)
     )
 endif()
 
-# LSP Server (WASM)
-if(EMSCRIPTEN)
-    set(BEHL_LSP_SOURCES
-        src/lsp/lsp_server.cpp
-        src/lsp/lsp_server.hpp
-        src/lsp/lsp_wasm.cpp
-        src/lsp/module_analyzer.cpp
-        src/lsp/module_analyzer.hpp
-        src/lsp/symbol_collector.cpp
-        src/lsp/symbol_collector.hpp
-    )
-    
-    add_executable(behl_lsp ${BEHL_LSP_SOURCES})
-    
-    target_include_directories(behl_lsp
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/lsp
-    )
-    
-    target_link_libraries(behl_lsp
-        PRIVATE
-            libbehl
-    )
-    
-    target_compile_options(behl_lsp PRIVATE -fwasm-exceptions)
-    set_target_properties(behl_lsp PROPERTIES
-        LINK_FLAGS "-s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME='createBehlLSP' -lembind -s ALLOW_MEMORY_GROWTH=1 -s ENVIRONMENT=node -s FORCE_FILESYSTEM=1 -s EXPORTED_RUNTIME_METHODS=['FS'] -fwasm-exceptions"
-    )
-    
-    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "src" FILES ${BEHL_LSP_SOURCES})
-endif()
-
 # Benchmarks
 if(BEHL_BUILD_BENCHMARKS AND NOT EMSCRIPTEN)
     set(BENCHMARK_SOURCES
