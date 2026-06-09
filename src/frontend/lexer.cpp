@@ -617,6 +617,9 @@ namespace behl
 
         AutoVector<Token> tokens(state);
 
+        const auto estimated_tokens = source.size() / 4;
+        tokens.reserve(estimated_tokens);
+
         while (L.pos < L.source.size())
         {
             skip_whitespace(L);

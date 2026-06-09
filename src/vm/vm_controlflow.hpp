@@ -428,7 +428,10 @@ namespace behl
             call_function(S, a, num_args, num_results);
 
             auto& new_frame = S->call_stack.back();
-            const auto stack_after_call = new_frame.base + new_frame.proto->max_stack_size;
+            // Keep room for the full register window, but never shrink below the passed
+            // arguments: a vararg callee still needs them in place until VARARGPREP runs.
+            const auto frame_window = new_frame.base + new_frame.proto->max_stack_size;
+            const auto stack_after_call = (frame_window > new_frame.top) ? frame_window : new_frame.top;
 
             S->stack.resize(S, stack_after_call);
             return &new_frame;

@@ -273,3 +273,171 @@ TEST_F(VarargsTest, VarargsDirectForwardingWithPrefix)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 303); // 100 + 200 + 3
 }
+
+TEST_F(VarargsTest, MultiAssignFromVarargsExact)
+{
+    constexpr std::string_view code = R"(
+        function test(...) {
+            let a, b, c = ...;
+            return a + b + c;
+        }
+        return test(10, 20, 30);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 60);
+}
+
+TEST_F(VarargsTest, MultiAssignFromVarargsNilPadded)
+{
+    constexpr std::string_view code = R"(
+        function test(...) {
+            let a, b, c = ...;
+            return typeof(a) + "," + typeof(b) + "," + typeof(c);
+        }
+        return test(10);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "integer,nil,nil");
+}
+
+TEST_F(VarargsTest, MultiAssignFromVarargsTruncated)
+{
+    constexpr std::string_view code = R"(
+        function test(...) {
+            let a, b = ...;
+            return a + b;
+        }
+        return test(10, 20, 30);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 30);
+}
+
+TEST_F(VarargsTest, MultiAssignWithParamsAndVarargs)
+{
+    constexpr std::string_view code = R"(
+        function test(p, ...) {
+            let a, b = ...;
+            return p + a + b;
+        }
+        return test(1, 10, 20);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 31);
+}
+
+TEST_F(VarargsTest, SingleAssignFromVarargs)
+{
+    constexpr std::string_view code = R"(
+        function test(...) {
+            let x = ...;
+            return x;
+        }
+        return test(42, 99);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 42);
+}
+
+TEST_F(VarargsTest, SingleAssignFromVarargsNoneIsNil)
+{
+    constexpr std::string_view code = R"(
+        function test(...) {
+            let x = ...;
+            return typeof(x);
+        }
+        return test();
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "nil");
+}
+
+TEST_F(VarargsTest, ReassignFromVarargs)
+{
+    constexpr std::string_view code = R"(
+        function test(...) {
+            let a = 0;
+            let b = 0;
+            a, b = ...;
+            return a + b;
+        }
+        return test(5, 7);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 12);
+}
+
+TEST_F(VarargsTest, ReturnVarargsAll)
+{
+    constexpr std::string_view code = R"(
+        function inner(...) {
+            return ...;
+        }
+        function outer(...) {
+            let a, b, c = inner(...);
+            return a + b + c;
+        }
+        return outer(10, 20, 30);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 60);
+}
+
+TEST_F(VarargsTest, ReturnPrefixThenVarargs)
+{
+    constexpr std::string_view code = R"(
+        function inner(...) {
+            return 1, ...;
+        }
+        function outer(...) {
+            let a, b, c = inner(...);
+            return a + b + c;
+        }
+        return outer(10, 20);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 31); // 1 + 10 + 20
+}
+
+TEST_F(VarargsTest, ReturnPrefixThenVarargsEmpty)
+{
+    constexpr std::string_view code = R"(
+        function inner(...) {
+            return 1, ...;
+        }
+        function outer(...) {
+            let a, b = inner(...);
+            return typeof(a) + "," + typeof(b);
+        }
+        return outer();
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "integer,nil");
+}
+
+TEST_F(VarargsTest, ReturnVarargsTruncatedWhenNotLast)
+{
+    constexpr std::string_view code = R"(
+        function inner(...) {
+            return ..., 99;
+        }
+        function outer(...) {
+            let a, b = inner(...);
+            return a + b;
+        }
+        return outer(10, 20);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 109); // 10 (... truncated to first) + 99
+}

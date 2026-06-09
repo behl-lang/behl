@@ -235,7 +235,7 @@ namespace behl
     }
 
     BEHL_FORCEINLINE
-    static void handler_varargprep([[maybe_unused]] State* S, CallFrame& frame, uint8_t num_params)
+    static void handler_varargprep(State* S, CallFrame& frame, uint8_t num_params)
     {
         // Calculate how many extra args were passed
         const auto total_args = frame.top - frame.base - 1;
@@ -273,35 +273,58 @@ namespace behl
             S->stack[new_base + 1 + i] = S->stack[old_base + 1 + i];
         }
 
-        // Update frame pointers
+        // Update frame pointers. call_pos is left untouched: it marks where the caller
+        // expects results, which stays at the original call site even though the locals
+        // base moves past the varargs.
         frame.base = new_base;
         frame.top = new_base + 1 + num_params;
-        frame.call_pos = new_base;
     }
 
     BEHL_FORCEINLINE
-    static void handler_vararg(State* S, CallFrame& frame, Reg a, [[maybe_unused]] uint8_t num)
+    static void handler_vararg(State* S, CallFrame& frame, Reg a, uint8_t num)
     {
         const auto num_varargs = frame.num_varargs;
 
         // Varargs are at: base - num_varargs ... base - 1
         const auto vararg_start = frame.base - num_varargs;
+        const auto dest = frame.base + a;
 
-        // Ensure stack is large enough for varargs
-        const auto target_end = frame.base + a + num_varargs;
+        // num == 0 requests all varargs (multret) and extends top so a following call
+        // or table constructor can consume them. num > 0 requests exactly that many
+        // values, nil-padding when fewer were passed and leaving top untouched.
+        if (num == 0)
+        {
+            const auto target_end = dest + num_varargs;
+            if (target_end > S->stack.size())
+            {
+                S->stack.resize(S, target_end);
+            }
+
+            for (uint32_t i = 0; i < num_varargs; ++i)
+            {
+                S->stack[dest + i] = S->stack[vararg_start + i];
+            }
+
+            frame.top = target_end;
+            return;
+        }
+
+        const auto want = static_cast<uint32_t>(num);
+        const auto target_end = dest + want;
         if (target_end > S->stack.size())
         {
             S->stack.resize(S, target_end);
         }
 
-        // Copy varargs to registers starting at `a`
-        for (uint32_t i = 0; i < num_varargs; ++i)
+        const auto copy_count = (num_varargs < want) ? num_varargs : want;
+        for (uint32_t i = 0; i < copy_count; ++i)
         {
-            S->stack[frame.base + a + i] = S->stack[vararg_start + i];
+            S->stack[dest + i] = S->stack[vararg_start + i];
         }
-
-        // Update top to reflect the new values pushed
-        frame.top = target_end;
+        for (uint32_t i = copy_count; i < want; ++i)
+        {
+            S->stack[dest + i].set_nil();
+        }
     }
 
     BEHL_FORCEINLINE

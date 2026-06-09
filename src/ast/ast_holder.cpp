@@ -11,6 +11,7 @@ namespace behl
         : m_state(state)
     {
         m_pools.emplace_back(m_state, m_state);
+        m_nodes.reserve(m_state, 1024);
     }
 
     AstHolder::~AstHolder()

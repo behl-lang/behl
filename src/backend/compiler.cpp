@@ -22,8 +22,11 @@
 
 namespace behl
 {
-    constexpr uint32_t kInvalidUpvalue = UINT32_MAX;
-    constexpr int32_t kInvalidLocal = -1;
+    static constexpr uint32_t kInvalidUpvalue = UINT32_MAX;
+    static constexpr int32_t kInvalidLocal = -1;
+    static constexpr size_t kInitialCodeCapacity = 64;
+    static constexpr size_t kInitialLineInfoCapacity = 64;
+    static constexpr size_t kInitialColumnInfoCapacity = 64;
 
     struct Local
     {
@@ -1767,6 +1770,9 @@ namespace behl
         }
         child_proto->num_params = param_count;
         child_proto->is_vararg = node.is_vararg;
+        child_proto->code.reserve(C.S, kInitialCodeCapacity);
+        child_proto->line_info.reserve(C.S, kInitialLineInfoCapacity);
+        child_proto->column_info.reserve(C.S, kInitialColumnInfoCapacity);
 
         // Set function name for debugging
         if (!node.self_name.empty())
@@ -1956,16 +1962,30 @@ namespace behl
         if (expr_count == 1 && var_count > 1 && node.first_expr)
         {
             const auto* call_expr = node.first_expr->try_as<AstFuncCall>();
-            if (call_expr)
+            const auto* vararg_expr = node.first_expr->try_as<AstVararg>();
+            if (call_expr || vararg_expr)
             {
-                compile_call(*call_expr, static_cast<uint8_t>(var_count));
-                Reg call_result_base = C.freereg - static_cast<uint8_t>(var_count);
+                Reg result_base;
+                if (call_expr)
+                {
+                    compile_call(*call_expr, static_cast<uint8_t>(var_count));
+                    result_base = C.freereg - static_cast<uint8_t>(var_count);
+                }
+                else
+                {
+                    result_base = C.freereg;
+                    for (size_t r = 0; r < var_count; ++r)
+                    {
+                        alloc_reg(C);
+                    }
+                    emit(C, make_op_vararg(result_base, static_cast<uint8_t>(var_count)), C.lastline);
+                }
 
                 // Assign results to variables
                 size_t i = 0;
                 for (AstNode* v = node.first_var; v; v = v->next_child, ++i)
                 {
-                    Reg val_reg = static_cast<Reg>(call_result_base + i);
+                    Reg val_reg = static_cast<Reg>(result_base + i);
                     if (auto* id = v->try_as<AstIdent>())
                     {
                         auto id_name = id->name->view();
@@ -2535,6 +2555,21 @@ namespace behl
                 {
                     emit(C, make_op_move(new_locals[i].reg, static_cast<uint8_t>(call_result_reg + i)), C.lastline);
                 }
+
+                C.freereg = locals_end;
+                if (C.freereg < C.min_freereg)
+                {
+                    C.freereg = C.min_freereg;
+                }
+
+                return;
+            }
+
+            if (node.first_init->try_as<AstVararg>())
+            {
+                // Locals are consecutive registers, so VARARG fills them directly,
+                // copying the available varargs and nil-padding the rest.
+                emit(C, make_op_vararg(new_locals[0].reg, static_cast<uint8_t>(new_locals.size())), C.lastline);
 
                 C.freereg = locals_end;
                 if (C.freereg < C.min_freereg)
@@ -3409,6 +3444,13 @@ namespace behl
                 Reg call_reg = C.freereg - 1;
                 emit(C, make_op_return(call_reg, static_cast<uint8_t>(kMultRet)), C.lastline);
             }
+            else if (node.first_expr->try_as<AstVararg>())
+            {
+                // return ... spreads every vararg, so emit a multret VARARG and return all of it
+                node.first_expr->accept(*this);
+                Reg result_reg = C.freereg - 1;
+                emit(C, make_op_return(result_reg, static_cast<uint8_t>(kMultRet)), C.lastline);
+            }
             else
             {
                 if (const auto* ident = node.first_expr->try_as<AstIdent>())
@@ -3443,6 +3485,7 @@ namespace behl
                 last_expr = expr;
             }
             const auto* last_call = last_expr ? last_expr->try_as<AstFuncCall>() : nullptr;
+            const auto* last_vararg = last_expr ? last_expr->try_as<AstVararg>() : nullptr;
 
             AutoVector<Reg> result_regs(C.S);
 
@@ -3453,7 +3496,24 @@ namespace behl
                 result_regs.push_back(C.freereg - 1);
             }
 
-            if (last_call)
+            if (last_vararg)
+            {
+                // Last operand is ... so spread every vararg after the leading values
+                Reg first_return_reg = result_regs.front();
+                for (size_t i = 1; i < result_regs.size(); i++)
+                {
+                    Reg expected_reg = first_return_reg + static_cast<Reg>(i);
+                    if (result_regs[i] != expected_reg)
+                    {
+                        emit(C, make_op_move(expected_reg, result_regs[i]), C.lastline);
+                    }
+                }
+
+                Reg vararg_pos = first_return_reg + static_cast<Reg>(result_regs.size());
+                emit(C, make_op_vararg(vararg_pos, 0), C.lastline);
+                emit(C, make_op_return(first_return_reg, static_cast<uint8_t>(kMultRet)), C.lastline);
+            }
+            else if (last_call)
             {
                 compile_call(*last_call, static_cast<uint8_t>(kMultRet));
                 result_regs.push_back(C.freereg - 1);
@@ -3645,6 +3705,11 @@ namespace behl
         C.current_proto->source_name = gc_new_string(state, source_name);
         C.current_proto->source_path = gc_new_string(state, source_name);
         C.current_proto->name = gc_new_string(state, "<main chunk>");
+
+        C.current_proto->code.reserve(state, kInitialCodeCapacity);
+        C.current_proto->line_info.reserve(state, kInitialLineInfoCapacity);
+        C.current_proto->column_info.reserve(state, kInitialColumnInfoCapacity);
+
         C.is_module = program->is_module;
         C.parent = nullptr;
         C.freereg = 1;
