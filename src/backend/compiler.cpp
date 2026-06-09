@@ -3499,7 +3499,7 @@ namespace behl
             if (last_vararg)
             {
                 // Last operand is ... so spread every vararg after the leading values
-                Reg first_return_reg = result_regs.front();
+                Reg first_return_reg = result_regs.empty() ? C.freereg : result_regs.front();
                 for (size_t i = 1; i < result_regs.size(); i++)
                 {
                     Reg expected_reg = first_return_reg + static_cast<Reg>(i);
