@@ -193,6 +193,10 @@ namespace behl
         { OpCode::kOpVarargPrep, OpMode::kNone, OpMode::kNone, OpMode::kNone, false, false, false, "VARARGPREP" },
         // kOpVarargExpand - Expand varargs into table array
         { OpCode::kOpVarargExpand, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, false, false, "VARARGEXPAND" },
+        // kOpReturn0 - Return no values
+        { OpCode::kOpReturn0, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, false, "RETURN0" },
+        // kOpReturn1 - Return R(A)
+        { OpCode::kOpReturn1, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, true, false, "RETURN1" },
     } };
 
     // Helper function to get metadata for an opcode

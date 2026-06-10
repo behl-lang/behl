@@ -97,10 +97,12 @@ namespace behl
         kOpVararg,
         kOpVarargPrep,
         kOpVarargExpand,
+        kOpReturn0,
+        kOpReturn1,
     };
 
     // Total number of opcodes - computed from last enum value
-    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpVarargExpand) + 1;
+    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpReturn1) + 1;
 
     struct Instruction
     {
@@ -525,6 +527,20 @@ namespace behl
         Instruction i{};
         i.raw = (static_cast<uint32_t>(OpCode::kOpReturn) << 25) | static_cast<uint32_t>(a)
             | (static_cast<uint32_t>(num_results) << 8);
+        return i;
+    }
+
+    constexpr Instruction make_op_return0() noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpReturn0) << 25);
+        return i;
+    }
+
+    constexpr Instruction make_op_return1(Reg a) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpReturn1) << 25) | static_cast<uint32_t>(a);
         return i;
     }
 

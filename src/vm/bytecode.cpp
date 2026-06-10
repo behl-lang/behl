@@ -247,6 +247,12 @@ namespace behl
             case OpCode::kOpReturn:
                 opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.b());
                 break;
+            case OpCode::kOpReturn0:
+                opcode_str = behl::format("{:<9}", meta.name);
+                break;
+            case OpCode::kOpReturn1:
+                opcode_str = behl::format("{:<9} R{}", meta.name, instr.a());
+                break;
             case OpCode::kOpForPrep:
                 opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_offset());
                 break;

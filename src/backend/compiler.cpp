@@ -347,7 +347,8 @@ namespace behl
                 return false;
             }
             const auto& last = C.current_proto->code.back();
-            return last.op() == OpCode::kOpReturn || last.op() == OpCode::kOpTailCall;
+            return last.op() == OpCode::kOpReturn || last.op() == OpCode::kOpReturn0 || last.op() == OpCode::kOpReturn1
+                || last.op() == OpCode::kOpTailCall;
         }
 
         Reg get_target_reg()
@@ -1829,6 +1830,13 @@ namespace behl
         child.freereg = first_param_reg + param_idx;
         child.min_freereg = child.freereg;
 
+        // The frame window must cover the function slot and parameters even if
+        // the body never allocates a register.
+        if (child.freereg > child.current_proto->max_stack_size)
+        {
+            child.current_proto->max_stack_size = child.freereg;
+        }
+
         VisitorAdapter child_visitor(child);
         if (node.block)
         {
@@ -1836,11 +1844,18 @@ namespace behl
         }
 
         // Only add implicit return if the last instruction isn't already a return
-        if (child.current_proto->code.empty() || child.current_proto->code.back().op() != OpCode::kOpReturn)
+        bool ends_with_return = false;
+        if (!child.current_proto->code.empty())
+        {
+            const auto last_op = child.current_proto->code.back().op();
+            ends_with_return = last_op == OpCode::kOpReturn || last_op == OpCode::kOpReturn0
+                || last_op == OpCode::kOpReturn1;
+        }
+        if (!ends_with_return)
         {
             // Implicit return: return 0 values (nil-padding happens at call site if needed)
             // Emit with line 0 to indicate this is not user-visible and shouldn't trigger breakpoints
-            emit(child, make_op_return(0, 0), 0, 0);
+            emit(child, make_op_return0(), 0, 0);
         }
 
         child.current_proto->num_params = param_count;
@@ -3314,7 +3329,7 @@ namespace behl
                     // Use the standard compile_call which will optimize tostring
                     compile_call(call_node, 0);
                     Reg result_reg = C.freereg - 1;
-                    emit(C, make_op_return(result_reg, 1), C.lastline);
+                    emit(C, make_op_return1(result_reg), C.lastline);
                     return;
                 }
             }
@@ -3432,7 +3447,7 @@ namespace behl
         if (!node.first_expr)
         {
             // Explicit empty return: return 0 values
-            emit(C, make_op_return(0, 0), C.lastline);
+            emit(C, make_op_return0(), C.lastline);
         }
         else if (!node.first_expr->next_child)
         {
@@ -3458,7 +3473,7 @@ namespace behl
                     int32_t loc = resolve_local(C, ident->name->view());
                     if (loc >= 0)
                     {
-                        emit(C, make_op_return(static_cast<uint8_t>(loc), 1), C.lastline);
+                        emit(C, make_op_return1(static_cast<uint8_t>(loc)), C.lastline);
                         return;
                     }
                     uint32_t up = resolve_upvalue(C, ident->name->view());
@@ -3466,14 +3481,14 @@ namespace behl
                     {
                         Reg reg = alloc_reg(C);
                         emit(C, make_op_getupval(reg, static_cast<uint8_t>(up)), C.lastline);
-                        emit(C, make_op_return(reg, 1), C.lastline);
+                        emit(C, make_op_return1(reg), C.lastline);
                         return;
                     }
                 }
 
                 node.first_expr->accept(*this);
                 Reg result_reg = C.freereg - 1;
-                emit(C, make_op_return(result_reg, 1), C.lastline);
+                emit(C, make_op_return1(result_reg), C.lastline);
             }
         }
         else
@@ -3721,7 +3736,7 @@ namespace behl
         leave_scope(C);
 
         // Return nothing (0 values) - export transform pass will add explicit return if module
-        emit(C, make_op_return(0, 0), 0, 0);
+        emit(C, make_op_return0(), 0, 0);
 
         return proto;
     }

@@ -104,17 +104,17 @@ namespace behl
         }
     }
 
-    // Clear local variables above arguments for tail call
+    // Clear local variables above arguments for tail call. The callee expects
+    // unpassed parameter slots to be nil, same as a fresh frame. Slots past the
+    // frame window are dropped by the following resize, so they stay untouched.
     BEHL_FORCEINLINE
-    void clear_tail_call_locals(State* S, uint32_t first_local_reg) noexcept
+    void clear_tail_call_locals(State* S, uint32_t first_local_reg, uint32_t frame_end) noexcept
     {
         auto& stack = S->stack;
-        if (first_local_reg < stack.size())
+        const auto end = std::min(frame_end, static_cast<uint32_t>(stack.size()));
+        for (uint32_t i = first_local_reg; i < end; ++i)
         {
-            for (size_t i = first_local_reg; i < stack.size(); ++i)
-            {
-                stack[i].set_nil();
-            }
+            stack[i].set_nil();
         }
     }
 
@@ -463,7 +463,7 @@ namespace behl
             {
                 move_tail_call_args(S, func_abs_pos + 1, frame.base + 1, actual_num_args);
             }
-            clear_tail_call_locals(S, frame.base + actual_num_args + 1);
+            clear_tail_call_locals(S, frame.base + actual_num_args + 1, frame.base + frame.proto->max_stack_size);
 
             // Reset PC to beginning - proto and upvalues stay the same
             frame.pc = 0;
@@ -487,7 +487,7 @@ namespace behl
 
             // Move only arguments to frame.base (overwriting old args)
             move_tail_call_args(S, func_abs_pos, frame.base, items_to_move);
-            clear_tail_call_locals(S, frame.base + actual_num_args + 1);
+            clear_tail_call_locals(S, frame.base + actual_num_args + 1, frame.base + proto->max_stack_size);
 
             frame.proto = proto;
             frame.pc = 0;
@@ -552,7 +552,7 @@ namespace behl
 
                 // Clear any locals above the arguments
                 const auto new_top = frame.base + mm_items_to_move + 1; // closure + object + args
-                clear_tail_call_locals(S, new_top);
+                clear_tail_call_locals(S, new_top, frame.base + closure_data->proto->max_stack_size);
 
                 frame.proto = closure_data->proto;
                 frame.pc = 0;
@@ -577,6 +577,124 @@ namespace behl
         return return_from_function(S, frame, a, num_results, entry_call_depth);
     }
 
+    // Return instruction handler for RETURN0: returning no values, skips the
+    // kMultRet/available accounting of the general return path.
+    BEHL_FORCEINLINE
+    static bool handler_return0(State* S, const CallFrame& frame, uint32_t entry_call_depth)
+    {
+        auto& call_stack = S->call_stack;
+        auto& stack = S->stack;
+
+        const uint32_t dest = frame.call_pos;
+
+        if (frame.proto->has_upvalues) [[unlikely]]
+        {
+            close_upvalues(S, frame.base);
+        }
+
+        // frame.nresults tells us how many the CALLER expects (from CALL instruction)
+        const uint8_t wanted = frame.nresults;
+        const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? 0 : wanted;
+
+        uint32_t min_final_size = 0;
+        if (call_stack.size() > entry_call_depth + 1)
+        {
+            const auto& caller = call_stack[call_stack.size() - 2];
+            if (caller.proto != nullptr)
+            {
+                min_final_size = caller.base + caller.proto->max_stack_size;
+            }
+        }
+
+        stack.resize(S, std::max(dest + num_to_move, min_final_size));
+
+        // Pad with nils when the caller expects results
+        for (uint32_t i = 0; i < num_to_move; ++i)
+        {
+            stack[dest + i].set_nil();
+        }
+
+        call_stack.pop_back();
+
+        // Check if we've returned to the entry depth or the stack is empty
+        if (call_stack.empty() || call_stack.size() <= entry_call_depth)
+        {
+            return false;
+        }
+
+        auto& next_frame = call_stack.back();
+        next_frame.top = dest + num_to_move;
+
+        if (next_frame.proto != nullptr)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    // Return instruction handler for RETURN1: returning exactly one value.
+    BEHL_FORCEINLINE
+    static bool handler_return1(State* S, const CallFrame& frame, Reg a, uint32_t entry_call_depth)
+    {
+        auto& call_stack = S->call_stack;
+        auto& stack = S->stack;
+
+        const auto result_base = frame.base + a;
+        const uint32_t dest = frame.call_pos;
+
+        if (frame.proto->has_upvalues) [[unlikely]]
+        {
+            close_upvalues(S, frame.base);
+        }
+
+        // frame.nresults tells us how many the CALLER expects (from CALL instruction)
+        const uint8_t wanted = frame.nresults;
+        const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? 1 : wanted;
+
+        uint32_t min_final_size = 0;
+        if (call_stack.size() > entry_call_depth + 1)
+        {
+            const auto& caller = call_stack[call_stack.size() - 2];
+            if (caller.proto != nullptr)
+            {
+                min_final_size = caller.base + caller.proto->max_stack_size;
+            }
+        }
+
+        // Move the result first (before resize in case src and dest overlap)
+        if (num_to_move != 0)
+        {
+            stack[dest] = std::move(stack[result_base]);
+        }
+
+        stack.resize(S, std::max(dest + num_to_move, min_final_size));
+
+        // Pad with nils when the caller expects more than one result
+        for (uint32_t i = 1; i < num_to_move; ++i)
+        {
+            stack[dest + i].set_nil();
+        }
+
+        call_stack.pop_back();
+
+        // Check if we've returned to the entry depth or the stack is empty
+        if (call_stack.empty() || call_stack.size() <= entry_call_depth)
+        {
+            return false;
+        }
+
+        auto& next_frame = call_stack.back();
+        next_frame.top = dest + num_to_move;
+
+        if (next_frame.proto != nullptr)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     //////////////////////////////////////////////////////////////////////////
     // Comparison and Test Handlers
 
@@ -584,19 +702,17 @@ namespace behl
     template<MetaMethodType MMIndex>
     BEHL_FORCEINLINE static bool try_comparison_metamethod(State* S, const Value first, const Value second, bool& result)
     {
-        Value mm1 = metatable_get_method<MMIndex>(first);
-        Value mm2 = metatable_get_method<MMIndex>(second);
-
         if constexpr (MMIndex == MetaMethodType::kEq)
         {
-            // Both operands must be tables OR userdata with metatables for __eq to trigger
-            bool a_has_metatable = first.is_table_like();
-            bool b_has_metatable = second.is_table_like();
-
-            if (!a_has_metatable || !b_has_metatable)
+            // Both operands must be tables OR userdata with metatables for __eq to trigger,
+            // skip the metamethod lookups entirely when they are not
+            if (!first.is_table_like() || !second.is_table_like())
             {
                 return false;
             }
+
+            Value mm1 = metatable_get_method<MMIndex>(first);
+            Value mm2 = metatable_get_method<MMIndex>(second);
 
             // BOTH must have the __eq metamethod, otherwise use default comparison
             if (!mm1.has_value() || !mm2.has_value())
@@ -609,17 +725,22 @@ namespace behl
             {
                 return false;
             }
+
+            result = metatable_call_method_result(S, mm1, first, second).is_truthy();
         }
         else
         {
+            Value mm1 = metatable_get_method<MMIndex>(first);
+            Value mm2 = metatable_get_method<MMIndex>(second);
+
             // For __lt and __le, use if either has the metamethod
             if (!mm1.has_value() && !mm2.has_value())
             {
                 return false;
             }
-        }
 
-        result = metatable_call_method_result(S, !mm1.has_value() ? mm2 : mm1, first, second).is_truthy();
+            result = metatable_call_method_result(S, !mm1.has_value() ? mm2 : mm1, first, second).is_truthy();
+        }
 
         return true;
     }
@@ -632,7 +753,7 @@ namespace behl
         bool result = false;
         if (try_comparison_metamethod<MMIndex>(S, lhs, rhs, result))
         {
-            frame.pc += !result ? 1 : 0;
+            frame.pc += static_cast<uint32_t>(!result);
             return;
         }
 
@@ -649,7 +770,7 @@ namespace behl
             {
                 // Numbers and strings - do direct comparison
                 result = cmp(lhs, rhs);
-                frame.pc += !result ? 1 : 0;
+                frame.pc += static_cast<uint32_t>(!result);
                 return;
             }
         }
@@ -659,7 +780,7 @@ namespace behl
         if constexpr (MMIndex == MetaMethodType::kEq)
         {
             result = cmp(lhs, rhs);
-            frame.pc += !result ? 1 : 0;
+            frame.pc += static_cast<uint32_t>(!result);
         }
         else
         {
@@ -682,34 +803,20 @@ namespace behl
     BEHL_FORCEINLINE
     void handler_test(State* S, CallFrame& frame, Reg a, bool invert)
     {
-        bool cond = get_register(S, frame, a).is_truthy();
-        if (invert)
-        {
-            cond = !cond;
-        }
-        if (!cond)
-        {
-            frame.pc++;
-        }
+        const bool cond = get_register(S, frame, a).is_truthy() ^ invert;
+        frame.pc += static_cast<uint32_t>(!cond);
     }
 
     // Test and set instruction handler
     BEHL_FORCEINLINE
     void handler_testset(State* S, CallFrame& frame, Reg a, Reg b, bool invert)
     {
-        bool cond = get_register(S, frame, b).is_truthy();
-        if (invert)
-        {
-            cond = !cond;
-        }
+        const bool cond = get_register(S, frame, b).is_truthy() ^ invert;
         if (cond)
         {
             get_register(S, frame, a) = get_register(S, frame, b);
         }
-        if (!cond)
-        {
-            frame.pc++;
-        }
+        frame.pc += static_cast<uint32_t>(!cond);
     }
 
 } // namespace behl
