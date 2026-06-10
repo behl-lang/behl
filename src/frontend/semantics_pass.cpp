@@ -587,16 +587,6 @@ namespace behl
             }
             return node;
         }
-        else if (auto* for_num = node->try_as<AstForNum>())
-        {
-            ScopeGuard scope(state);
-            declare_local(state, for_num->var->view());
-            if (for_num->block)
-            {
-                transform_block(state, *for_num->block);
-            }
-            return node;
-        }
         else if (auto* for_in = node->try_as<AstForIn>())
         {
             ScopeGuard scope(state);

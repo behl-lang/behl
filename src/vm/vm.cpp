@@ -108,36 +108,66 @@ namespace behl
     static void handler_forprep(State* S, CallFrame& frame, Reg a, int32_t offset)
     {
         Value& init = get_register(S, frame, a);
-        const Value& step = get_register(S, frame, a + 2);
+        Value& limit = get_register(S, frame, a + 1);
+        Value& step = get_register(S, frame, a + 2);
 
-        if (init.is_integer())
+        if (init.is_integer() && limit.is_integer() && step.is_integer())
         {
-            auto i_int = init.get_integer();
-            if (step.is_integer())
+            // Counted loop: prove the types and compute the trip count once so
+            // FORLOOP only decrements a counter per iteration. The count lives
+            // in the internal register the compiler reserves at a+3.
+            const auto i = init.get_integer();
+            const auto l = limit.get_integer();
+            const auto s = step.get_integer();
+
+            if ((s > 0) ? (i > l) : (i < l))
             {
-                auto s_int = step.get_integer();
-                i_int = int_op::sub(i_int, s_int);
-                init.update(i_int);
+                // Zero iterations: skip past the FORLOOP instruction
+                frame.pc += static_cast<uint32_t>(offset) + 1;
+                return;
+            }
+
+            using UInt = std::make_unsigned_t<Integer>;
+            UInt remaining;
+            if (s > 0)
+            {
+                remaining = (static_cast<UInt>(l) - static_cast<UInt>(i)) / static_cast<UInt>(s);
+            }
+            else if (s < 0)
+            {
+                remaining = (static_cast<UInt>(i) - static_cast<UInt>(l)) / (0 - static_cast<UInt>(s));
             }
             else
             {
-                const FP i = static_cast<FP>(i_int);
-                const FP s = step.is_integer() ? static_cast<FP>(step.get_integer()) : step.get_fp();
-                init.emplace<FP>(i - s);
+                // A zero step never advances; mirror the old endless behavior
+                remaining = ~static_cast<UInt>(0);
             }
+
+            get_register(S, frame, a + 3).emplace<Integer>(static_cast<Integer>(remaining));
+
+            // Fall through into the body with the loop variable at its start value
+            return;
         }
-        else if (init.is_fp() || step.is_fp())
+
+        if (init.is_numeric() && step.is_numeric())
         {
             const FP i = init.is_integer() ? static_cast<FP>(init.get_integer()) : init.get_fp();
             const FP s = step.is_integer() ? static_cast<FP>(step.get_integer()) : step.get_fp();
             init.emplace<FP>(i - s);
-        }
-        else
-        {
-            throw TypeError("numeric for-loop requires number initial and step values", get_current_location(frame));
+
+            // FORLOOP distinguishes counted loops by an integer step, so float
+            // loops always carry a float step
+            step.emplace<FP>(s);
+            if (limit.is_integer())
+            {
+                limit.emplace<FP>(static_cast<FP>(limit.get_integer()));
+            }
+
+            frame.pc += static_cast<uint32_t>(offset);
+            return;
         }
 
-        frame.pc += static_cast<uint32_t>(offset);
+        throw TypeError("numeric for-loop requires number initial and step values", get_current_location(frame));
     }
 
     BEHL_FORCEINLINE
@@ -147,25 +177,24 @@ namespace behl
         const Value& limit = get_register(S, frame, a + 1);
         const Value& step = get_register(S, frame, a + 2);
 
-        if (idx.is_integer())
+        if (step.is_integer())
         {
-            auto i_int = idx.get_integer();
-            if (limit.is_integer())
+            // Counted loop: FORPREP proved idx/limit/step are integers and left
+            // the remaining iteration count in the internal register at a+3
+            Value& count = get_register(S, frame, a + 3);
+            using UInt = std::make_unsigned_t<Integer>;
+            const auto remaining = static_cast<UInt>(count.get_integer());
+
+            // The index keeps advancing on the final iteration so it ends on
+            // the first failing value, same as the generic path
+            idx.update(int_op::add(idx.get_integer(), step.get_integer()));
+
+            if (remaining != 0)
             {
-                auto l_int = limit.get_integer();
-                if (step.is_integer())
-                {
-                    auto s_int = step.get_integer();
-                    i_int = int_op::add(i_int, s_int);
-                    const bool continue_loop = (s_int > 0) ? (i_int <= l_int) : (i_int >= l_int);
-                    idx.update(i_int);
-                    if (continue_loop)
-                    {
-                        frame.pc += static_cast<uint32_t>(offset - 1);
-                    }
-                    return;
-                }
+                count.update(static_cast<Integer>(remaining - 1));
+                frame.pc += static_cast<uint32_t>(offset - 1);
             }
+            return;
         }
 
         if (idx.is_numeric() && limit.is_numeric() && step.is_numeric())

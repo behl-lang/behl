@@ -1013,43 +1013,17 @@ namespace behl
                 }
                 return fori;
             }
-            // Check for comma-style numeric for loop (for (i = start, end))
+            // C-style for loop with a variable declared outside
             else if (match(P, { TokenType::kAssign }))
             {
                 if (names->next_child != nullptr)
                 {
-                    error(P, "Numeric for loop expects one variable");
+                    error(P, "For loop expects one variable");
                 }
 
-                // Peek ahead to see if this is C-style (semicolon after init) or numeric (comma)
                 auto start_expr = parse_expr(P);
 
-                if (match(P, { TokenType::kComma }))
-                {
-                    // Comma-style numeric: for (i = start, end [, step])
-                    auto end = parse_expr(P);
-                    AstNode* step = nullptr;
-                    if (match(P, { TokenType::kComma }))
-                    {
-                        step = parse_expr(P);
-                    }
-                    consume(P, TokenType::kRParen, "Expected ')' after for loop");
-                    auto forn = make_node<AstForNum>(P.holder, tok, names, start_expr, end);
-                    forn->step = step;
-
-                    if (match(P, { TokenType::kLBrace }))
-                    {
-                        forn->block = parse_block(P);
-                        consume(P, TokenType::kRBrace, "Expected '}'");
-                    }
-                    else
-                    {
-                        forn->block = P.holder.make<AstBlock>();
-                        append_to_block(*forn->block, parse_stat(P));
-                    }
-                    return forn;
-                }
-                else if (match(P, { TokenType::kSemi }))
+                if (match(P, { TokenType::kSemi }))
                 {
                     // C-style without let: for (i = start; i < end; i++)
                     // Build an assignment node for init
@@ -1142,7 +1116,7 @@ namespace behl
                 }
                 else
                 {
-                    error(P, "Expected ';' or ',' after for loop initialization");
+                    error(P, "Expected ';' after for loop initialization");
                 }
             }
             else
@@ -1152,9 +1126,7 @@ namespace behl
         }
         else
         {
-            error(P,
-                "For loops require C-style syntax: for (let i = 0; i < n; i++) { } or for (i = start, end) { } or for (v in "
-                "expr) { }");
+            error(P, "For loops require C-style syntax: for (let i = 0; i < n; i++) { } or for (v in expr) { }");
         }
     }
 

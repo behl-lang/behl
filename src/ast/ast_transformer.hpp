@@ -95,8 +95,6 @@ namespace behl
                     return visit_If(static_cast<AstIf*>(node));
                 case AstNodeType::kWhile:
                     return visit_While(static_cast<AstWhile*>(node));
-                case AstNodeType::kForNum:
-                    return visit_ForNum(static_cast<AstForNum*>(node));
                 case AstNodeType::kForIn:
                     return visit_ForIn(static_cast<AstForIn*>(node));
                 case AstNodeType::kForC:
@@ -336,18 +334,6 @@ namespace behl
         virtual AstNode* visit_While(AstWhile* node)
         {
             node->cond = transform(node->cond);
-            transform_block(node->block);
-            return node;
-        }
-
-        virtual AstNode* visit_ForNum(AstForNum* node)
-        {
-            node->start = transform(node->start);
-            node->end = transform(node->end);
-            if (node->step)
-            {
-                node->step = transform(node->step);
-            }
             transform_block(node->block);
             return node;
         }

@@ -345,11 +345,6 @@ namespace behl
             print_indent();
             println("AstWhile");
         }
-        void visit(const AstForNum&) override
-        {
-            print_indent();
-            println("AstForNum");
-        }
         void visit(const AstForIn&) override
         {
             print_indent();

@@ -672,3 +672,160 @@ TEST_F(LoopTest, ForLoopMultipleVariableDeclarationsComplex)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1607);
 }
+
+TEST_F(LoopTest, ForLoopZeroIterationsAscending)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 5; i < 5; i++) {
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_F(LoopTest, ForLoopZeroIterationsDescending)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 0; i > 5; i--) {
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_F(LoopTest, ForLoopStepOvershootsLimit)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 0; i < 10; i += 100) {
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_F(LoopTest, ForLoopDescendingNonUnitStep)
+{
+    constexpr std::string_view code = R"(
+        let sum = 0
+        for (let i = 10; i > 0; i -= 3) {
+            sum = sum + i
+        }
+        return sum
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    // 10 + 7 + 4 + 1
+    ASSERT_EQ(behl::to_integer(S, -1), 22);
+}
+
+TEST_F(LoopTest, ForLoopBodyWritesLoopVariable)
+{
+    // Writing the loop variable in the body keeps C semantics: the loop must
+    // not be rewritten into the counted numeric form
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 0; i < 10; i++) {
+            i = i + 1
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    // i advances by 2 per iteration: 0, 2, 4, 6, 8
+    ASSERT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_F(LoopTest, ForLoopBodyShadowsLoopVariable)
+{
+    constexpr std::string_view code = R"(
+        let sum = 0
+        for (let i = 0; i < 3; i++) {
+            let i = 100
+            sum = sum + i
+        }
+        return sum
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 300);
+}
+
+TEST_F(LoopTest, ForLoopClosureWritesLoopVariable)
+{
+    // A closure inside the body writing the loop variable must also keep the
+    // loop on the generic C-semantics path
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 0; i < 10; i++) {
+            let bump = function() {
+                i = i + 1
+            }
+            bump()
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    // i advances by 2 per iteration: 0, 2, 4, 6, 8
+    ASSERT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_F(LoopTest, ForLoopNearIntegerMaxInclusive)
+{
+    // The index reaching the maximum integer must terminate the loop instead
+    // of wrapping around and looping forever
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 9223372036854775798; i <= 9223372036854775807; i++) {
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_F(LoopTest, ForLoopNearIntegerMaxOvershootStep)
+{
+    // The final step overshooting the maximum integer must terminate the loop
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 9223372036854775797; i < 9223372036854775807; i += 4) {
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    // 9223372036854775797, +4, +4; the next step would pass the limit
+    ASSERT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_F(LoopTest, ForLoopIntBoundsFloatStep)
+{
+    constexpr std::string_view code = R"(
+        let sum = 0.0
+        for (let i = 0; i < 5; i += 1.0) {
+            sum = sum + i
+        }
+        return sum
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 10.0);
+}

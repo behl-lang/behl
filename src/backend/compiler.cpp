@@ -459,7 +459,6 @@ namespace behl
         void visit(const AstLocalDecl&) override;
         void visit(const AstIf&) override;
         void visit(const AstWhile&) override;
-        void visit(const AstForNum&) override;
         void visit(const AstForIn&) override;
         void visit(const AstForC&) override;
         void visit(const AstForCNumeric&) override;
@@ -2730,71 +2729,6 @@ namespace behl
         C.loop_stack.pop_back();
     }
 
-    void VisitorAdapter::visit(const AstForNum& node)
-    {
-        enter_scope(C);
-        Reg base = alloc_reg(C);
-        Local var_loc{ node.var->view(), static_cast<int>(C.current_proto->code.size()), base, false };
-        C.scopes.back().push_back(var_loc);
-        Reg limit_reg = alloc_reg(C);
-        Reg step_reg = alloc_reg(C);
-        Reg internal_reg = alloc_reg(C);
-        node.start->accept(*this);
-        emit(C, make_op_move(base, static_cast<Reg>(C.freereg - 1)), C.lastline);
-        free_reg(C, C.freereg - 1);
-        node.end->accept(*this);
-        emit(C, make_op_move(limit_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
-        free_reg(C, C.freereg - 1);
-        if (node.step)
-        {
-            node.step->accept(*this);
-            emit(C, make_op_move(step_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
-            free_reg(C, C.freereg - 1);
-        }
-        else
-        {
-            const auto k = add_integer_constant(C, 1);
-            emit(C, make_op_loadi(step_reg, k), C.lastline);
-        }
-        size_t prep_pc = C.current_proto->code.size();
-        emit(C, make_op_forprep(base, 0), C.lastline);
-
-        // Push loop context for break/continue tracking
-        C.loop_stack.emplace_back(C.S);
-
-        if (node.block)
-        {
-            node.block->accept(*this);
-        }
-
-        // Continue jumps should jump to the FORLOOP instruction (which will be at loop_pc)
-        size_t loop_pc = C.current_proto->code.size();
-        for (size_t pos : C.loop_stack.back().continue_list)
-        {
-            C.current_proto->code[pos] = make_op_jmp(static_cast<int32_t>(loop_pc - pos - 1));
-        }
-
-        emit(C, make_op_forloop(base, 0), C.lastline);
-        C.current_proto->code[prep_pc] = make_op_forprep(base, static_cast<int32_t>(loop_pc - (prep_pc + 1)));
-        C.current_proto->code[loop_pc] = make_op_forloop(base, static_cast<int32_t>((prep_pc + 1) - loop_pc));
-
-        // Break jumps should jump to after the loop (current position)
-        size_t break_target = C.current_proto->code.size();
-        for (size_t pos : C.loop_stack.back().break_list)
-        {
-            C.current_proto->code[pos] = make_op_jmp(static_cast<int32_t>(break_target - pos - 1));
-        }
-
-        // Pop loop context
-        C.loop_stack.pop_back();
-
-        leave_scope(C);
-        free_reg(C, internal_reg);
-        free_reg(C, step_reg);
-        free_reg(C, limit_reg);
-        free_reg(C, base);
-    }
-
     void VisitorAdapter::visit(const AstForIn& node)
     {
         enter_scope(C);
@@ -3077,7 +3011,6 @@ namespace behl
     void VisitorAdapter::visit(const AstForCNumeric& node)
     {
         // Compile optimized numeric C-style for loop using FORPREP/FORLOOP
-        // This is similar to ForNum but handles C-style comparison operators and step directions
 
         enter_scope(C);
         Reg base = alloc_reg(C);

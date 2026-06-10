@@ -51,7 +51,6 @@ namespace behl
         kIf,
         kElseIf,
         kWhile,
-        kForNum,
         kForIn,
         kForC,
         kForCNumeric,
@@ -1002,43 +1001,6 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstForNum : AstNode
-    {
-        static constexpr AstNodeType kType = AstNodeType::kForNum;
-        AstString* var;
-        AstNode* start;
-        AstNode* end;
-        AstNode* step = nullptr;
-        AstBlock* block = nullptr;
-        AstForNum(AstString* v, AstNode* s, AstNode* e)
-            : AstNode(AstNodeType::kForNum)
-            , var(std::move(v))
-            , start(std::move(s))
-            , end(std::move(e))
-        {
-        }
-        AstNode* clone(AstHolder& holder) const override
-        {
-            auto c = make_clone<AstForNum>(holder, var, start->clone(holder), end->clone(holder));
-            if (step)
-            {
-                c->step = step->clone(holder);
-            }
-            if (block)
-            {
-                c->block = holder.make<AstBlock>();
-                AstNode** tail = &c->block->first_stat;
-                for (const AstNode* stat = block->first_stat; stat != nullptr; stat = stat->next_child)
-                {
-                    *tail = stat->clone(holder);
-                    tail = &(*tail)->next_child;
-                }
-            }
-            return c;
-        }
-        void accept(AstVisitor& v) const override;
-    };
-
     struct AstForIn : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kForIn;
@@ -1424,7 +1386,6 @@ namespace behl
         virtual void visit(const AstLocalDecl&) = 0;
         virtual void visit(const AstIf&) = 0;
         virtual void visit(const AstWhile&) = 0;
-        virtual void visit(const AstForNum&) = 0;
         virtual void visit(const AstForIn&) = 0;
         virtual void visit(const AstForC&) = 0;
         virtual void visit(const AstForCNumeric&) = 0;
@@ -1577,10 +1538,6 @@ namespace behl
         v.visit(*this);
     }
     inline void AstWhile::accept(AstVisitor& v) const
-    {
-        v.visit(*this);
-    }
-    inline void AstForNum::accept(AstVisitor& v) const
     {
         v.visit(*this);
     }

@@ -272,18 +272,6 @@ namespace behl
             }
             return for_c->block && block_reads_variable(for_c->block, var_name);
         }
-        if (auto* for_num = stat->try_as<AstForNum>())
-        {
-            if (reads_variable(for_num->start, var_name) || reads_variable(for_num->end, var_name))
-            {
-                return true;
-            }
-            if (for_num->step && reads_variable(for_num->step, var_name))
-            {
-                return true;
-            }
-            return for_num->block && block_reads_variable(for_num->block, var_name);
-        }
         if (auto* for_in = stat->try_as<AstForIn>())
         {
             for (AstNode* expr = for_in->first_expr; expr; expr = expr->next_child)
@@ -561,13 +549,6 @@ namespace behl
                     if (for_c->block)
                     {
                         eliminate_in_block(state, *for_c->block);
-                    }
-                }
-                else if (auto* for_num = stat->try_as<AstForNum>())
-                {
-                    if (for_num->block)
-                    {
-                        eliminate_in_block(state, *for_num->block);
                     }
                 }
                 else if (auto* for_in = stat->try_as<AstForIn>())

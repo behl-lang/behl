@@ -43,7 +43,6 @@ exportstat ::=  ‘export’ ‘function’ funcname funcbody |
 forstat ::=
      ‘for’ ‘(’ (‘let’ | ‘const’) Name ‘=’ exp {‘,’ Name [‘=’ exp]} ‘;’ exp ‘;’ [updatelist] ‘)’ body |
      ‘for’ ‘(’ [‘let’ | ‘const’] namelist ‘in’ explist ‘)’ body |
-     ‘for’ ‘(’ Name ‘=’ exp ‘,’ exp [‘,’ exp] ‘)’ body |
      ‘for’ ‘(’ Name ‘=’ exp ‘;’ exp ‘;’ [update] ‘)’ body
 
 updatelist ::= update {‘,’ update}
