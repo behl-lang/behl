@@ -11,7 +11,6 @@
 
 namespace behl
 {
-    static_assert(sizeof(Value) == 16);
     static_assert(sizeof(Vector<Value>) == 3 * sizeof(void*));
     static_assert(std::is_same_v<FP, double>);
 

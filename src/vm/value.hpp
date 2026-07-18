@@ -31,7 +31,7 @@ namespace behl
     constexpr uint16_t kTypePairStringString = (static_cast<uint16_t>(Type::kString) << 8)
         | static_cast<uint16_t>(Type::kString);
 
-    struct Value
+    struct alignas(8) Value
     {
         struct Nil
         {

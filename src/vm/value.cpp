@@ -16,6 +16,7 @@
 namespace behl
 {
 
+    static_assert(sizeof(Value) == 16);
     static_assert(std::is_trivially_copyable_v<Value>, "Value must be trivially copyable");
     static_assert(std::is_trivially_destructible_v<Value>, "Value must be trivially destructible");
     static_assert(std::is_trivially_copy_constructible_v<Value>, "Value must be trivially copy constructible");
