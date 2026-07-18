@@ -119,6 +119,10 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_string.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_table.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_userdata.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/codegen_aarch64.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/codegen_aarch64.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/emitter_aarch64.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/emitter_aarch64.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.cpp

@@ -51,7 +51,7 @@ namespace behl
         return mem(kFrameBase, kValueSize * reg + kPayloadOffset);
     }
 
-    static Mem slot_payload_hi(int32_t reg) noexcept
+    [[maybe_unused]] static Mem slot_payload_hi(int32_t reg) noexcept
     {
         return mem(kFrameBase, kValueSize * reg + kPayloadOffset + 4);
     }
@@ -1027,11 +1027,11 @@ namespace behl
             return nullptr;
         }
         const size_t emitted = e_.finalize(reinterpret_cast<uintptr_t>(code_mem), static_cast<uint8_t*>(code_mem), size);
+        jit_exec_commit(code_mem, size);
         if (emitted == 0 || emitted > size)
         {
             return nullptr;
         }
-        jit_exec_commit(code_mem, size);
 
         return reinterpret_cast<JitEntry>(code_mem);
     }

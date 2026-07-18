@@ -20,7 +20,13 @@
 
 #define BEHL_JIT_X86 (BEHL_JIT_X86_64 || BEHL_JIT_X86_32)
 
-#if BEHL_JIT_X86
+#if defined(_M_ARM64) || defined(__aarch64__)
+#    define BEHL_JIT_AARCH64 1
+#else
+#    define BEHL_JIT_AARCH64 0
+#endif
+
+#if BEHL_JIT_X86 || BEHL_JIT_AARCH64
 #    define BEHL_JIT_SUPPORTED 1
 #else
 #    define BEHL_JIT_SUPPORTED 0

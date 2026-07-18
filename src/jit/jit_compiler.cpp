@@ -314,7 +314,7 @@ namespace behl
                 uint32_t pcn;
                 ColdKind kind;
                 int32_t offset;
-                int64_t k;
+                int64_t k{};
             };
 
             CgOp& push(CgOpKind kind)

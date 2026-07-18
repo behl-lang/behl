@@ -13,6 +13,8 @@
 #endif
 #if BEHL_JIT_X86
 #    include "x86/codegen_x86.hpp"
+#elif BEHL_JIT_AARCH64
+#    include "aarch64/codegen_aarch64.hpp"
 #endif
 
 #if BEHL_PLATFORM_WINDOWS
@@ -21,6 +23,9 @@
 #    include <Windows.h>
 #else
 #    include <sys/mman.h>
+#    if defined(__APPLE__)
+#        include <pthread.h>
+#    endif
 #endif
 
 namespace behl
@@ -50,7 +55,11 @@ namespace behl
     static constexpr size_t kJitMinSplit = 64;
 
 #if BEHL_PLATFORM_WINDOWS && defined(_WIN64)
+#    if BEHL_JIT_AARCH64
+    static constexpr uintptr_t kNearWindow = uintptr_t{ 128 } << 20;
+#    else
     static constexpr uintptr_t kNearWindow = uintptr_t{ 2 } << 30;
+#    endif
 
     static uintptr_t jit_image_base() noexcept
     {
@@ -168,8 +177,19 @@ namespace behl
 #    endif
         return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 #else
-        void* mem = mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+#    if defined(__APPLE__)
+        flags |= MAP_JIT;
+#    endif
+        void* mem = mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
         return (mem == MAP_FAILED) ? nullptr : mem;
+#endif
+    }
+
+    static void jit_write_protect([[maybe_unused]] bool executable) noexcept
+    {
+#if defined(__APPLE__) && defined(__aarch64__)
+        pthread_jit_write_protect_np(executable ? 1 : 0);
 #endif
     }
 
@@ -189,13 +209,17 @@ namespace behl
 
     JitEntry jit_compile(State* S, const GCProto* proto)
     {
-#if BEHL_JIT_X86
+#if BEHL_JIT_SUPPORTED
         CgProgram program;
         if (!jit_compile_proto(proto, program))
         {
             return nullptr;
         }
+#    if BEHL_JIT_X86
         CodegenX86 backend;
+#    else
+        CodegenAArch64 backend;
+#    endif
         return backend.generate(S, program);
 #else
         (void)S;
@@ -255,6 +279,7 @@ namespace behl
                 arena.free_blocks.pop_back();
             }
 
+            jit_write_protect(false);
             std::memcpy(base, &block_total, sizeof(block_total));
             return base + kJitHeaderSize;
         }
@@ -284,6 +309,7 @@ namespace behl
         JitChunk& chunk = arena.chunks.back();
         uint8_t* base = chunk.base + chunk.used;
         chunk.used += total;
+        jit_write_protect(false);
         std::memcpy(base, &total, sizeof(total));
 
         return base + kJitHeaderSize;
@@ -291,6 +317,7 @@ namespace behl
 
     void jit_exec_commit(void* mem, size_t size)
     {
+        jit_write_protect(true);
 #if BEHL_PLATFORM_WINDOWS
         FlushInstructionCache(GetCurrentProcess(), mem, size);
 #else
