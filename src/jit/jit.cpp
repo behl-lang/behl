@@ -77,19 +77,20 @@ namespace behl
         return reinterpret_cast<uintptr_t>(image);
     }
 
+    using VirtualAlloc2Fn = PVOID(WINAPI*)(HANDLE, PVOID, SIZE_T, ULONG, ULONG, MEM_EXTENDED_PARAMETER*, ULONG);
+
+    static const VirtualAlloc2Fn virtual_alloc2 = []() noexcept -> VirtualAlloc2Fn {
+        const HMODULE kernelbase = GetModuleHandleW(L"kernelbase.dll");
+        if (kernelbase == nullptr)
+        {
+            return nullptr;
+        }
+        return reinterpret_cast<VirtualAlloc2Fn>(
+            reinterpret_cast<void (*)()>(GetProcAddress(kernelbase, "VirtualAlloc2")));
+    }();
+
     static void* jit_alloc_via_valloc2(uintptr_t base, size_t size) noexcept
     {
-        using VirtualAlloc2Fn = PVOID(WINAPI*)(HANDLE, PVOID, SIZE_T, ULONG, ULONG, MEM_EXTENDED_PARAMETER*, ULONG);
-
-        static const VirtualAlloc2Fn virtual_alloc2 = []() noexcept -> VirtualAlloc2Fn {
-            const HMODULE kernelbase = GetModuleHandleW(L"kernelbase.dll");
-            if (kernelbase == nullptr)
-            {
-                return nullptr;
-            }
-            return reinterpret_cast<VirtualAlloc2Fn>(GetProcAddress(kernelbase, "VirtualAlloc2"));
-        }();
-
         if (virtual_alloc2 == nullptr)
         {
             return nullptr;
