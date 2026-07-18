@@ -55,7 +55,7 @@ namespace behl
         return mem(kFrameBase, kValueSize * reg + kPayloadOffset + 4);
     }
 
-    static Cond cond_signed(CgCmp cmp) noexcept
+    [[maybe_unused]] static Cond cond_signed(CgCmp cmp) noexcept
     {
         switch (cmp)
         {
