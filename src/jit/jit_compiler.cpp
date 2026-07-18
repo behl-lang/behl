@@ -2,9 +2,12 @@
 
 #include <bit>
 #include <cassert>
+#include <type_traits>
 
 namespace behl
 {
+    static_assert(std::is_same_v<FP, double>);
+
     static JitOpFn plain_helper(OpCode op) noexcept
     {
         switch (op)

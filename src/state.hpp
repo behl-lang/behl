@@ -14,7 +14,9 @@
 #include "vm/upvalue.hpp"
 #include "vm/value.hpp"
 
+#include <cstddef>
 #include <exception>
+#include <type_traits>
 #include <vector>
 
 namespace behl
@@ -55,7 +57,32 @@ namespace behl
         uint32_t jit_depth{};
         bool jit_enabled{ true };
         bool jit_pending_clear{};
+
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+        static constexpr int32_t stack_data_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, stack) + decltype(stack)::data_offset());
+        }
+
+        static constexpr int32_t call_stack_data_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_stack) + decltype(call_stack)::data_offset());
+        }
+
+        static constexpr int32_t call_stack_size_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_stack) + decltype(call_stack)::size_offset());
+        }
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
     };
+
+    static_assert(std::is_standard_layout_v<std::exception_ptr>);
+    static_assert(std::is_standard_layout_v<State>);
 
     ptrdiff_t resolve_index(const State* S, int idx);
 

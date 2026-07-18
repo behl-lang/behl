@@ -7,15 +7,16 @@
 
 namespace behl
 {
+    struct GCString;
 
     struct SourceLocation
     {
-        std::string filename;
+        const GCString* filename = nullptr;
         int line = 0;
         int column = 0;
 
         SourceLocation() = default;
-        SourceLocation(std::string_view fname, int ln = 0, int col = 0)
+        SourceLocation(const GCString* fname, int ln = 0, int col = 0)
             : filename(fname)
             , line(ln)
             , column(col)

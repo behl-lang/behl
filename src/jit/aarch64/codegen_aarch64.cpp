@@ -2,7 +2,8 @@
 
 #if BEHL_JIT_AARCH64
 
-#    include "jit/codegen_generic.hpp"
+#    include "state.hpp"
+#    include "vm/frame.hpp"
 
 #    include <cassert>
 
@@ -21,12 +22,12 @@ namespace behl
 
     static A64Mem slot_tag(int32_t reg) noexcept
     {
-        return mem(kFrameBase, kValueSize * reg);
+        return mem(kFrameBase, Value::size() * reg);
     }
 
     static A64Mem slot_payload(int32_t reg) noexcept
     {
-        return mem(kFrameBase, kValueSize * reg + kPayloadOffset);
+        return mem(kFrameBase, Value::size() * reg + Value::payload_offset());
     }
 
     static A64Cond cond_signed(CgCmp cmp) noexcept
@@ -148,14 +149,14 @@ namespace behl
 
     void CodegenAArch64::emit_base_refresh()
     {
-        e_.ldr(A64Reg::x0, mem(kStateReg, kOffCallStackData));
-        e_.ldr(A64Reg::x1, mem(kStateReg, kOffCallStackSize));
+        e_.ldr(A64Reg::x0, mem(kStateReg, State::call_stack_data_offset()));
+        e_.ldr(A64Reg::x1, mem(kStateReg, State::call_stack_size_offset()));
         e_.sub(A64Reg::x1, A64Reg::x1, 1);
         e_.mov32(A64Reg::x2, static_cast<uint32_t>(sizeof(CallFrame)));
         e_.madd(A64Reg::x0, A64Reg::x1, A64Reg::x2, A64Reg::x0);
-        e_.ldrw(A64Reg::x1, mem(A64Reg::x0, kOffFrameBase));
+        e_.ldrw(A64Reg::x1, mem(A64Reg::x0, CallFrame::base_offset()));
         e_.lsl(A64Reg::x1, A64Reg::x1, 4);
-        e_.ldr(kFrameBase, mem(kStateReg, kOffStackData));
+        e_.ldr(kFrameBase, mem(kStateReg, State::stack_data_offset()));
         e_.add(kFrameBase, kFrameBase, A64Reg::x1);
     }
 

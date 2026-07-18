@@ -19,7 +19,8 @@ namespace behl
     {
         if (!frame.proto)
         {
-            return SourceLocation("<native>");
+            static constexpr GCString native{ true, "<native>" };
+            return SourceLocation(&native);
         }
 
         int line = 0;
@@ -37,10 +38,7 @@ namespace behl
             }
         }
 
-        std::string source = !frame.proto->source_name || frame.proto->source_name->size() == 0
-            ? "<script>"
-            : std::string(frame.proto->source_name->view());
-        return SourceLocation(source, line, column);
+        return SourceLocation(frame.proto->source_name, line, column);
     }
 
     BEHL_FORCEINLINE

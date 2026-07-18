@@ -28,4 +28,6 @@ namespace behl
     using UpvalueVector = Vector<Upvalue>;
     using UpvalueIndexVector = Vector<uint32_t>;
 
+    static_assert(std::is_standard_layout_v<Upvalue>);
+
 } // namespace behl

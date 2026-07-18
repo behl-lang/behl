@@ -7,6 +7,7 @@
 #include <bit>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <memory>
@@ -446,6 +447,24 @@ namespace behl
             return const_reverse_iterator(begin());
         }
 
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+        static constexpr int32_t data_offset()
+        {
+            return static_cast<int32_t>(offsetof(Vector, data_));
+        }
+
+        static constexpr int32_t size_offset()
+        {
+            return static_cast<int32_t>(offsetof(Vector, size_));
+        }
+
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
+
     private:
         BEHL_FORCEINLINE
         void grow(State* state, size_t min_capacity)
@@ -686,5 +705,8 @@ namespace behl
         State* state_{ nullptr };
         Vector<T> vec_;
     };
+
+    static_assert(sizeof(Vector<void*>) == 3 * sizeof(void*));
+    static_assert(std::is_standard_layout_v<Vector<void*>>);
 
 } // namespace behl

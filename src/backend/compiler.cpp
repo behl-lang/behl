@@ -146,8 +146,7 @@ namespace behl
 
     static SourceLocation get_location(const CompilerState& C)
     {
-        std::string_view filename = C.current_proto->source_name ? C.current_proto->source_name->view() : "";
-        return SourceLocation(filename, C.lastline, C.lastcolumn);
+        return SourceLocation(C.current_proto->source_name, C.lastline, C.lastcolumn);
     }
 
     static Reg alloc_reg(CompilerState& C)
@@ -3650,8 +3649,9 @@ namespace behl
 
         CompilerState C(state, nullptr, proto);
 
-        C.current_proto->source_name = gc_new_string(state, source_name);
-        C.current_proto->source_path = gc_new_string(state, source_name);
+        const std::string_view chunk_name = source_name.empty() ? std::string_view("<script>") : source_name;
+        C.current_proto->source_name = gc_new_string(state, chunk_name);
+        C.current_proto->source_path = gc_new_string(state, chunk_name);
         C.current_proto->name = gc_new_string(state, "<main chunk>");
 
         C.current_proto->code.reserve(state, kInitialCodeCapacity);

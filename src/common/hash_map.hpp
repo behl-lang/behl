@@ -8,11 +8,24 @@
 #include <cassert>
 #include <cstddef>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 namespace behl
 {
     struct State;
+
+    namespace detail
+    {
+
+        template<typename K, typename V>
+        struct CompressedKeyValue
+        {
+            K first;
+            BEHL_NO_UNIQUE_ADDRESS V second;
+        };
+
+    } // namespace detail
 
     template<typename K, typename V, typename Hash = std::hash<K>, typename Eq = std::equal_to<K>>
     struct HashMap
@@ -25,15 +38,16 @@ namespace behl
         static constexpr int8_t kEmpty = -128; // 0b10000000
         static constexpr int8_t kDeleted = -2; // 0b11111110
 
-        using KeyValue = std::pair<K, V>;
+        using KeyValue = std::conditional_t<std::is_empty_v<V> && !std::is_final_v<V>, detail::CompressedKeyValue<K, V>,
+            std::pair<K, V>>;
 
         int8_t* ctrl_{};
         KeyValue* slots_{};
         size_t size_{};       // Number of occupied entries
         size_t capacity_{};   // Total number of slots
         size_t tombstones_{}; // Number of kDeleted slots — counted toward load factor
-        [[no_unique_address]] Hash hasher_{};
-        [[no_unique_address]] Eq eq_{};
+        BEHL_NO_UNIQUE_ADDRESS Hash hasher_{};
+        BEHL_NO_UNIQUE_ADDRESS Eq eq_{};
 
         // Helper to extract 7-bit hash from full hash
         static constexpr int8_t h2(size_t hash)
@@ -646,5 +660,7 @@ namespace behl
         State* state_{ nullptr };
         HashMap<K, V, Hash, Eq> map_;
     };
+
+    static_assert(std::is_standard_layout_v<HashMap<void*, void*>>);
 
 } // namespace behl

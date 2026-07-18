@@ -783,6 +783,19 @@ namespace behl
             mark_value(S, it->second);
         }
 
+        gc_log("Marking breakpoints ({} entries)", S->debug.breakpoints.size());
+        for (const Breakpoint& bp : S->debug.breakpoints)
+        {
+            if (bp.file != nullptr)
+            {
+                mark_gray(S, bp.file);
+            }
+        }
+        if (S->debug.last_file != nullptr)
+        {
+            mark_gray(S, S->debug.last_file);
+        }
+
         // Globals table
         gc_log("Marking globals table");
         mark_gray(S, S->globals_table.get_gcobject());

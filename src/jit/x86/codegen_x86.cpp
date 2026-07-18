@@ -2,7 +2,8 @@
 
 #if BEHL_JIT_X86
 
-#    include "jit/codegen_generic.hpp"
+#    include "state.hpp"
+#    include "vm/frame.hpp"
 
 #    include <cassert>
 
@@ -36,17 +37,17 @@ namespace behl
 
     static Mem slot_tag(int32_t reg) noexcept
     {
-        return mem(kFrameBase, kValueSize * reg);
+        return mem(kFrameBase, Value::size() * reg);
     }
 
     static Mem slot_payload(int32_t reg) noexcept
     {
-        return mem(kFrameBase, kValueSize * reg + kPayloadOffset);
+        return mem(kFrameBase, Value::size() * reg + Value::payload_offset());
     }
 
     [[maybe_unused]] static Mem slot_payload_hi(int32_t reg) noexcept
     {
-        return mem(kFrameBase, kValueSize * reg + kPayloadOffset + 4);
+        return mem(kFrameBase, Value::size() * reg + Value::payload_offset() + 4);
     }
 
     [[maybe_unused]] static Cond cond_signed(CgCmp cmp) noexcept
@@ -167,14 +168,14 @@ namespace behl
 
     void CodegenX86::emit_base_refresh()
     {
-        e_.mov(kScratchA, mem(kStateReg, kOffCallStackData));
-        e_.mov(kScratchB, mem(kStateReg, kOffCallStackSize));
+        e_.mov(kScratchA, mem(kStateReg, State::call_stack_data_offset()));
+        e_.mov(kScratchB, mem(kStateReg, State::call_stack_size_offset()));
         e_.sub(kScratchB, 1);
         e_.imul(kScratchB, kScratchB, static_cast<int32_t>(sizeof(CallFrame)));
         e_.add(kScratchA, kScratchB);
-        e_.mov32(kScratchB, mem(kScratchA, kOffFrameBase));
+        e_.mov32(kScratchB, mem(kScratchA, CallFrame::base_offset()));
         e_.shl(kScratchB, 4);
-        e_.mov(kFrameBase, mem(kStateReg, kOffStackData));
+        e_.mov(kFrameBase, mem(kStateReg, State::stack_data_offset()));
         e_.add(kFrameBase, kScratchB);
     }
 

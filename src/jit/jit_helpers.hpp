@@ -15,13 +15,10 @@ namespace behl
 
     int64_t BEHL_CALLCONV jit_i64_mod(int64_t a, int64_t b) noexcept;
 
-    uint32_t BEHL_CALLCONV jit_op_move(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_loadi(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_loadf(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_loads(State* S, uint32_t raw, uint32_t pc_next) noexcept;
-    uint32_t BEHL_CALLCONV jit_op_loadbool(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_loadnil(State* S, uint32_t raw, uint32_t pc_next) noexcept;
-    uint32_t BEHL_CALLCONV jit_op_loadimm(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_getglobal(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_setglobal(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_getupval(State* S, uint32_t raw, uint32_t pc_next) noexcept;

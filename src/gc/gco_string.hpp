@@ -6,7 +6,9 @@
 #include <array>
 #include <behl/config.hpp>
 #include <bit>
+#include <cassert>
 #include <cstdint>
+#include <string_view>
 
 namespace behl
 {
@@ -46,6 +48,21 @@ namespace behl
         } storage{};
 
         static_assert(sizeof(Storage) == 32, "GCString::Storage must be 32 bytes");
+
+        constexpr GCString() = default;
+
+        constexpr GCString([[maybe_unused]] bool sso, std::string_view str) noexcept
+            : GCObject(GCType::kString)
+        {
+            assert(sso && str.size() < kSSOCapacity);
+            storage.sso = {};
+            for (size_t i = 0; i < str.size(); ++i)
+            {
+                storage.sso.buffer[i] = str[i];
+            }
+            storage.sso.buffer[str.size()] = '\0';
+            storage.sso.len = static_cast<uint8_t>(str.size());
+        }
 
         [[nodiscard]] constexpr bool is_sso() const noexcept
         {

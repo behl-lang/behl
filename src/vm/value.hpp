@@ -482,19 +482,41 @@ namespace behl
 
         size_t hash() const noexcept;
 
+        static constexpr int32_t size()
+        {
+            return static_cast<int32_t>(sizeof(Value));
+        }
+
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+        static constexpr int32_t type_offset()
+        {
+            return static_cast<int32_t>(offsetof(Value, type_));
+        }
+
+        static constexpr int32_t payload_offset()
+        {
+            return static_cast<int32_t>(offsetof(Value, int_));
+        }
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
+
     private:
         Type type_;
         union
         {
-            bool bool_;
-            Integer int_;
-            FP float_;
-            GCObject* gc_object_; // All GC types share this
-            GCString* string_;
-            GCTable* table_;
-            GCClosure* closure_;
-            UserdataData* userdata_;
-            CFunction cfunction_;
+            alignas(8) bool bool_;
+            alignas(8) Integer int_;
+            alignas(8) FP float_;
+            alignas(8) GCObject* gc_object_; // All GC types share this
+            alignas(8) GCString* string_;
+            alignas(8) GCTable* table_;
+            alignas(8) GCClosure* closure_;
+            alignas(8) UserdataData* userdata_;
+            alignas(8) CFunction cfunction_;
         };
     };
 

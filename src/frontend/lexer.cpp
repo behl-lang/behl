@@ -1,6 +1,7 @@
 #include "frontend/lexer.hpp"
 
 #include "common/vector.hpp"
+#include "gc/gc.hpp"
 #include "state.hpp"
 
 #include <algorithm>
@@ -58,7 +59,7 @@ namespace behl
         size_t pos = 0;
         int line = 1;
         int column = 1;
-        std::string_view chunkname;
+        GCString* chunkname;
     };
 
     static char32_t decode_codepoint(const LexerState& L, size_t start_pos, size_t& bytes)
@@ -613,7 +614,8 @@ namespace behl
 
     AutoVector<Token> tokenize(State* state, std::string_view source, std::string_view chunkname)
     {
-        LexerState L{ source, 0, 1, 1, chunkname };
+        GCString* chunk = gc_new_string(state, chunkname.empty() ? std::string_view("<script>") : chunkname);
+        LexerState L{ source, 0, 1, 1, chunk };
 
         AutoVector<Token> tokens(state);
 

@@ -80,6 +80,7 @@ namespace behl
         S->module_paths.destroy(S);
         S->module_cache.destroy(S);
         S->metatable_registry.destroy(S);
+        S->debug.breakpoints.destroy(S);
 
         jit_shutdown(S);
 

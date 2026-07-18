@@ -46,13 +46,10 @@ namespace behl
         }                                                                                                                      \
     }
 
-    BEHL_JIT_WRAP(jit_op_move, handler_move(S, frame, instr.a(), instr.b()))
     BEHL_JIT_WRAP(jit_op_loadi, handler_loadi(S, frame, instr.a(), instr.const_or_proto_index()))
     BEHL_JIT_WRAP(jit_op_loadf, handler_loadf(S, frame, instr.a(), instr.const_or_proto_index()))
     BEHL_JIT_WRAP(jit_op_loads, handler_loadk(S, frame, instr.a(), instr.const_or_proto_index()))
-    BEHL_JIT_WRAP(jit_op_loadbool, handler_loadbool(S, frame, instr.a(), instr.bool_value(), instr.skip_next()))
     BEHL_JIT_WRAP(jit_op_loadnil, handler_loadnil(S, frame, instr.a(), instr.b()))
-    BEHL_JIT_WRAP(jit_op_loadimm, handler_load_imm(S, frame, instr.a(), instr.signed_immediate()))
     BEHL_JIT_WRAP(jit_op_getglobal, handler_getglobal(S, frame, instr.a(), instr.const_or_proto_index()))
     BEHL_JIT_WRAP(jit_op_setglobal, handler_setglobal(S, frame, instr.a(), instr.const_or_proto_index()))
     BEHL_JIT_WRAP(jit_op_getupval, handler_getupval(S, frame, instr.a(), instr.b()))

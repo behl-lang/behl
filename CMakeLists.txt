@@ -92,6 +92,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/hash_map.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/hash_set.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/print.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/print.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/string.hpp
@@ -123,7 +124,6 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/codegen_aarch64.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/emitter_aarch64.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/emitter_aarch64.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/codegen_generic.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.cpp
@@ -273,6 +273,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/string_format_tests.cpp
         src/tests/function_tests.cpp
         src/tests/hash_map_tests.cpp
+        src/tests/hash_set_tests.cpp
         src/tests/gc_list_tests.cpp
         src/tests/gc_stress_tests.cpp
         src/tests/gc_tests.cpp
