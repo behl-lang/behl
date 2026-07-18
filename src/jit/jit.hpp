@@ -36,7 +36,7 @@ namespace behl
 {
     struct State;
 
-    using JitEntry = uint32_t (*)(State* S);
+    using JitEntry = uint32_t(BEHL_CALLCONV*)(State* S);
 
     constexpr uint32_t kJitResultOk = 0;
     constexpr uint32_t kJitResultError = 1;

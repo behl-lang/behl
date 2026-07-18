@@ -28,7 +28,7 @@
 namespace behl
 {
 #define BEHL_JIT_WRAP(NAME, ...)                                                                                               \
-    uint32_t NAME(State* S, uint32_t raw, uint32_t pc_next) noexcept                                                           \
+    uint32_t BEHL_CALLCONV NAME(State* S, uint32_t raw, uint32_t pc_next) noexcept                                                           \
     {                                                                                                                          \
         const Instruction instr{ raw };                                                                                        \
         (void)instr;                                                                                                           \
@@ -183,7 +183,7 @@ namespace behl
 
 #undef BEHL_JIT_WRAP
 
-    int64_t jit_i64_mod(int64_t a, int64_t b) noexcept
+    int64_t BEHL_CALLCONV jit_i64_mod(int64_t a, int64_t b) noexcept
     {
         if (b == -1)
         {
@@ -206,7 +206,7 @@ namespace behl
         return static_cast<uint32_t>(size - 1);
     }
 
-    uint32_t jit_op_return(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    uint32_t BEHL_CALLCONV jit_op_return(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
         const Instruction instr{ raw };
         try
@@ -223,7 +223,7 @@ namespace behl
         }
     }
 
-    uint32_t jit_op_return0(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    uint32_t BEHL_CALLCONV jit_op_return0(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
         (void)raw;
         try
@@ -240,7 +240,7 @@ namespace behl
         }
     }
 
-    uint32_t jit_op_return1(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    uint32_t BEHL_CALLCONV jit_op_return1(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
         const Instruction instr{ raw };
         try
@@ -257,7 +257,7 @@ namespace behl
         }
     }
 
-    uint32_t jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    uint32_t BEHL_CALLCONV jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
         const Instruction instr{ raw };
         try
@@ -282,7 +282,7 @@ namespace behl
         }
     }
 
-    uint32_t jit_op_tailcall(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    uint32_t BEHL_CALLCONV jit_op_tailcall(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
         const Instruction instr{ raw };
         try

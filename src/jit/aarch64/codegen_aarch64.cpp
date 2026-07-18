@@ -2,29 +2,16 @@
 
 #if BEHL_JIT_AARCH64
 
-#    include "state.hpp"
-#    include "vm/frame.hpp"
+#    include "jit/codegen_generic.hpp"
 
 #    include <cassert>
-#    include <cstddef>
-#    include <type_traits>
 
 namespace behl
 {
-    static_assert(sizeof(Vector<Value>) == 3 * sizeof(void*));
-    static_assert(std::is_same_v<FP, double>);
-
     static constexpr A64Reg kStateReg = A64Reg::x19;
     static constexpr A64Reg kFrameBase = A64Reg::x20;
     static constexpr A64Reg kScratch = A64Reg::x16;
     static constexpr A64Vec kCopyVec = A64Vec::d16;
-
-    static constexpr int32_t kValueSize = 16;
-    static constexpr int32_t kPayloadOffset = 8;
-    static constexpr int32_t kOffStackData = static_cast<int32_t>(offsetof(State, stack));
-    static constexpr int32_t kOffCallStackData = static_cast<int32_t>(offsetof(State, call_stack));
-    static constexpr int32_t kOffCallStackSize = static_cast<int32_t>(offsetof(State, call_stack) + sizeof(void*));
-    static constexpr int32_t kOffFrameBase = static_cast<int32_t>(offsetof(CallFrame, base));
 
     static constexpr A64Reg kGpPool[] = { A64Reg::x0, A64Reg::x1, A64Reg::x2, A64Reg::x9, A64Reg::x10 };
     static constexpr A64Vec kFpPool[] = { A64Vec::d0, A64Vec::d1, A64Vec::d2, A64Vec::d3 };

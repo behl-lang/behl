@@ -2,33 +2,27 @@
 
 #if BEHL_JIT_X86
 
-#    include "state.hpp"
-#    include "vm/frame.hpp"
+#    include "jit/codegen_generic.hpp"
 
 #    include <cassert>
-#    include <cstddef>
-#    include <type_traits>
 
 namespace behl
 {
-    static_assert(sizeof(Vector<Value>) == 3 * sizeof(void*));
-    static_assert(std::is_same_v<FP, double>);
-
     static constexpr bool kMode64 = BEHL_JIT_X86_64 != 0;
+
+    static constexpr bool kWinABI = BEHL_PLATFORM_WINDOWS != 0;
 
     static constexpr GpReg kScratchA = GpReg::r0;
     static constexpr GpReg kScratchB = GpReg::r1;
     static constexpr GpReg kScratchC = GpReg::r2;
     static constexpr GpReg kStateReg = GpReg::r3;
     static constexpr GpReg kStackPtr = GpReg::r4;
+#    if BEHL_JIT_X86_64 && !BEHL_PLATFORM_WINDOWS
+    static constexpr GpReg kFrameBase = GpReg::r14;
+#    else
     static constexpr GpReg kFrameBase = GpReg::r6;
-
-    static constexpr int32_t kValueSize = 16;
-    static constexpr int32_t kPayloadOffset = 8;
-    static constexpr int32_t kOffStackData = static_cast<int32_t>(offsetof(State, stack));
-    static constexpr int32_t kOffCallStackData = static_cast<int32_t>(offsetof(State, call_stack));
-    static constexpr int32_t kOffCallStackSize = static_cast<int32_t>(offsetof(State, call_stack) + sizeof(void*));
-    static constexpr int32_t kOffFrameBase = static_cast<int32_t>(offsetof(CallFrame, base));
+#    endif
+    static constexpr int32_t kFrameScratch = kWinABI ? 40 : 24;
 
 #    if BEHL_JIT_X86_64
     static constexpr GpReg kGpPool[] = { kScratchA, kScratchB, kScratchC, GpReg::r9, GpReg::r10 };
@@ -190,8 +184,15 @@ namespace behl
         {
             e_.push(kStateReg);
             e_.push(kFrameBase);
-            e_.sub(kStackPtr, 40);
-            e_.mov(kStateReg, kScratchB);
+            e_.sub(kStackPtr, kFrameScratch);
+            if constexpr (kWinABI)
+            {
+                e_.mov(kStateReg, kScratchB);
+            }
+            else
+            {
+                e_.mov(kStateReg, GpReg::r7);
+            }
         }
         else
         {
@@ -209,7 +210,7 @@ namespace behl
         e_.mov(kScratchA, static_cast<uint64_t>(result_code));
         if constexpr (kMode64)
         {
-            e_.add(kStackPtr, 40);
+            e_.add(kStackPtr, kFrameScratch);
             e_.pop(kFrameBase);
             e_.pop(kStateReg);
         }
@@ -229,18 +230,28 @@ namespace behl
 
         if constexpr (kMode64)
         {
-            e_.mov(kScratchB, kStateReg);
-            e_.mov32(kScratchC, op.raw);
-            e_.mov32(GpReg::r8, op.pcn);
+            if constexpr (kWinABI)
+            {
+                e_.mov(kScratchB, kStateReg);
+                e_.mov32(kScratchC, op.raw);
+                e_.mov32(GpReg::r8, op.pcn);
+            }
+            else
+            {
+                e_.mov(GpReg::r7, kStateReg);
+                e_.mov32(GpReg::r6, op.raw);
+                e_.mov32(kScratchC, op.pcn);
+            }
             e_.call(reinterpret_cast<uintptr_t>(op.fn));
         }
         else
         {
+            e_.sub(kStackPtr, 4);
             e_.push_imm(op.pcn);
             e_.push_imm(op.raw);
             e_.push(kStateReg);
             e_.call(reinterpret_cast<uintptr_t>(op.fn));
-            e_.add(kStackPtr, 12);
+            e_.add(kStackPtr, 16);
         }
 
         e_.cmp32(kScratchA, kJitError);

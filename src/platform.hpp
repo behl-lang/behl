@@ -19,6 +19,16 @@
 #    define BEHL_CPLUSPLUS __cplusplus
 #endif
 
+#if defined(_M_IX86) || defined(__i386__)
+#    ifdef _MSC_VER
+#        define BEHL_CALLCONV __cdecl
+#    else
+#        define BEHL_CALLCONV __attribute__((cdecl))
+#    endif
+#else
+#    define BEHL_CALLCONV
+#endif
+
 #ifdef _MSC_VER
 #    define BEHL_FORCEINLINE __forceinline
 #    define BEHL_NOINLINE __declspec(noinline)
