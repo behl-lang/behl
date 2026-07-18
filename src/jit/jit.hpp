@@ -58,13 +58,14 @@ namespace behl
 
     void* jit_exec_alloc(State* S, size_t size);
     void jit_exec_commit(void* mem, size_t size);
+    void jit_clear_cache(State* S) noexcept;
     void jit_shutdown(State* S) noexcept;
 
     BEHL_FORCEINLINE
     bool jit_try_execute(State* S, const GCProto* proto)
     {
 #if BEHL_JIT_SUPPORTED
-        if (proto->jit_declined)
+        if (proto->jit_declined || !S->jit_enabled)
         {
             return false;
         }

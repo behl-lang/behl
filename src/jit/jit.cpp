@@ -1,6 +1,9 @@
 #include "jit.hpp"
 
+#include "gc/gc.hpp"
+#include "gc/gc_object.hpp"
 #include "jit_helpers.hpp"
+#include "memory.hpp"
 #include "state.hpp"
 #include "vm/vm.hpp"
 
@@ -256,7 +259,7 @@ namespace behl
     {
         if (S->jit_arena == nullptr)
         {
-            S->jit_arena = new JitArena();
+            S->jit_arena = mem_create<JitArena>(S);
         }
         auto& arena = *S->jit_arena;
 
@@ -330,6 +333,32 @@ namespace behl
 #endif
     }
 
+    void jit_clear_cache(State* S) noexcept
+    {
+#if BEHL_JIT_SUPPORTED
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj != nullptr; obj = obj->next)
+        {
+            if (obj->is_proto())
+            {
+                auto* proto = static_cast<GCProto*>(obj);
+                proto->jit_code = nullptr;
+                proto->jit_declined = false;
+            }
+        }
+
+        if (S->jit_depth == 0)
+        {
+            jit_shutdown(S);
+        }
+        else
+        {
+            S->jit_pending_clear = true;
+        }
+#else
+        (void)S;
+#endif
+    }
+
     void jit_shutdown(State* S) noexcept
     {
         if (S->jit_arena == nullptr)
@@ -342,9 +371,29 @@ namespace behl
             jit_os_free(chunk.base, chunk.size);
         }
 
-        delete S->jit_arena;
+        mem_destroy(S, S->jit_arena);
         S->jit_arena = nullptr;
     }
+
+    struct JitDepthGuard
+    {
+        State* state;
+
+        explicit JitDepthGuard(State* S) noexcept
+            : state(S)
+        {
+            ++S->jit_depth;
+        }
+
+        ~JitDepthGuard()
+        {
+            if (--state->jit_depth == 0 && state->jit_pending_clear)
+            {
+                state->jit_pending_clear = false;
+                jit_clear_cache(state);
+            }
+        }
+    };
 
     bool jit_run_or_compile(State* S, const GCProto* proto)
     {
@@ -353,6 +402,8 @@ namespace behl
         {
             return false;
         }
+
+        const JitDepthGuard depth_guard{ S };
 
         if (proto->jit_code == nullptr)
         {

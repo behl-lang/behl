@@ -52,6 +52,9 @@ namespace behl
 
         JitArena* jit_arena{};
         std::exception_ptr jit_exception{};
+        uint32_t jit_depth{};
+        bool jit_enabled{ true };
+        bool jit_pending_clear{};
     };
 
     ptrdiff_t resolve_index(const State* S, int idx);

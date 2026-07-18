@@ -138,6 +138,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_fs.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_gc.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_jit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_math.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_os.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_process.cpp
