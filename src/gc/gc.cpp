@@ -10,6 +10,7 @@
 #include "gco_string.hpp"
 #include "gco_table.hpp"
 #include "gco_userdata.hpp"
+#include "jit/jit.hpp"
 #include "memory.hpp"
 #include "state.hpp"
 #include "vm/bytecode.hpp"
@@ -490,6 +491,12 @@ namespace behl
 
     static void destroy_proto(State* S, GCProto* proto)
     {
+        if (proto->jit_code != nullptr)
+        {
+            jit_release(S, proto->jit_code);
+            proto->jit_code = nullptr;
+        }
+
         proto->code.destroy(S);
         proto->str_constants.destroy(S);
         proto->int_constants.destroy(S);

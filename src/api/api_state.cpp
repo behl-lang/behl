@@ -3,6 +3,7 @@
 #include "gc/gc_object.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
+#include "jit/jit.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
 
@@ -79,6 +80,8 @@ namespace behl
         S->module_paths.destroy(S);
         S->module_cache.destroy(S);
         S->metatable_registry.destroy(S);
+
+        jit_shutdown(S);
 
         delete S;
     }

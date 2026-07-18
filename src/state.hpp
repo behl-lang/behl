@@ -14,10 +14,13 @@
 #include "vm/upvalue.hpp"
 #include "vm/value.hpp"
 
+#include <exception>
 #include <vector>
 
 namespace behl
 {
+    struct JitArena;
+
     struct State
     {
         GCState gc{};
@@ -46,6 +49,9 @@ namespace behl
         DebugState debug{};
 
         PrintHandler print_handler{};
+
+        JitArena* jit_arena{};
+        std::exception_ptr jit_exception{};
     };
 
     ptrdiff_t resolve_index(const State* S, int idx);

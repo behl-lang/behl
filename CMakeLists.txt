@@ -119,6 +119,16 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_string.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_table.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_userdata.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_core.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_fs.cpp
@@ -163,6 +173,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_controlflow.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_debug.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_detail.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_handlers.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_load.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_metatable.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_operands.hpp

@@ -3,6 +3,7 @@
 #include "bytecode.hpp"
 #include "common/format.hpp"
 #include "frame.hpp"
+#include "jit/jit.hpp"
 #include "platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
@@ -18,7 +19,7 @@
 namespace behl
 {
     // Forward declarations for functions used by control flow handlers
-    [[noreturn]] BEHL_NOINLINE void throw_bad_call(const Value& val, const CallFrame& frame, State* S)
+    [[noreturn]] BEHL_NOINLINE inline void throw_bad_call(const Value& val, const CallFrame& frame, State* S)
     {
         const auto loc = get_current_location(frame);
         std::string msg;
@@ -229,10 +230,10 @@ namespace behl
         }
 
         uint32_t min_final_size = 0;
-        if (call_stack.size() > entry_call_depth + 1)
+        if (call_stack.size() >= 2)
         {
             const auto& caller = call_stack[call_stack.size() - 2];
-            if (caller.proto != nullptr)
+            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
             {
                 min_final_size = caller.base + caller.proto->max_stack_size;
             }
@@ -421,10 +422,17 @@ namespace behl
             }
             CallFrame& new_frame = setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
             prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
+#if BEHL_JIT_SUPPORTED
+            if (!S->debug.enabled && jit_try_execute(S, proto))
+            {
+                return &S->call_stack.back();
+            }
+#endif
             return &new_frame;
         }
         else
         {
+            [[maybe_unused]] const auto depth_before = S->call_stack.size();
             call_function(S, a, num_args, num_results);
 
             auto& new_frame = S->call_stack.back();
@@ -434,6 +442,12 @@ namespace behl
             const auto stack_after_call = (frame_window > new_frame.top) ? frame_window : new_frame.top;
 
             S->stack.resize(S, stack_after_call);
+#if BEHL_JIT_SUPPORTED
+            if (S->call_stack.size() > depth_before && !S->debug.enabled && jit_try_execute(S, new_frame.proto))
+            {
+                return &S->call_stack.back();
+            }
+#endif
             return &new_frame;
         }
     }
@@ -597,10 +611,10 @@ namespace behl
         const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? 0 : wanted;
 
         uint32_t min_final_size = 0;
-        if (call_stack.size() > entry_call_depth + 1)
+        if (call_stack.size() >= 2)
         {
             const auto& caller = call_stack[call_stack.size() - 2];
-            if (caller.proto != nullptr)
+            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
             {
                 min_final_size = caller.base + caller.proto->max_stack_size;
             }
@@ -653,10 +667,10 @@ namespace behl
         const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? 1 : wanted;
 
         uint32_t min_final_size = 0;
-        if (call_stack.size() > entry_call_depth + 1)
+        if (call_stack.size() >= 2)
         {
             const auto& caller = call_stack[call_stack.size() - 2];
-            if (caller.proto != nullptr)
+            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
             {
                 min_final_size = caller.base + caller.proto->max_stack_size;
             }

@@ -14,9 +14,14 @@
 namespace behl
 {
 
+    struct State;
+
     struct GCProto : GCObject
     {
         static constexpr auto kObjectType = GCType::kProto;
+
+        mutable uint32_t (*jit_code)(State*){};
+        mutable bool jit_declined{};
 
         Vector<Instruction> code;
         Vector<Value> str_constants;
