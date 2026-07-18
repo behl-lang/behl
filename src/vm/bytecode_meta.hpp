@@ -20,14 +20,15 @@ namespace behl
     // Metadata for an opcode describing its operands
     struct OpCodeMeta
     {
-        OpCode opcode;         // OpCode enum value (for validation)
-        OpMode a;              // Access mode for operand A
-        OpMode b;              // Access mode for operand B
-        OpMode c;              // Access mode for operand C
-        bool has_side_effects; // Affects memory, globals, or control flow
-        bool is_terminator;    // Ends a basic block (branch, return, etc.)
-        bool is_branch;        // Conditional or unconditional branch
-        std::string_view name; // Human-readable name for debugging
+        OpCode opcode;                     // OpCode enum value (for validation)
+        OpMode a;                          // Access mode for operand A
+        OpMode b;                          // Access mode for operand B
+        OpMode c;                          // Access mode for operand C
+        bool has_side_effects;             // Affects memory, globals, or control flow
+        bool is_terminator;                // Ends a basic block (branch, return, etc.)
+        bool is_branch;                    // Conditional or unconditional branch
+        std::string_view name;             // Human-readable name for debugging
+        bool preserves_frame_base = false; // Frame is not modified.
     };
 
     inline constexpr std::array<OpCodeMeta, kOpCount> kOpCodeMetadata = { {
@@ -126,15 +127,15 @@ namespace behl
         // kOpLoadBool - R(A) = bool
         { OpCode::kOpLoadBool, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADBOOL" },
         // kOpLoadF - R(A) = KF(const_index)
-        { OpCode::kOpLoadF, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADF" },
+        { OpCode::kOpLoadF, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADF", true },
         // kOpLoadI - R(A) = KI(const_index)
-        { OpCode::kOpLoadI, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADI" },
+        { OpCode::kOpLoadI, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADI", true },
         // kOpLoadImm - R(A) = immediate
         { OpCode::kOpLoadImm, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADIMM" },
         // kOpLoadNil - R(A..A+B) = nil
-        { OpCode::kOpLoadNil, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADNIL" },
+        { OpCode::kOpLoadNil, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADNIL", true },
         // kOpLoadS - R(A) = KS(const_index)
-        { OpCode::kOpLoadS, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADS" },
+        { OpCode::kOpLoadS, OpMode::kWrite, OpMode::kNone, OpMode::kNone, false, false, false, "LOADS", true },
         // kOpMod - R(A) = R(B) % R(C)
         { OpCode::kOpMod, OpMode::kWrite, OpMode::kRead, OpMode::kRead, false, false, false, "MOD" },
         // kOpMove - R(A) = R(B)
@@ -156,9 +157,9 @@ namespace behl
         // kOpGetFieldS - R(A) = R(B)[KS(C)]
         { OpCode::kOpGetFieldS, OpMode::kWrite, OpMode::kRead, OpMode::kNone, false, false, false, "GETFIELDS" },
         // kOpGetGlobal - R(A) = _G[KS(const_index)]
-        { OpCode::kOpGetGlobal, OpMode::kWrite, OpMode::kNone, OpMode::kNone, true, false, false, "GETGLOBAL" },
+        { OpCode::kOpGetGlobal, OpMode::kWrite, OpMode::kNone, OpMode::kNone, true, false, false, "GETGLOBAL", true },
         // kOpGetUpval - R(A) = upvalue[B]
-        { OpCode::kOpGetUpval, OpMode::kWrite, OpMode::kNone, OpMode::kNone, true, false, false, "GETUPVAL" },
+        { OpCode::kOpGetUpval, OpMode::kWrite, OpMode::kNone, OpMode::kNone, true, false, false, "GETUPVAL", true },
         // kOpSetField - R(A)[R(B)] = R(C)
         { OpCode::kOpSetField, OpMode::kRead, OpMode::kRead, OpMode::kRead, true, false, false, "SETFIELD" },
         // kOpSetFieldI - R(A)[imm] = R(B)
@@ -197,6 +198,32 @@ namespace behl
         { OpCode::kOpReturn0, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, false, "RETURN0" },
         // kOpReturn1 - Return R(A)
         { OpCode::kOpReturn1, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, true, false, "RETURN1" },
+        // kOpAddKS - R(A) = R(B) .. KS(C), string concatenation with a constant
+        { OpCode::kOpAddKS, OpMode::kWrite, OpMode::kRead, OpMode::kNone, true, false, false, "ADDKS" },
+        // kOpDefer - mark defer block A active for the current frame
+        { OpCode::kOpDefer, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, false, false, "DEFER", true },
+        // kOpDeferCall - run defer block A if it is active
+        { OpCode::kOpDeferCall, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, true, "DEFERCALL" },
+        // kOpEndDefer - leave defer block A, resuming after the DEFERCALL that entered it
+        { OpCode::kOpEndDefer, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, true, "ENDDEFER" },
+        // kOpSaveRet - stash the B results at R(A) until the defer blocks have run
+        { OpCode::kOpSaveRet, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, false, false, "SAVERET" },
+        // kOpRetSaved - return the results stashed by SAVERET
+        { OpCode::kOpRetSaved, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, false, "RETSAVED" },
+        // kOpEndUnwind - stop after running the defer blocks of a frame being unwound
+        { OpCode::kOpEndUnwind, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, false, "ENDUNWIND" },
+        // kOpMMAdd - slow path for kOpAdd: string concat, metamethod or error
+        { OpCode::kOpMMAdd, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMADD" },
+        { OpCode::kOpMMSub, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSUB" },
+        { OpCode::kOpMMMul, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMMUL" },
+        { OpCode::kOpMMDiv, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMDIV" },
+        { OpCode::kOpMMMod, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMMOD" },
+        { OpCode::kOpMMPow, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMPOW" },
+        { OpCode::kOpMMBand, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMBAND" },
+        { OpCode::kOpMMBor, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMBOR" },
+        { OpCode::kOpMMBxor, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMBXOR" },
+        { OpCode::kOpMMShl, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHL" },
+        { OpCode::kOpMMShr, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHR" },
     } };
 
     // Helper function to get metadata for an opcode

@@ -26,6 +26,7 @@ Lua-inspired scripting language with C-like syntax, implemented in C++20.
 - **First-Class Functions** - Functions are values that can be passed around
 - **Tables** - 0-indexed associative arrays (unlike Lua's 1-indexed)
 - **Modern VM** - Register-based bytecode with incremental garbage collection
+- **JIT Compilation** - Hand-written baseline JIT for x86-64, x86 and AArch64 with automatic interpreter fallback
 - **C++ API** - Easy embedding with a Lua-like API: `push_integer()`, `call()`, etc.
 - **Fast Performance** - Competitive with Lua in many benchmarks
 
@@ -173,6 +174,7 @@ Standard library and embedding:
 - [FS Module](stdlib/fs) - File system operations
 - [Debug Module](stdlib/debug) - Debugging utilities
 - [GC Module](stdlib/gc) - Garbage collector control
+- [JIT Module](stdlib/jit) - JIT compiler control
 
 **C++ Embedding:**
 - [Embedding Overview](embedding/) - Integrate Behl in C++ applications

@@ -3,6 +3,7 @@
 #include "gc/gc_object.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
+#include "jit/jit.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
 
@@ -73,12 +74,17 @@ namespace behl
         S->pinned.destroy(S);
         S->free_pinned_indices.destroy(S);
         S->call_stack.destroy(S);
+        S->call_headers.destroy(S);
+        S->ret_scratch.destroy(S);
         S->upvalues.destroy(S);
         S->open_upvalue_indices.destroy(S);
         S->closed_upvalue_freelist.destroy(S);
         S->module_paths.destroy(S);
         S->module_cache.destroy(S);
         S->metatable_registry.destroy(S);
+        S->debug.breakpoints.destroy(S);
+
+        jit_shutdown(S);
 
         delete S;
     }

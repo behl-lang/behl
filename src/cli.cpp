@@ -5,6 +5,9 @@
 #include "vm/bytecode.hpp"
 
 #include <behl/behl.hpp>
+#ifdef _MSC_VER
+#    include <crtdbg.h>
+#endif
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -319,6 +322,13 @@ int main(int argc, char* argv[])
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+#endif
+#if defined(_MSC_VER) && defined(_DEBUG)
+    _set_error_mode(_OUT_TO_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
 #endif
 
     std::string error_msg;

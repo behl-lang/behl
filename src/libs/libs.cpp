@@ -9,6 +9,7 @@ namespace behl
         load_lib_core(S);
         load_lib_table(S);
         load_lib_gc(S);
+        load_lib_jit(S);
         load_lib_debug(S);
         load_lib_math(S);
         load_lib_os(S);

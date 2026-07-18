@@ -47,9 +47,9 @@ let t = {};
 ```
 
 **Key syntax rules:**
-- `key = value` — Only valid when `key` is an identifier (no spaces, special chars, or keywords)
-- `[expr] = value` — Works with any expression as the key
-- Plain `value` — Auto-assigns to next array index (0, 1, 2...)
+- `key = value` - Only valid when `key` is an identifier (no spaces, special chars, or keywords)
+- `[expr] = value` - Works with any expression as the key
+- Plain `value` - Auto-assigns to next array index (0, 1, 2...)
 
 ### Empty Table
 
@@ -404,6 +404,6 @@ let mixed = {
 
 ## See Also
 
-- [Metatables](metatables) — Customize table behavior with metamethods
-- [Functions](functions) — Using tables with functions
-- [Iteration](iteration) — Looping through tables
+- [Metatables](metatables) - Customize table behavior with metamethods
+- [Functions](functions) - Using tables with functions
+- [Iteration](iteration) - Looping through tables

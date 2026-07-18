@@ -167,6 +167,51 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
     // Bitwise Handlers
 
+    template<typename Op>
+    BEHL_FORCEINLINE static bool try_bitwise_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    {
+        switch (make_type_pair(a, b))
+        {
+            case kTypePairIntInt:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                dst.emplace<Integer>(op(a.get_integer(), b.get_integer()));
+                return true;
+            }
+            case kTypePairIntFloat:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                dst.emplace<Integer>(op(a.get_integer(), static_cast<Integer>(b.get_fp())));
+                return true;
+            }
+            case kTypePairFloatInt:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                dst.emplace<Integer>(op(static_cast<Integer>(a.get_fp()), b.get_integer()));
+                return true;
+            }
+            case kTypePairFloatFloat:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                dst.emplace<Integer>(op(static_cast<Integer>(a.get_fp()), static_cast<Integer>(b.get_fp())));
+                return true;
+            }
+            default:
+                return false;
+        }
+    }
+
+    template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
+    BEHL_FORCEINLINE static void handler_bitwise_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    {
+        const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
+        const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
+        if (try_bitwise_fast(S, dst, lhs, rhs, frame, BitwiseOp{}))
+        {
+            frame.pc++;
+        }
+    }
+
     // Generic bitwise handler template
     template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
     BEHL_FORCEINLINE static void handler_bitwise(State* S, CallFrame& frame, Reg dst, Args&&... args)

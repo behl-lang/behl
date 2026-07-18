@@ -2,6 +2,8 @@
 
 #include "gc_types.hpp"
 
+#include <cstdint>
+
 namespace behl
 {
 
@@ -9,6 +11,8 @@ namespace behl
     {
         GCType type{};
         GCColor color{};
+
+        uint32_t str_hash{};
 
         GCObject* next{};
         GCObject* prev{};

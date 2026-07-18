@@ -83,24 +83,24 @@ print(tostring(sum));   // "(4, 6)"
 ```
 
 **Supported operators:**
-- `__add` — Addition `+`
-- `__sub` — Subtraction `-`
-- `__mul` — Multiplication `*`
-- `__div` — Division `/`
-- `__mod` — Modulo `%`
-- `__pow` — Power `**`
-- `__unm` — Unary negation `-`
+- `__add` - Addition `+`
+- `__sub` - Subtraction `-`
+- `__mul` - Multiplication `*`
+- `__div` - Division `/`
+- `__mod` - Modulo `%`
+- `__pow` - Power `**`
+- `__unm` - Unary negation `-`
 
 ### Bitwise Metamethods
 
 Override bitwise operators:
 
-- `__band` — Bitwise AND `&`
-- `__bor` — Bitwise OR `|`
-- `__bxor` — Bitwise XOR `^`
-- `__bnot` — Bitwise NOT `~`
-- `__shl` — Left shift `<<`
-- `__shr` — Right shift `>>`
+- `__band` - Bitwise AND `&`
+- `__bor` - Bitwise OR `|`
+- `__bxor` - Bitwise XOR `^`
+- `__bnot` - Bitwise NOT `~`
+- `__shl` - Left shift `<<`
+- `__shr` - Right shift `>>`
 
 ```cpp
 let bits_mt = {
@@ -129,9 +129,9 @@ let mt = {
 ```
 
 **Supported operators:**
-- `__eq` — Equality `==`
-- `__lt` — Less than `<`
-- `__le` — Less or equal `<=`
+- `__eq` - Equality `==`
+- `__lt` - Less than `<`
+- `__le` - Less or equal `<=`
 
 **Note**: `>` and `>=` are derived from `<` and `<=`.
 
@@ -213,9 +213,9 @@ print(t(100));  // "Called with 100"
 
 ### Other Metamethods
 
-- `__tostring` — String conversion via `tostring()`
-- `__gc` — Garbage collection finalizer (cleanup when table is collected)
-- `__pairs` — Custom iterator for `for...in` loops
+- `__tostring` - String conversion via `tostring()`
+- `__gc` - Garbage collection finalizer (cleanup when table is collected)
+- `__pairs` - Custom iterator for `for...in` loops
 
 ---
 
@@ -425,12 +425,12 @@ print(log["y"]);  // 1
 
 ## Best Practices
 
-1. **Use raw operations carefully** — Bypassing metamethods can break expectations
-2. **Document metamethod behavior** — Make it clear when tables have custom behavior
-3. **Avoid complex `__index` chains** — Deep inheritance can hurt performance
-4. **Don't overuse metamethods** — Use only when the abstraction adds value
-5. **Test metatable edge cases** — Especially with `nil` values and missing keys
-6. **Use `rawset` in `__newindex`** — Prevent infinite recursion
+1. **Use raw operations carefully** - Bypassing metamethods can break expectations
+2. **Document metamethod behavior** - Make it clear when tables have custom behavior
+3. **Avoid complex `__index` chains** - Deep inheritance can hurt performance
+4. **Don't overuse metamethods** - Use only when the abstraction adds value
+5. **Test metatable edge cases** - Especially with `nil` values and missing keys
+6. **Use `rawset` in `__newindex`** - Prevent infinite recursion
 
 ```cpp
 // Bad: Infinite recursion
@@ -452,6 +452,6 @@ let mt = {
 
 ## See Also
 
-- [Tables](tables) — Basic table operations
-- [Functions](functions) — Creating methods and callbacks
-- [Types](types) — Understanding Behl's type system
+- [Tables](tables) - Basic table operations
+- [Functions](functions) - Creating methods and callbacks
+- [Types](types) - Understanding Behl's type system
