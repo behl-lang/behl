@@ -147,6 +147,7 @@ namespace behl
 
         Label new_label();
         void bind(Label label);
+        void align(uint8_t boundary);
 
         void jmp(Label label);
         void jcc(Cond cond, Label label);
@@ -165,6 +166,8 @@ namespace behl
             bool is_jcc;
             bool is_call;
             uint8_t encoded_size;
+            bool is_align{};
+            uint8_t boundary{};
         };
 
         struct LabelState

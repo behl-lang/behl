@@ -622,6 +622,13 @@ namespace behl
         nodes_.push_back(PatchNode{ static_cast<uint32_t>(buffer_.size()), 0, target, 0, false, true, 5 });
     }
 
+    void X86Emitter::align(uint8_t boundary)
+    {
+        assert(relax_mode_ == 0 && "align after relaxation");
+        assert(boundary != 0 && (boundary & (boundary - 1)) == 0 && "align: boundary must be a power of two");
+        nodes_.push_back(PatchNode{ static_cast<uint32_t>(buffer_.size()), 0, 0, 0, false, false, 0, true, boundary });
+    }
+
     void X86Emitter::relax(bool exact, uintptr_t address)
     {
         if (relax_mode_ == (exact ? 2 : 1) || (!exact && relax_mode_ == 2))
@@ -633,7 +640,11 @@ namespace behl
 
         for (PatchNode& node : nodes_)
         {
-            if (node.is_call)
+            if (node.is_align)
+            {
+                node.encoded_size = exact ? 0 : static_cast<uint8_t>(node.boundary - 1);
+            }
+            else if (node.is_call)
             {
                 if (!mode64_)
                 {
@@ -664,13 +675,24 @@ namespace behl
             changed = false;
             for (size_t i = 0; i < nodes_.size(); ++i)
             {
-                node_prefix_[i + 1] = node_prefix_[i] + nodes_[i].encoded_size;
+                PatchNode& node = nodes_[i];
+                if (node.is_align && exact)
+                {
+                    const uint32_t mask = node.boundary - 1u;
+                    const auto pad = static_cast<uint8_t>((node.boundary - ((node.lit_pos + node_prefix_[i]) & mask)) & mask);
+                    if (pad != node.encoded_size)
+                    {
+                        node.encoded_size = pad;
+                        changed = true;
+                    }
+                }
+                node_prefix_[i + 1] = node_prefix_[i] + node.encoded_size;
             }
 
             for (size_t i = 0; i < nodes_.size(); ++i)
             {
                 PatchNode& node = nodes_[i];
-                if (node.is_call || node.encoded_size != 2)
+                if (node.is_align || node.is_call || node.encoded_size != 2)
                 {
                     continue;
                 }
@@ -706,6 +728,22 @@ namespace behl
         return buffer_.size() + node_prefix_.back();
     }
 
+    static const uint8_t* nop_sequence(size_t len) noexcept
+    {
+        static constexpr uint8_t kNops[9][9] = {
+            { 0x90 },
+            { 0x66, 0x90 },
+            { 0x0F, 0x1F, 0x00 },
+            { 0x0F, 0x1F, 0x40, 0x00 },
+            { 0x0F, 0x1F, 0x44, 0x00, 0x00 },
+            { 0x66, 0x0F, 0x1F, 0x44, 0x00, 0x00 },
+            { 0x0F, 0x1F, 0x80, 0x00, 0x00, 0x00, 0x00 },
+            { 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00 },
+            { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00 },
+        };
+        return kNops[len - 1];
+    }
+
     size_t X86Emitter::finalize(uintptr_t address, uint8_t* buf, size_t buf_size)
     {
         assert(buf != nullptr && "finalize: null output buffer");
@@ -731,6 +769,20 @@ namespace behl
             std::memcpy(buf + out, buffer_.data() + lit_cursor, lit_chunk);
             out += lit_chunk;
             lit_cursor = node.lit_pos;
+
+            if (node.is_align)
+            {
+                size_t remaining = node.encoded_size;
+                while (remaining > 0)
+                {
+                    const size_t chunk = remaining < 9 ? remaining : 9;
+                    std::memcpy(buf + out, nop_sequence(chunk), chunk);
+                    out += chunk;
+                    remaining -= chunk;
+                }
+                assert(((address + out) & (node.boundary - 1u)) == 0);
+                continue;
+            }
 
             if (node.is_call)
             {

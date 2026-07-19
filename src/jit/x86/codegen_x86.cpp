@@ -472,6 +472,10 @@ namespace behl
         switch (op.kind)
         {
             case CgOpKind::kBind:
+                if (loop_header_[op.label])
+                {
+                    e_.align(16);
+                }
                 e_.bind(label(op.label));
                 if (op.flag)
                 {
@@ -1014,6 +1018,49 @@ namespace behl
     JitEntry CodegenX86::generate(State* S, const CgProgram& program)
     {
         compute_liveness(program);
+
+        loop_header_.assign(program.num_labels, false);
+        {
+            std::vector<uint32_t> bind_pos(program.num_labels, UINT32_MAX);
+            for (uint32_t i = 0; i < program.ops.size(); ++i)
+            {
+                if (program.ops[i].kind == CgOpKind::kBind)
+                {
+                    bind_pos[program.ops[i].label] = i;
+                }
+            }
+
+            const auto mark_backward = [&](uint32_t target, uint32_t use_pos) {
+                if (bind_pos[target] != UINT32_MAX && bind_pos[target] < use_pos)
+                {
+                    loop_header_[target] = true;
+                }
+            };
+
+            for (uint32_t i = 0; i < program.ops.size(); ++i)
+            {
+                const CgOp& op = program.ops[i];
+                switch (op.kind)
+                {
+                    case CgOpKind::kJump:
+                    case CgOpKind::kGuardTag:
+                    case CgOpKind::kBranchI64Imm:
+                    case CgOpKind::kBranchI64:
+                    case CgOpKind::kBranchVarEqU32:
+                    case CgOpKind::kHelperCall:
+                    case CgOpKind::kModI64:
+                        mark_backward(op.label, i);
+                        break;
+                    case CgOpKind::kBranchF64:
+                    case CgOpKind::kBranchTruthy:
+                        mark_backward(op.label, i);
+                        mark_backward(op.label2, i);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
 
         for (uint32_t i = 0; i < program.num_labels; ++i)
         {

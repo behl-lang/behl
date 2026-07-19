@@ -42,6 +42,7 @@ namespace behl
 
         X86Emitter e_;
         std::vector<uint32_t> last_pos_;
+        std::vector<bool> loop_header_;
         std::vector<uint8_t> var_reg_;
         std::vector<uint8_t> var_reg2_;
         std::vector<bool> var_f64_;
