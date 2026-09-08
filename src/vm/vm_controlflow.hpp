@@ -410,7 +410,7 @@ namespace behl
         {
             // Self-recursive call: same closure as the caller, so we don't need
             // to look up the function value. Propagate the caller's closure into
-            // the new frame's function slot — handler_getupval/setupval read the
+            // the new frame's function slot - handler_getupval/setupval read the
             // closure from stack[base], so the slot must hold a valid closure.
             const auto new_base = call_pos;
             const uint32_t actual_num_args = count_actual_args(frame, static_cast<uint32_t>(call_pos), num_args);

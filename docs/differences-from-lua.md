@@ -422,7 +422,7 @@ Behl fully supports varargs with similar semantics. See [Varargs](../language/va
 
 ### Self-Recursion Dispatch
 
-Inside a function, a call written as `f(...)` where `f` is the enclosing function's name is dispatched directly to the enclosing function at compile time. Rebinding `f` inside its own body — by reassigning the global, shadowing with a local, or writing through `_G` — does **not** redirect the self-call. This differs from vanilla Lua, where every recursive call goes through the env lookup and respects rebinding.
+Inside a function, a call written as `f(...)` where `f` is the enclosing function's name is dispatched directly to the enclosing function at compile time. Rebinding `f` inside its own body - by reassigning the global, shadowing with a local, or writing through `_G` - does **not** redirect the self-call. This differs from vanilla Lua, where every recursive call goes through the env lookup and respects rebinding.
 
 **Lua (rebinding takes effect):**
 ```lua

@@ -45,7 +45,7 @@ namespace behl
         KeyValue* slots_{};
         size_t size_{};       // Number of occupied entries
         size_t capacity_{};   // Total number of slots
-        size_t tombstones_{}; // Number of kDeleted slots — counted toward load factor
+        size_t tombstones_{}; // Number of kDeleted slots - counted toward load factor
         BEHL_NO_UNIQUE_ADDRESS Hash hasher_{};
         BEHL_NO_UNIQUE_ADDRESS Eq eq_{};
 
@@ -544,7 +544,7 @@ namespace behl
             // Tombstones must factor into the load decision. Without this,
             // sustained insert/erase churn fills the table with tombstones
             // until insert_or_assign falls through to the recursive rehash
-            // path — long probe chains in the meantime.
+            // path - long probe chains in the meantime.
             return static_cast<double>(size_ + tombstones_) > static_cast<double>(capacity_) * kLoadFactor;
         }
     };

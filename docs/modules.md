@@ -357,6 +357,7 @@ Behl provides standard modules that are registered when `load_stdlib(S)` is call
 - `table` - Table manipulation functions
 - `os` - Operating system functions
 - `gc` - Garbage collector control
+- `jit` - JIT compiler control
 - `debug` - Debugging utilities
 
 ### Accessing Standard Modules

@@ -11,6 +11,7 @@ Lua-inspired scripting language with C-like syntax, implemented in C++20.
 - **First-Class Functions** - Functions as values with closures and lexical scoping
 - **Powerful Tables** - 0-indexed associative arrays (unlike Lua's 1-indexed)
 - **Modern VM** - Register-based bytecode with incremental garbage collection
+- **JIT Compilation** - Hand-written baseline JIT for x86-64, x86 and AArch64 with automatic interpreter fallback
 - **Metatables** - Customize table behavior with metamethods
 - **C++ API** - Easy embedding with a Lua-like API
 - **Optimizations** - Constant folding, loop optimization, tail call optimization, dead store elimination
