@@ -68,6 +68,20 @@ namespace behl
         return const_cast<Value&>(const_val);
     }
 
+    // The header sits at the same index as its frame in State::call_stack.
+    BEHL_FORCEINLINE
+    CallFrameHeader& frame_header(State* S, const CallFrame& frame) noexcept
+    {
+        return S->call_headers[static_cast<size_t>(&frame - S->call_stack.data())];
+    }
+
+    BEHL_FORCEINLINE
+    void pop_call_frame(State* S) noexcept
+    {
+        S->call_stack.pop_back();
+        S->call_headers.pop_back();
+    }
+
     BEHL_FORCEINLINE
     Value& get_register(State* S, CallFrame& frame, size_t reg) noexcept
     {

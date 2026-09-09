@@ -116,7 +116,7 @@ namespace behl
         get_register(S, frame, a) = result;
 
         // TOSTRING produces exactly 1 result in register a, so top = base + a + 1
-        frame.top = frame.base + a + 1;
+        frame_header(S, frame).top = frame.base + a + 1;
 
         gc_step(S);
     }
@@ -130,7 +130,7 @@ namespace behl
         get_register(S, frame, a) = result;
 
         // TONUMBER produces exactly 1 result in register a, so top = base + a + 1
-        frame.top = frame.base + a + 1;
+        frame_header(S, frame).top = frame.base + a + 1;
     }
 
     BEHL_FORCEINLINE

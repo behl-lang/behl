@@ -1088,7 +1088,7 @@ namespace behl
                                 for (size_t f = 0; f < S->call_stack.size(); ++f)
                                 {
                                     const auto& frame = S->call_stack[f];
-                                    gc_log("!!!   Frame {}: base={}, top={}", f, frame.base, frame.top);
+                                    gc_log("!!!   Frame {}: base={}, top={}", f, frame.base, S->call_headers[f].top);
                                 }
                             }
                         }

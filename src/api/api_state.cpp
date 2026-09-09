@@ -74,6 +74,7 @@ namespace behl
         S->pinned.destroy(S);
         S->free_pinned_indices.destroy(S);
         S->call_stack.destroy(S);
+        S->call_headers.destroy(S);
         S->ret_scratch.destroy(S);
         S->upvalues.destroy(S);
         S->open_upvalue_indices.destroy(S);

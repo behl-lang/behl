@@ -17,6 +17,9 @@ namespace behl
 
     void unwind_call_frames(State* S, size_t target_depth, std::exception_ptr& pending);
 
+    // Drops every frame above count, keeping call_stack and call_headers in step.
+    void truncate_call_frames(State* S, size_t count);
+
     // Debug utilities - internal version returns String
     std::string build_stacktrace_internal(State* S);
 

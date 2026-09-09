@@ -175,13 +175,16 @@ namespace behl
         }
     }
 
+    static_assert(sizeof(CallFrame) == 16, "call frame stride must stay a power of two for the shift below");
+    static constexpr uint8_t kCallFrameShift = 4;
+
     void CodegenAArch64::emit_base_refresh()
     {
         e_.ldr(A64Reg::x0, mem(kStateReg, State::call_stack_data_offset()));
         e_.ldr(A64Reg::x1, mem(kStateReg, State::call_stack_size_offset()));
         e_.sub(A64Reg::x1, A64Reg::x1, 1);
-        e_.mov32(A64Reg::x2, static_cast<uint32_t>(sizeof(CallFrame)));
-        e_.madd(A64Reg::x0, A64Reg::x1, A64Reg::x2, A64Reg::x0);
+        e_.lsl(A64Reg::x1, A64Reg::x1, kCallFrameShift);
+        e_.add(A64Reg::x0, A64Reg::x0, A64Reg::x1);
         e_.ldrw(A64Reg::x1, mem(A64Reg::x0, CallFrame::base_offset()));
         e_.lsl(A64Reg::x1, A64Reg::x1, 4);
         e_.ldr(kFrameBase, mem(kStateReg, State::stack_data_offset()));
@@ -215,7 +218,10 @@ namespace behl
 
         e_.cmnw(A64Reg::x0, 1);
         e_.bcond(A64Cond::eq, label(op.label));
-        base_valid_ = false;
+        if (!op.flag)
+        {
+            base_valid_ = false;
+        }
         alloc_result(op.var);
     }
 
@@ -933,8 +939,8 @@ namespace behl
                     e_.ldr(A64Reg::x0, mem(kStateReg, State::call_stack_data_offset()));
                     e_.ldr(A64Reg::x1, mem(kStateReg, State::call_stack_size_offset()));
                     e_.sub(A64Reg::x1, A64Reg::x1, 1);
-                    e_.mov32(A64Reg::x2, static_cast<uint32_t>(sizeof(CallFrame)));
-                    e_.madd(A64Reg::x0, A64Reg::x1, A64Reg::x2, A64Reg::x0);
+                    e_.lsl(A64Reg::x1, A64Reg::x1, kCallFrameShift);
+                    e_.add(A64Reg::x0, A64Reg::x0, A64Reg::x1);
                     e_.ldrw(gp(op.var), mem(A64Reg::x0, CallFrame::pc_offset()));
                 }
                 break;

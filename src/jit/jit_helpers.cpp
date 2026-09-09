@@ -65,7 +65,7 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_newtable, handler_newtable(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_setlist, handler_setlist(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_self, handler_self(S, frame, instr.a(), instr.b(), instr.c()))
-    BEHL_JIT_WRAP(jit_op_defer, handler_defer(frame, instr.a()))
+    BEHL_JIT_WRAP(jit_op_defer, handler_defer(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_defercall, handler_defercall(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_enddefer, handler_enddefer(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_saveret, handler_saveret(S, frame, instr.a(), instr.b()))
@@ -236,7 +236,7 @@ namespace behl
         if (size >= 2)
         {
             const CallFrame& caller = S->call_stack[size - 2];
-            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
+            if (caller.proto != nullptr && frame_header(S, frame).call_pos < caller.base + caller.proto->max_stack_size)
             {
                 return static_cast<uint32_t>(size - 2);
             }

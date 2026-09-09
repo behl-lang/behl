@@ -71,6 +71,7 @@ endif()
 
 set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_call.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_internal.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_global.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_load.cpp

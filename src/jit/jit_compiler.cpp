@@ -1,5 +1,7 @@
 #include "jit_compiler.hpp"
 
+#include "vm/bytecode_meta.hpp"
+
 #include <bit>
 #include <cassert>
 #include <type_traits>
@@ -553,6 +555,7 @@ namespace behl
                 op.raw = raw;
                 op.pcn = pcn;
                 op.label = err_;
+                op.flag = get_opcode_meta(Instruction{ raw }.op()).preserves_frame_base;
                 op.var = new_var();
                 return op.var;
             }

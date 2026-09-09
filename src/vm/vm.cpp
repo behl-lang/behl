@@ -37,10 +37,10 @@ namespace behl
     static void handler_varargprep(State* S, CallFrame& frame, uint8_t num_params)
     {
         // Calculate how many extra args were passed
-        const auto total_args = frame.top - frame.base - 1;
+        const auto total_args = frame_header(S, frame).top - frame.base - 1;
         const auto num_varargs = (total_args > num_params) ? (total_args - num_params) : 0;
 
-        frame.num_varargs = num_varargs;
+        frame_header(S, frame).num_varargs = num_varargs;
 
         if (num_varargs == 0)
         {
@@ -76,13 +76,13 @@ namespace behl
         // expects results, which stays at the original call site even though the locals
         // base moves past the varargs.
         frame.base = new_base;
-        frame.top = new_base + 1 + num_params;
+        frame_header(S, frame).top = new_base + 1 + num_params;
     }
 
     BEHL_FORCEINLINE
     static void handler_vararg(State* S, CallFrame& frame, Reg a, uint8_t num)
     {
-        const auto num_varargs = frame.num_varargs;
+        const auto num_varargs = frame_header(S, frame).num_varargs;
 
         // Varargs are at: base - num_varargs ... base - 1
         const auto vararg_start = frame.base - num_varargs;
@@ -104,7 +104,7 @@ namespace behl
                 S->stack[dest + i] = S->stack[vararg_start + i];
             }
 
-            frame.top = target_end;
+            frame_header(S, frame).top = target_end;
             return;
         }
 
@@ -129,7 +129,7 @@ namespace behl
     BEHL_FORCEINLINE
     static void handler_varargexpand(State* S, CallFrame& frame, Reg table_reg, uint32_t start_idx)
     {
-        const auto num_varargs = frame.num_varargs;
+        const auto num_varargs = frame_header(S, frame).num_varargs;
 
         // Get the table
         Value& table = get_register(S, frame, table_reg);
@@ -385,7 +385,7 @@ namespace behl
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpDefer:
-                    handler_defer(*frame, instr.a());
+                    handler_defer(S, *frame, instr.a());
                     break;
                 case OpCode::kOpDeferCall:
                     handler_defercall(S, *frame, instr.a());
@@ -706,6 +706,12 @@ namespace behl
         interpreter_loop<false>(S, entry_call_depth, stop_depth);
     }
 
+    void truncate_call_frames(State* S, size_t count)
+    {
+        S->call_stack.resize(S, count);
+        S->call_headers.resize(S, count);
+    }
+
     void unwind_call_frames(State* S, size_t target_depth, std::exception_ptr& pending)
     {
         while (S->call_stack.size() > target_depth)
@@ -716,7 +722,7 @@ namespace behl
             {
                 CallFrame& frame = S->call_stack[index];
 
-                if (frame.proto == nullptr || frame.defer_mask == 0 || frame.proto->defer_unwind_pc == 0)
+                if (frame.proto == nullptr || frame_header(S, frame).defer_mask == 0 || frame.proto->defer_unwind_pc == 0)
                 {
                     break;
                 }
@@ -743,7 +749,7 @@ namespace behl
                 }
             }
 
-            S->call_stack.resize(S, index);
+            truncate_call_frames(S, index);
         }
     }
 

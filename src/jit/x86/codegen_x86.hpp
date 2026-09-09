@@ -37,6 +37,7 @@ namespace behl
         };
 
         void compute_liveness(const CgProgram& program);
+        bool take_fused(uint32_t var);
         void lower(const CgOp& op, uint32_t index);
         void release_dead(const CgOp& op, uint32_t index);
 
@@ -73,6 +74,7 @@ namespace behl
 
         X86Emitter e_;
         std::vector<uint32_t> last_pos_;
+        std::vector<bool> fuse_load_;
         std::vector<bool> loop_header_;
         std::vector<uint8_t> var_reg_;
         std::vector<uint8_t> var_reg2_;
@@ -86,6 +88,9 @@ namespace behl
         uint32_t gp_used_{};
         uint32_t xmm_used_{};
         bool base_valid_{};
+        bool fused_active_{};
+        uint32_t fused_var_{};
+        int32_t fused_slot_{};
         bool failed_{};
     };
 

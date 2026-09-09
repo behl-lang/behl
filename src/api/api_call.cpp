@@ -38,7 +38,7 @@ namespace behl
             unwind_call_frames(S, call_frame_pos, pending);
 
             S->stack.resize(S, func_pos);
-            S->call_stack.resize(S, call_frame_pos);
+            truncate_call_frames(S, call_frame_pos);
 
             std::rethrow_exception(pending);
         }

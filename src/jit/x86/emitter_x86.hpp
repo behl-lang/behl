@@ -61,15 +61,23 @@ namespace behl
         uint32_t id;
     };
 
+    // scale of 0 means there is no index register.
     struct Mem
     {
         GpReg base;
         int32_t disp;
+        GpReg index;
+        uint8_t scale;
     };
 
     constexpr Mem mem(GpReg base, int32_t disp = 0) noexcept
     {
-        return Mem{ base, disp };
+        return Mem{ base, disp, GpReg::r0, 0 };
+    }
+
+    constexpr Mem mem(GpReg base, GpReg index, uint8_t scale, int32_t disp = 0) noexcept
+    {
+        return Mem{ base, disp, index, scale };
     }
 
     struct X86Emitter
@@ -82,6 +90,7 @@ namespace behl
         void mov(GpReg dst, GpReg src);
         void mov(GpReg dst, uint64_t imm);
         void mov(GpReg dst, Mem src);
+        void lea(GpReg dst, Mem src);
         void mov(Mem dst, GpReg src);
         void mov(Mem dst, int32_t imm);
         void mov32(GpReg dst, uint32_t imm);
@@ -121,6 +130,9 @@ namespace behl
         void cmp(Mem mem_op, int32_t imm);
         void cmp8(Mem mem_op, uint8_t imm);
         void shl(GpReg reg, uint8_t imm);
+        void shl32(GpReg reg, uint8_t imm);
+        void test(GpReg lhs, GpReg rhs);
+        void dec(GpReg reg);
         void sar(GpReg reg, uint8_t imm);
         void shl_cl(GpReg reg);
         void sar_cl(GpReg reg);
@@ -134,6 +146,12 @@ namespace behl
         void cqo();
         void idiv(GpReg divisor);
         void cmp(GpReg lhs, GpReg rhs);
+        void add(GpReg dst, Mem src);
+        void sub(GpReg dst, Mem src);
+        void and_(GpReg dst, Mem src);
+        void or_(GpReg dst, Mem src);
+        void xor_(GpReg dst, Mem src);
+        void cmp(GpReg lhs, Mem rhs);
         void xor_(GpReg dst, GpReg src);
         void and_(GpReg dst, GpReg src);
         void or_(GpReg dst, GpReg src);
@@ -187,6 +205,7 @@ namespace behl
         void emit64(uint64_t value);
         void emit_rex(bool w, bool r, bool x, bool b);
         void emit_rex_opt(bool r, bool b);
+        void emit_rex_opt(bool r, bool x, bool b);
         void emit_rex_natural(bool r, bool x, bool b);
         void emit_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
         void emit_modrm_mem(uint8_t reg, const Mem& mem);

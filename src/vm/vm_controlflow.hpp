@@ -57,21 +57,21 @@ namespace behl
     }
 
     BEHL_FORCEINLINE
-    static void handler_defer(CallFrame& frame, Reg block)
+    static void handler_defer(State* S, CallFrame& frame, Reg block)
     {
-        frame.defer_mask |= (1u << block);
+        frame_header(S, frame).defer_mask |= (1u << block);
     }
 
     BEHL_FORCEINLINE
     static void handler_defercall(State* S, CallFrame& frame, Reg block)
     {
         const uint32_t bit = 1u << block;
-        if ((frame.defer_mask & bit) == 0)
+        if ((frame_header(S, frame).defer_mask & bit) == 0)
         {
             return;
         }
 
-        frame.defer_mask &= ~bit;
+        frame_header(S, frame).defer_mask &= ~bit;
 
         const DeferBlock& info = frame.proto->defer_blocks[block];
         get_register(S, frame, info.link_reg) = Value(static_cast<Integer>(frame.pc));
@@ -91,17 +91,18 @@ namespace behl
         State* S, const GCProto* proto, uint32_t new_base, uint32_t actual_num_args, uint32_t call_pos, uint8_t nresults)
     {
         CallFrame& new_frame = S->call_stack.emplace_back(S);
+        CallFrameHeader& header = S->call_headers.emplace_back(S);
         new_frame.proto = proto;
         new_frame.pc = 0;
         new_frame.base = new_base;
-        new_frame.top = new_base + actual_num_args + 1;
-        new_frame.call_pos = call_pos;
-        new_frame.nresults = nresults;
-        new_frame.defer_mask = 0;
+        header.top = new_base + actual_num_args + 1;
+        header.call_pos = call_pos;
+        header.nresults = nresults;
+        header.defer_mask = 0;
 
         if (proto && proto->is_vararg) [[unlikely]]
         {
-            new_frame.num_varargs = (actual_num_args > proto->num_params) ? (actual_num_args - proto->num_params) : 0;
+            header.num_varargs = (actual_num_args > proto->num_params) ? (actual_num_args - proto->num_params) : 0;
         }
 
         return new_frame;
@@ -204,12 +205,13 @@ namespace behl
 
     // Count the actual number of arguments passed to a function.
     BEHL_FORCEINLINE
-    static uint32_t count_actual_args(const CallFrame& frame, uint32_t func_pos, uint8_t num_args) noexcept
+    static uint32_t count_actual_args(State* S, const CallFrame& frame, uint32_t func_pos, uint8_t num_args) noexcept
     {
         if (num_args == static_cast<uint8_t>(kMultArgs))
         {
             // kMultArgs: use all values on stack from func_pos + 1 to frame.top
-            return (frame.top > func_pos + 1) ? (frame.top - func_pos - 1) : 0;
+            const uint32_t top = frame_header(S, frame).top;
+            return (top > func_pos + 1) ? (top - func_pos - 1) : 0;
         }
         return static_cast<uint32_t>(num_args - 1);
     }
@@ -229,7 +231,7 @@ namespace behl
         if (num_results == static_cast<uint8_t>(kMultRet))
         {
             // kMultRet (-1 as uint8_t = 255): return all available values from frame.top
-            num_available = (frame.top > result_base) ? (frame.top - result_base) : 0;
+            num_available = (frame_header(S, frame).top > result_base) ? (frame_header(S, frame).top - result_base) : 0;
         }
         else
         {
@@ -238,7 +240,7 @@ namespace behl
         }
 
         // frame.nresults tells us how many the CALLER expects (from CALL instruction)
-        const uint8_t wanted = frame.nresults;
+        const uint8_t wanted = frame_header(S, frame).nresults;
         uint32_t num_to_move;
         if (wanted == static_cast<uint8_t>(kMultRet))
         {
@@ -251,7 +253,7 @@ namespace behl
             num_to_move = wanted;
         }
 
-        const uint32_t dest = frame.call_pos;
+        const uint32_t dest = frame_header(S, frame).call_pos;
         const uint32_t stack_size = static_cast<uint32_t>(stack.size());
 
         if (frame.proto->has_upvalues) [[unlikely]]
@@ -263,7 +265,7 @@ namespace behl
         if (call_stack.size() >= 2)
         {
             const auto& caller = call_stack[call_stack.size() - 2];
-            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
+            if (caller.proto != nullptr && frame_header(S, frame).call_pos < caller.base + caller.proto->max_stack_size)
             {
                 min_final_size = caller.base + caller.proto->max_stack_size;
             }
@@ -273,7 +275,7 @@ namespace behl
         const auto available = (result_base < stack_size) ? std::min(num_available, stack_size - result_base) : 0;
         move_results(stack, S, result_base, dest, num_to_move, available, min_final_size);
 
-        call_stack.pop_back();
+        pop_call_frame(S);
 
         // Check if we've returned to the entry depth or the stack is empty
         if (call_stack.empty() || call_stack.size() <= entry_call_depth)
@@ -283,7 +285,7 @@ namespace behl
 
         // Set top to what we're claiming to return
         auto& next_frame = call_stack.back();
-        next_frame.top = dest + num_to_move;
+        frame_header(S, next_frame).top = dest + num_to_move;
 
         if (next_frame.proto != nullptr)
         {
@@ -302,7 +304,7 @@ namespace behl
         uint32_t num_available;
         if (num_results == static_cast<uint8_t>(kMultRet))
         {
-            num_available = (frame.top > result_base) ? (frame.top - result_base) : 0;
+            num_available = (frame_header(S, frame).top > result_base) ? (frame_header(S, frame).top - result_base) : 0;
         }
         else
         {
@@ -312,7 +314,7 @@ namespace behl
         const auto stack_size = static_cast<uint32_t>(stack.size());
         const uint32_t present = (result_base < stack_size) ? std::min(num_available, stack_size - result_base) : 0;
 
-        frame.ret_base = static_cast<uint32_t>(S->ret_scratch.size());
+        frame_header(S, frame).ret_base = static_cast<uint32_t>(S->ret_scratch.size());
 
         for (uint32_t i = 0; i < present; ++i)
         {
@@ -330,13 +332,13 @@ namespace behl
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
 
-        const uint32_t saved_base = frame.ret_base;
+        const uint32_t saved_base = frame_header(S, frame).ret_base;
         const auto num_available = static_cast<uint32_t>(S->ret_scratch.size()) - saved_base;
 
-        const uint8_t wanted = frame.nresults;
+        const uint8_t wanted = frame_header(S, frame).nresults;
         const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? num_available : wanted;
 
-        const uint32_t dest = frame.call_pos;
+        const uint32_t dest = frame_header(S, frame).call_pos;
 
         if (frame.proto->has_upvalues) [[unlikely]]
         {
@@ -347,7 +349,7 @@ namespace behl
         if (call_stack.size() >= 2)
         {
             const auto& caller = call_stack[call_stack.size() - 2];
-            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
+            if (caller.proto != nullptr && frame_header(S, frame).call_pos < caller.base + caller.proto->max_stack_size)
             {
                 min_final_size = caller.base + caller.proto->max_stack_size;
             }
@@ -369,7 +371,7 @@ namespace behl
 
         S->ret_scratch.resize(S, saved_base);
 
-        call_stack.pop_back();
+        pop_call_frame(S);
 
         if (call_stack.empty() || call_stack.size() <= entry_call_depth)
         {
@@ -377,7 +379,7 @@ namespace behl
         }
 
         auto& next_frame = call_stack.back();
-        next_frame.top = dest + num_to_move;
+        frame_header(S, next_frame).top = dest + num_to_move;
 
         if (next_frame.proto != nullptr)
         {
@@ -392,7 +394,6 @@ namespace behl
     static uint32_t execute_native_impl(State* S, CFunction cfunc, uint32_t func_pos, uint32_t num_args)
     {
         auto& stack = S->stack;
-        auto& call_stack = S->call_stack;
 
         setup_call_frame(S, nullptr, func_pos, num_args, func_pos, static_cast<uint8_t>(kMultRet));
         prepare_call(S, 0, func_pos, num_args);
@@ -400,7 +401,7 @@ namespace behl
         const auto res = cfunc(S);
         const auto result_count = std::max(0, res);
 
-        call_stack.pop_back();
+        pop_call_frame(S);
 
         const auto returned_count = static_cast<uint32_t>(result_count);
         const auto current_stack_size = static_cast<uint32_t>(stack.size());
@@ -432,7 +433,7 @@ namespace behl
                 const auto caller_base = caller_frame.base;
                 const auto call_pos = caller_base + a;
                 const auto new_base = call_pos;
-                const uint32_t actual_num_args = count_actual_args(caller_frame, call_pos, num_args);
+                const uint32_t actual_num_args = count_actual_args(S, caller_frame, call_pos, num_args);
 
                 const auto* closure_data = func.get_closure();
                 const auto* proto = closure_data->proto;
@@ -447,7 +448,7 @@ namespace behl
                 const auto caller_base = caller_frame.base;
                 const auto call_pos = caller_base + a;
                 const auto new_base = call_pos;
-                const uint32_t actual_num_args = count_actual_args(caller_frame, call_pos, num_args);
+                const uint32_t actual_num_args = count_actual_args(S, caller_frame, call_pos, num_args);
 
                 auto* cfunc = func.get_cfunction();
 
@@ -463,7 +464,7 @@ namespace behl
                         S->stack.resize(S, call_pos + wanted);
                     }
 
-                    call_stack.back().top = call_pos + wanted;
+                    S->call_headers.back().top = call_pos + wanted;
 
                     // Pad with nils if needed
                     for (uint32_t i = returned_count; i < wanted; ++i)
@@ -492,7 +493,7 @@ namespace behl
                     // Adjust top if it was fixed
                     if (num_args != static_cast<uint8_t>(kMultArgs))
                     {
-                        call_stack.back().top++;
+                        S->call_headers.back().top++;
                     }
 
                     // Loop back with updated num_args (simulates tail call)
@@ -528,7 +529,7 @@ namespace behl
         // Only set frame.top for fixed argument counts. kMultArgs means use current frame.top
         if (num_args != static_cast<uint8_t>(kMultArgs))
         {
-            frame.top = call_pos + num_args;
+            frame_header(S, frame).top = call_pos + num_args;
         }
 
         if (is_self_call)
@@ -538,7 +539,7 @@ namespace behl
             // the new frame's function slot - handler_getupval/setupval read the
             // closure from stack[base], so the slot must hold a valid closure.
             const auto new_base = call_pos;
-            const uint32_t actual_num_args = count_actual_args(frame, static_cast<uint32_t>(call_pos), num_args);
+            const uint32_t actual_num_args = count_actual_args(S, frame, static_cast<uint32_t>(call_pos), num_args);
 
             const auto* proto = frame.proto;
             if (proto->has_upvalues)
@@ -567,7 +568,7 @@ namespace behl
             // Keep room for the full register window, but never shrink below the passed
             // arguments: a vararg callee still needs them in place until VARARGPREP runs.
             const auto frame_window = new_frame.base + new_frame.proto->max_stack_size;
-            const auto stack_after_call = (frame_window > new_frame.top) ? frame_window : new_frame.top;
+            const auto stack_after_call = (frame_window > frame_header(S, new_frame).top) ? frame_window : frame_header(S, new_frame).top;
 
             S->stack.resize(S, stack_after_call);
 #if BEHL_JIT_SUPPORTED
@@ -589,7 +590,7 @@ namespace behl
         State* S, CallFrame& frame, Reg a, uint8_t num_args, bool is_self_call, uint32_t entry_call_depth)
     {
         const auto func_abs_pos = frame.base + a;
-        const uint32_t actual_num_args = count_actual_args(frame, static_cast<uint32_t>(func_abs_pos), num_args);
+        const uint32_t actual_num_args = count_actual_args(S, frame, static_cast<uint32_t>(func_abs_pos), num_args);
         const auto items_to_move = actual_num_args + 1;
         auto& stack = S->stack;
 
@@ -612,7 +613,7 @@ namespace behl
 
             // Reset PC to beginning - proto and upvalues stay the same
             frame.pc = 0;
-            frame.top = frame.base + actual_num_args + 1;
+            frame_header(S, frame).top = frame.base + actual_num_args + 1;
             stack.resize(S, frame.base + frame.proto->max_stack_size);
 
             return true;
@@ -636,9 +637,9 @@ namespace behl
 
             frame.proto = proto;
             frame.pc = 0;
-            frame.top = frame.base + actual_num_args + 1;
+            frame_header(S, frame).top = frame.base + actual_num_args + 1;
 
-            const auto items_count = frame.top;
+            const auto items_count = frame_header(S, frame).top;
             const auto proto_size = frame.base + proto->max_stack_size;
             const auto required_size = (items_count > proto_size) ? items_count : proto_size;
 
@@ -701,7 +702,7 @@ namespace behl
 
                 frame.proto = closure_data->proto;
                 frame.pc = 0;
-                frame.top = new_top;
+                frame_header(S, frame).top = new_top;
                 stack.resize(S, frame.base + closure_data->proto->max_stack_size);
 
                 return true;
@@ -730,7 +731,7 @@ namespace behl
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
 
-        const uint32_t dest = frame.call_pos;
+        const uint32_t dest = frame_header(S, frame).call_pos;
 
         if (frame.proto->has_upvalues) [[unlikely]]
         {
@@ -738,14 +739,14 @@ namespace behl
         }
 
         // frame.nresults tells us how many the CALLER expects (from CALL instruction)
-        const uint8_t wanted = frame.nresults;
+        const uint8_t wanted = frame_header(S, frame).nresults;
         const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? 0 : wanted;
 
         uint32_t min_final_size = 0;
         if (call_stack.size() >= 2)
         {
             const auto& caller = call_stack[call_stack.size() - 2];
-            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
+            if (caller.proto != nullptr && frame_header(S, frame).call_pos < caller.base + caller.proto->max_stack_size)
             {
                 min_final_size = caller.base + caller.proto->max_stack_size;
             }
@@ -759,7 +760,7 @@ namespace behl
             stack[dest + i].set_nil();
         }
 
-        call_stack.pop_back();
+        pop_call_frame(S);
 
         // Check if we've returned to the entry depth or the stack is empty
         if (call_stack.empty() || call_stack.size() <= entry_call_depth)
@@ -768,7 +769,7 @@ namespace behl
         }
 
         auto& next_frame = call_stack.back();
-        next_frame.top = dest + num_to_move;
+        frame_header(S, next_frame).top = dest + num_to_move;
 
         if (next_frame.proto != nullptr)
         {
@@ -786,7 +787,7 @@ namespace behl
         auto& stack = S->stack;
 
         const auto result_base = frame.base + a;
-        const uint32_t dest = frame.call_pos;
+        const uint32_t dest = frame_header(S, frame).call_pos;
 
         if (frame.proto->has_upvalues) [[unlikely]]
         {
@@ -794,14 +795,14 @@ namespace behl
         }
 
         // frame.nresults tells us how many the CALLER expects (from CALL instruction)
-        const uint8_t wanted = frame.nresults;
+        const uint8_t wanted = frame_header(S, frame).nresults;
         const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? 1 : wanted;
 
         uint32_t min_final_size = 0;
         if (call_stack.size() >= 2)
         {
             const auto& caller = call_stack[call_stack.size() - 2];
-            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
+            if (caller.proto != nullptr && frame_header(S, frame).call_pos < caller.base + caller.proto->max_stack_size)
             {
                 min_final_size = caller.base + caller.proto->max_stack_size;
             }
@@ -821,7 +822,7 @@ namespace behl
             stack[dest + i].set_nil();
         }
 
-        call_stack.pop_back();
+        pop_call_frame(S);
 
         // Check if we've returned to the entry depth or the stack is empty
         if (call_stack.empty() || call_stack.size() <= entry_call_depth)
@@ -830,7 +831,7 @@ namespace behl
         }
 
         auto& next_frame = call_stack.back();
-        next_frame.top = dest + num_to_move;
+        frame_header(S, next_frame).top = dest + num_to_move;
 
         if (next_frame.proto != nullptr)
         {

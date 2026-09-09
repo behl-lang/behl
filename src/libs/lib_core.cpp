@@ -1,3 +1,4 @@
+#include "api/api_internal.hpp"
 #include "ast/ast.hpp"
 #include "ast/ast_holder.hpp"
 #include "backend/compiler.hpp"
@@ -346,7 +347,7 @@ namespace behl
         {
             // Cleanup on exception
             auto* err_obj = gc_new_string(S, e.what());
-            S->call_stack.resize(S, call_frame_pos);
+            truncate_call_frames(S, call_frame_pos);
 
             // Clear stack and push error result
             set_top(S, 0);

@@ -20,6 +20,11 @@ namespace behl
         return static_cast<uint8_t>(reg) & 0x7;
     }
 
+    static bool mem_index_ext(const Mem& mem_op) noexcept
+    {
+        return mem_op.scale != 0 && (static_cast<uint8_t>(mem_op.index) & 0x8) != 0;
+    }
+
     void X86Emitter::emit_rex_natural(bool r, bool x, bool b)
     {
         if (mode64_)
@@ -34,6 +39,11 @@ namespace behl
 
     void X86Emitter::mov(GpReg dst, GpReg src)
     {
+        if (dst == src)
+        {
+            return;
+        }
+
         emit_rex_natural(reg_ext(src), false, reg_ext(dst));
         emit8(0x89);
         emit_modrm(0b11, reg_low(src), reg_low(dst));
@@ -41,36 +51,63 @@ namespace behl
 
     void X86Emitter::mov(GpReg dst, uint64_t imm)
     {
-        if (mode64_)
+        if (imm == 0)
         {
-            emit_rex(true, false, false, reg_ext(dst));
-            emit8(static_cast<uint8_t>(0xB8 + reg_low(dst)));
-            emit64(imm);
+            xor_(dst, dst);
+            return;
         }
-        else
+
+        if (!mode64_)
         {
             assert(imm <= 0xFFFFFFFFu && "immediate exceeds 32 bit mode width");
             mov32(dst, static_cast<uint32_t>(imm));
+            return;
         }
+
+        if (imm <= 0xFFFFFFFFu)
+        {
+            mov32(dst, static_cast<uint32_t>(imm));
+            return;
+        }
+
+        if (static_cast<int64_t>(imm) >= INT32_MIN && static_cast<int64_t>(imm) <= INT32_MAX)
+        {
+            emit_rex(true, false, false, reg_ext(dst));
+            emit8(0xC7);
+            emit_modrm(0b11, 0, reg_low(dst));
+            emit32(static_cast<uint32_t>(static_cast<int32_t>(imm)));
+            return;
+        }
+
+        emit_rex(true, false, false, reg_ext(dst));
+        emit8(static_cast<uint8_t>(0xB8 + reg_low(dst)));
+        emit64(imm);
+    }
+
+    void X86Emitter::lea(GpReg dst, Mem src)
+    {
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x8D);
+        emit_modrm_mem(reg_low(dst), src);
     }
 
     void X86Emitter::mov(GpReg dst, Mem src)
     {
-        emit_rex_natural(reg_ext(dst), false, reg_ext(src.base));
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
         emit8(0x8B);
         emit_modrm_mem(reg_low(dst), src);
     }
 
     void X86Emitter::mov(Mem dst, GpReg src)
     {
-        emit_rex_natural(reg_ext(src), false, reg_ext(dst.base));
+        emit_rex_natural(reg_ext(src), mem_index_ext(dst), reg_ext(dst.base));
         emit8(0x89);
         emit_modrm_mem(reg_low(src), dst);
     }
 
     void X86Emitter::mov(Mem dst, int32_t imm)
     {
-        emit_rex_natural(false, false, reg_ext(dst.base));
+        emit_rex_natural(false, mem_index_ext(dst), reg_ext(dst.base));
         emit8(0xC7);
         emit_modrm_mem(0, dst);
         emit32(static_cast<uint32_t>(imm));
@@ -85,14 +122,14 @@ namespace behl
 
     void X86Emitter::mov32(GpReg dst, Mem src)
     {
-        emit_rex_opt(reg_ext(dst), reg_ext(src.base));
+        emit_rex_opt(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
         emit8(0x8B);
         emit_modrm_mem(reg_low(dst), src);
     }
 
     void X86Emitter::mov32(Mem dst, uint32_t imm)
     {
-        emit_rex_opt(false, reg_ext(dst.base));
+        emit_rex_opt(false, mem_index_ext(dst), reg_ext(dst.base));
         emit8(0xC7);
         emit_modrm_mem(0, dst);
         emit32(imm);
@@ -100,7 +137,7 @@ namespace behl
 
     void X86Emitter::movups(XmmReg dst, Mem src)
     {
-        emit_rex_opt(false, reg_ext(src.base));
+        emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));
         emit8(0x0F);
         emit8(0x10);
         emit_modrm_mem(xmm_low(dst), src);
@@ -108,7 +145,7 @@ namespace behl
 
     void X86Emitter::movups(Mem dst, XmmReg src)
     {
-        emit_rex_opt(false, reg_ext(dst.base));
+        emit_rex_opt(false, mem_index_ext(dst), reg_ext(dst.base));
         emit8(0x0F);
         emit8(0x11);
         emit_modrm_mem(xmm_low(src), dst);
@@ -117,7 +154,7 @@ namespace behl
     void X86Emitter::movsd(XmmReg dst, Mem src)
     {
         emit8(0xF2);
-        emit_rex_opt(false, reg_ext(src.base));
+        emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));
         emit8(0x0F);
         emit8(0x10);
         emit_modrm_mem(xmm_low(dst), src);
@@ -126,7 +163,7 @@ namespace behl
     void X86Emitter::movsd(Mem dst, XmmReg src)
     {
         emit8(0xF2);
-        emit_rex_opt(false, reg_ext(dst.base));
+        emit_rex_opt(false, mem_index_ext(dst), reg_ext(dst.base));
         emit8(0x0F);
         emit8(0x11);
         emit_modrm_mem(xmm_low(src), dst);
@@ -154,7 +191,7 @@ namespace behl
     {
         assert(mode64_ && "cvtsi2sd from m64 requires 64 bit mode");
         emit8(0xF2);
-        emit_rex(true, false, false, reg_ext(src.base));
+        emit_rex(true, false, mem_index_ext(src), reg_ext(src.base));
         emit8(0x0F);
         emit8(0x2A);
         emit_modrm_mem(xmm_low(dst), src);
@@ -162,14 +199,14 @@ namespace behl
 
     void X86Emitter::fild_qword(Mem src)
     {
-        emit_rex_opt(false, reg_ext(src.base));
+        emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));
         emit8(0xDF);
         emit_modrm_mem(5, src);
     }
 
     void X86Emitter::fstp_qword(Mem dst)
     {
-        emit_rex_opt(false, reg_ext(dst.base));
+        emit_rex_opt(false, mem_index_ext(dst), reg_ext(dst.base));
         emit8(0xDD);
         emit_modrm_mem(3, dst);
     }
@@ -193,7 +230,7 @@ namespace behl
     void X86Emitter::addsd(XmmReg dst, Mem src)
     {
         emit8(0xF2);
-        emit_rex_opt(false, reg_ext(src.base));
+        emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));
         emit8(0x0F);
         emit8(0x58);
         emit_modrm_mem(xmm_low(dst), src);
@@ -202,7 +239,7 @@ namespace behl
     void X86Emitter::subsd(XmmReg dst, Mem src)
     {
         emit8(0xF2);
-        emit_rex_opt(false, reg_ext(src.base));
+        emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));
         emit8(0x0F);
         emit8(0x5C);
         emit_modrm_mem(xmm_low(dst), src);
@@ -235,7 +272,7 @@ namespace behl
     void X86Emitter::ucomisd(XmmReg lhs, Mem rhs)
     {
         emit8(0x66);
-        emit_rex_opt(false, reg_ext(rhs.base));
+        emit_rex_opt(false, mem_index_ext(rhs), reg_ext(rhs.base));
         emit8(0x0F);
         emit8(0x2E);
         emit_modrm_mem(xmm_low(lhs), rhs);
@@ -267,14 +304,14 @@ namespace behl
 
     void X86Emitter::add(Mem dst, GpReg src)
     {
-        emit_rex_natural(reg_ext(src), false, reg_ext(dst.base));
+        emit_rex_natural(reg_ext(src), mem_index_ext(dst), reg_ext(dst.base));
         emit8(0x01);
         emit_modrm_mem(reg_low(src), dst);
     }
 
     void X86Emitter::add(Mem dst, int32_t imm)
     {
-        emit_rex_natural(false, false, reg_ext(dst.base));
+        emit_rex_natural(false, mem_index_ext(dst), reg_ext(dst.base));
         if (imm >= -128 && imm <= 127)
         {
             emit8(0x83);
@@ -346,7 +383,7 @@ namespace behl
 
     void X86Emitter::sub(Mem dst, int32_t imm)
     {
-        emit_rex_natural(false, false, reg_ext(dst.base));
+        emit_rex_natural(false, mem_index_ext(dst), reg_ext(dst.base));
         if (imm >= -128 && imm <= 127)
         {
             emit8(0x83);
@@ -371,6 +408,12 @@ namespace behl
 
     void X86Emitter::cmp(GpReg reg, int32_t imm)
     {
+        if (imm == 0)
+        {
+            test(reg, reg);
+            return;
+        }
+
         emit_rex_natural(false, false, reg_ext(reg));
         if (imm >= -128 && imm <= 127)
         {
@@ -388,7 +431,7 @@ namespace behl
 
     void X86Emitter::cmp(Mem mem_op, int32_t imm)
     {
-        emit_rex_natural(false, false, reg_ext(mem_op.base));
+        emit_rex_natural(false, mem_index_ext(mem_op), reg_ext(mem_op.base));
         if (imm >= -128 && imm <= 127)
         {
             emit8(0x83);
@@ -405,9 +448,31 @@ namespace behl
 
     void X86Emitter::cmp8(Mem mem_op, uint8_t imm)
     {
-        emit_rex_opt(false, reg_ext(mem_op.base));
+        emit_rex_opt(false, mem_index_ext(mem_op), reg_ext(mem_op.base));
         emit8(0x80);
         emit_modrm_mem(7, mem_op);
+        emit8(imm);
+    }
+
+    void X86Emitter::test(GpReg lhs, GpReg rhs)
+    {
+        emit_rex_natural(reg_ext(rhs), false, reg_ext(lhs));
+        emit8(0x85);
+        emit_modrm(0b11, reg_low(rhs), reg_low(lhs));
+    }
+
+    void X86Emitter::dec(GpReg reg)
+    {
+        emit_rex_natural(false, false, reg_ext(reg));
+        emit8(0xFF);
+        emit_modrm(0b11, 1, reg_low(reg));
+    }
+
+    void X86Emitter::shl32(GpReg reg, uint8_t imm)
+    {
+        emit_rex_opt(false, reg_ext(reg));
+        emit8(0xC1);
+        emit_modrm(0b11, 4, reg_low(reg));
         emit8(imm);
     }
 
@@ -437,7 +502,7 @@ namespace behl
 
     void X86Emitter::imul(GpReg dst, Mem src)
     {
-        emit_rex_natural(reg_ext(dst), false, reg_ext(src.base));
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
         emit8(0x0F);
         emit8(0xAF);
         emit_modrm_mem(reg_low(dst), src);
@@ -445,14 +510,14 @@ namespace behl
 
     void X86Emitter::mul(Mem src)
     {
-        emit_rex_natural(false, false, reg_ext(src.base));
+        emit_rex_natural(false, mem_index_ext(src), reg_ext(src.base));
         emit8(0xF7);
         emit_modrm_mem(4, src);
     }
 
     void X86Emitter::div(Mem src)
     {
-        emit_rex_natural(false, false, reg_ext(src.base));
+        emit_rex_natural(false, mem_index_ext(src), reg_ext(src.base));
         emit8(0xF7);
         emit_modrm_mem(6, src);
     }
@@ -528,6 +593,48 @@ namespace behl
         emit_rex_natural(reg_ext(src), false, reg_ext(dst));
         emit8(0x09);
         emit_modrm(0b11, reg_low(src), reg_low(dst));
+    }
+
+    void X86Emitter::add(GpReg dst, Mem src)
+    {
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x03);
+        emit_modrm_mem(reg_low(dst), src);
+    }
+
+    void X86Emitter::sub(GpReg dst, Mem src)
+    {
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x2B);
+        emit_modrm_mem(reg_low(dst), src);
+    }
+
+    void X86Emitter::and_(GpReg dst, Mem src)
+    {
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x23);
+        emit_modrm_mem(reg_low(dst), src);
+    }
+
+    void X86Emitter::or_(GpReg dst, Mem src)
+    {
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x0B);
+        emit_modrm_mem(reg_low(dst), src);
+    }
+
+    void X86Emitter::xor_(GpReg dst, Mem src)
+    {
+        emit_rex_natural(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x33);
+        emit_modrm_mem(reg_low(dst), src);
+    }
+
+    void X86Emitter::cmp(GpReg lhs, Mem rhs)
+    {
+        emit_rex_natural(reg_ext(lhs), mem_index_ext(rhs), reg_ext(rhs.base));
+        emit8(0x3B);
+        emit_modrm_mem(reg_low(lhs), rhs);
     }
 
     void X86Emitter::xor_(GpReg dst, GpReg src)
@@ -899,6 +1006,16 @@ namespace behl
         }
     }
 
+    void X86Emitter::emit_rex_opt(bool r, bool x, bool b)
+    {
+        if (r || x || b)
+        {
+            assert(mode64_ && "extended registers unavailable in 32 bit mode");
+            emit8(static_cast<uint8_t>(0x40 | (static_cast<uint8_t>(r) << 2) | (static_cast<uint8_t>(x) << 1)
+                | static_cast<uint8_t>(b)));
+        }
+    }
+
     void X86Emitter::emit_modrm(uint8_t mod, uint8_t reg, uint8_t rm)
     {
         emit8(static_cast<uint8_t>((mod << 6) | (reg << 3) | rm));
@@ -907,7 +1024,8 @@ namespace behl
     void X86Emitter::emit_modrm_mem(uint8_t reg, const Mem& mem_op)
     {
         const uint8_t base = reg_low(mem_op.base);
-        const bool needs_sib = base == 0b100;
+        const bool indexed = mem_op.scale != 0;
+        const bool needs_sib = indexed || base == 0b100;
         const bool disp_fits8 = mem_op.disp >= -128 && mem_op.disp <= 127;
 
         uint8_t mod;
@@ -924,9 +1042,33 @@ namespace behl
             mod = 0b10;
         }
 
-        emit_modrm(mod, reg, base);
+        emit_modrm(mod, reg, needs_sib ? uint8_t{ 0b100 } : base);
 
-        if (needs_sib)
+        if (indexed)
+        {
+            assert(reg_low(mem_op.index) != 0b100 && "rsp cannot be a SIB index");
+            uint8_t scale_bits = 0;
+            switch (mem_op.scale)
+            {
+                case 1:
+                    scale_bits = 0;
+                    break;
+                case 2:
+                    scale_bits = 1;
+                    break;
+                case 4:
+                    scale_bits = 2;
+                    break;
+                case 8:
+                    scale_bits = 3;
+                    break;
+                default:
+                    assert(false && "SIB scale must be 1, 2, 4 or 8");
+                    break;
+            }
+            emit8(static_cast<uint8_t>((scale_bits << 6) | (reg_low(mem_op.index) << 3) | base));
+        }
+        else if (needs_sib)
         {
             emit8(0x24);
         }

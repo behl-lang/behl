@@ -9,6 +9,7 @@
 #include "gc/gc_state.hpp"
 #include "gc/gc_types.hpp"
 #include "gc/gco_string.hpp"
+#include "platform.hpp"
 #include "state_debug.hpp"
 #include "vm/frame.hpp"
 #include "vm/upvalue.hpp"
@@ -28,6 +29,7 @@ namespace behl
         GCState gc{};
 
         Vector<Value> stack;
+        Vector<CallFrameHeader> call_headers;
         Vector<CallFrame> call_stack;
         Vector<Value> ret_scratch;
 
@@ -84,7 +86,5 @@ namespace behl
 
     static_assert(std::is_standard_layout_v<std::exception_ptr>);
     static_assert(std::is_standard_layout_v<State>);
-
-    ptrdiff_t resolve_index(const State* S, int idx);
 
 } // namespace behl

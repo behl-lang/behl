@@ -405,7 +405,7 @@ namespace behl
                 // Calculate number of fields from stack top
                 // Values start at register (a + 2), and frame.top points one past the last value
                 uint8_t values_start = a + 2;
-                actual_num_fields = static_cast<uint8_t>(frame.top - (frame.base + values_start));
+                actual_num_fields = static_cast<uint8_t>(frame_header(S, frame).top - (frame.base + values_start));
             }
             else
             {

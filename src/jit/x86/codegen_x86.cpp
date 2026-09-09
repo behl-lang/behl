@@ -35,6 +35,11 @@ namespace behl
     static constexpr size_t kXmmPoolSize = sizeof(kXmmPool) / sizeof(kXmmPool[0]);
     static constexpr uint8_t kNoReg = 0xFF;
 
+    static_assert(sizeof(CallFrame) == 16, "call frame stride must stay a power of two for the shift below");
+    // SIB scales top out at 8, so the 16 byte stride is applied as scale 8 twice.
+    static constexpr uint8_t kCallFrameHalfScale = 8;
+    static constexpr int32_t kCallFrameStride = static_cast<int32_t>(sizeof(CallFrame));
+
     static Mem slot_tag(int32_t reg) noexcept
     {
         return mem(kFrameBase, Value::size() * reg);
@@ -183,6 +188,17 @@ namespace behl
         }
     }
 
+    bool CodegenX86::take_fused(uint32_t var)
+    {
+        if (!fused_active_ || fused_var_ != var)
+        {
+            return false;
+        }
+
+        fused_active_ = false;
+        return true;
+    }
+
     void CodegenX86::ensure_base()
     {
         if (!base_valid_)
@@ -197,11 +213,10 @@ namespace behl
     {
         e_.mov(kScratchA, mem(kStateReg, State::call_stack_data_offset()));
         e_.mov(kScratchB, mem(kStateReg, State::call_stack_size_offset()));
-        e_.sub(kScratchB, 1);
-        e_.imul(kScratchB, kScratchB, static_cast<int32_t>(sizeof(CallFrame)));
-        e_.add(kScratchA, kScratchB);
-        e_.mov32(kScratchB, mem(kScratchA, CallFrame::base_offset()));
-        e_.shl(kScratchB, 4);
+        e_.lea(kScratchA, mem(kScratchA, kScratchB, kCallFrameHalfScale));
+        e_.mov32(kScratchB,
+            mem(kScratchA, kScratchB, kCallFrameHalfScale, CallFrame::base_offset() - kCallFrameStride));
+        e_.shl32(kScratchB, 4);
         e_.mov(kFrameBase, mem(kStateReg, State::stack_data_offset()));
         e_.add(kFrameBase, kScratchB);
     }
@@ -284,7 +299,10 @@ namespace behl
 
         e_.cmp32(kScratchA, kJitError);
         e_.jcc(Cond::e, label(op.label));
-        base_valid_ = false;
+        if (!op.flag)
+        {
+            base_valid_ = false;
+        }
         alloc_result(op.var);
     }
 
@@ -394,12 +412,28 @@ namespace behl
         }
     }
 
+    static bool fusable_consumer(CgOpKind kind) noexcept
+    {
+        switch (kind)
+        {
+            case CgOpKind::kAddI64:
+            case CgOpKind::kSubI64:
+            case CgOpKind::kAndI64:
+            case CgOpKind::kOrI64:
+            case CgOpKind::kXorI64:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     void CodegenX86::compute_liveness(const CgProgram& program)
     {
         last_pos_.assign(program.num_vars, 0);
         var_reg_.assign(program.num_vars, kNoReg);
         var_reg2_.assign(program.num_vars, kNoReg);
         var_f64_.assign(program.num_vars, false);
+        fuse_load_.assign(program.ops.size(), false);
 
         for (uint32_t i = 0; i < program.ops.size(); ++i)
         {
@@ -443,6 +477,31 @@ namespace behl
                     break;
                 default:
                     break;
+            }
+        }
+
+        // A slot load whose only use is the right hand side of the very next
+        // arithmetic or compare becomes a memory operand on that instruction.
+        if constexpr (kMode64)
+        {
+            for (uint32_t i = 0; i + 1 < program.ops.size(); ++i)
+            {
+                const CgOp& load = program.ops[i];
+                if (load.kind != CgOpKind::kLoadI64)
+                {
+                    continue;
+                }
+
+                const CgOp& use = program.ops[i + 1];
+                if (!fusable_consumer(use.kind) || use.var2 != load.var || use.var == load.var)
+                {
+                    continue;
+                }
+
+                if (last_pos_[load.var] == i + 1)
+                {
+                    fuse_load_[i] = true;
+                }
             }
         }
     }
@@ -901,6 +960,14 @@ namespace behl
                     }
                     break;
                 }
+                if (index < fuse_load_.size() && fuse_load_[index])
+                {
+                    ensure_base();
+                    fused_active_ = true;
+                    fused_var_ = op.var;
+                    fused_slot_ = op.slot;
+                    break;
+                }
                 ensure_base();
                 alloc_i64(op.var);
                 if (!failed_)
@@ -991,6 +1058,11 @@ namespace behl
             case CgOpKind::kAddI64:
                 if (!failed_)
                 {
+                    if (take_fused(op.var2))
+                    {
+                        e_.add(gp(op.var), slot_payload(fused_slot_));
+                        break;
+                    }
                     e_.add(gp(op.var), gp(op.var2));
                     if constexpr (!kMode64)
                     {
@@ -1002,6 +1074,11 @@ namespace behl
             case CgOpKind::kSubI64:
                 if (!failed_)
                 {
+                    if (take_fused(op.var2))
+                    {
+                        e_.sub(gp(op.var), slot_payload(fused_slot_));
+                        break;
+                    }
                     e_.sub(gp(op.var), gp(op.var2));
                     if constexpr (!kMode64)
                     {
@@ -1013,6 +1090,11 @@ namespace behl
             case CgOpKind::kAndI64:
                 if (!failed_)
                 {
+                    if (take_fused(op.var2))
+                    {
+                        e_.and_(gp(op.var), slot_payload(fused_slot_));
+                        break;
+                    }
                     e_.and_(gp(op.var), gp(op.var2));
                     if constexpr (!kMode64)
                     {
@@ -1024,6 +1106,11 @@ namespace behl
             case CgOpKind::kOrI64:
                 if (!failed_)
                 {
+                    if (take_fused(op.var2))
+                    {
+                        e_.or_(gp(op.var), slot_payload(fused_slot_));
+                        break;
+                    }
                     e_.or_(gp(op.var), gp(op.var2));
                     if constexpr (!kMode64)
                     {
@@ -1035,6 +1122,11 @@ namespace behl
             case CgOpKind::kXorI64:
                 if (!failed_)
                 {
+                    if (take_fused(op.var2))
+                    {
+                        e_.xor_(gp(op.var), slot_payload(fused_slot_));
+                        break;
+                    }
                     e_.xor_(gp(op.var), gp(op.var2));
                     if constexpr (!kMode64)
                     {
@@ -1496,14 +1588,13 @@ namespace behl
                 {
                     e_.mov(kScratchA, mem(kStateReg, State::call_stack_data_offset()));
                     e_.mov(kScratchB, mem(kStateReg, State::call_stack_size_offset()));
-                    e_.sub(kScratchB, 1);
-                    e_.imul(kScratchB, kScratchB, static_cast<int32_t>(sizeof(CallFrame)));
-                    e_.add(kScratchA, kScratchB);
+                    e_.lea(kScratchA, mem(kScratchA, kScratchB, kCallFrameHalfScale));
                     if constexpr (!kMode64)
                     {
                         e_.mov32(gp_hi(op.var), 0);
                     }
-                    e_.mov32(gp(op.var), mem(kScratchA, CallFrame::pc_offset()));
+                    e_.mov32(gp(op.var),
+                        mem(kScratchA, kScratchB, kCallFrameHalfScale, CallFrame::pc_offset() - kCallFrameStride));
                 }
                 break;
 
@@ -1534,6 +1625,11 @@ namespace behl
                 }
                 emit_epilogue(static_cast<uint32_t>(op.imm));
                 break;
+        }
+
+        if (op.kind != CgOpKind::kLoadI64)
+        {
+            fused_active_ = false;
         }
 
         release_dead(op, index);
