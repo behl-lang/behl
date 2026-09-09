@@ -35,10 +35,10 @@ namespace behl
     static constexpr size_t kXmmPoolSize = sizeof(kXmmPool) / sizeof(kXmmPool[0]);
     static constexpr uint8_t kNoReg = 0xFF;
 
-    static_assert(sizeof(CallFrame) == 16, "call frame stride must stay a power of two for the shift below");
     // SIB scales top out at 8, so the 16 byte stride is applied as scale 8 twice.
-    static constexpr uint8_t kCallFrameHalfScale = 8;
     static constexpr int32_t kCallFrameStride = static_cast<int32_t>(sizeof(CallFrame));
+    static constexpr uint8_t kCallFrameHalfScale = 8;
+    static_assert(2 * kCallFrameHalfScale == sizeof(CallFrame));
 
     static Mem slot_tag(int32_t reg) noexcept
     {
@@ -412,7 +412,7 @@ namespace behl
         }
     }
 
-    static bool fusable_consumer(CgOpKind kind) noexcept
+    [[maybe_unused]] static bool fusable_consumer(CgOpKind kind) noexcept
     {
         switch (kind)
         {
@@ -1175,7 +1175,7 @@ namespace behl
                         e_.push(gp(op.var2));
                         e_.push(gp_hi(op.var));
                         e_.push(gp(op.var));
-                        e_.call(reinterpret_cast<uintptr_t>(&jit_i64_mod));
+                        e_.call(reinterpret_cast<uintptr_t>(&jit_soft_i64_mod));
                         e_.add(kStackPtr, 16);
                         e_.mov(mem(kStackPtr, 0), kScratchA);
                         e_.mov(gp_hi(op.var), kScratchC);
@@ -1207,7 +1207,7 @@ namespace behl
                         e_.push(gp(op.var2));
                         e_.push(gp_hi(op.var));
                         e_.push(gp(op.var));
-                        e_.call(reinterpret_cast<uintptr_t>(&jit_u64_div));
+                        e_.call(reinterpret_cast<uintptr_t>(&jit_soft_u64_div));
                         e_.add(kStackPtr, 16);
                         e_.mov(mem(kStackPtr, 0), kScratchA);
                         e_.mov(gp_hi(op.var), kScratchC);
@@ -1589,12 +1589,12 @@ namespace behl
                     e_.mov(kScratchA, mem(kStateReg, State::call_stack_data_offset()));
                     e_.mov(kScratchB, mem(kStateReg, State::call_stack_size_offset()));
                     e_.lea(kScratchA, mem(kScratchA, kScratchB, kCallFrameHalfScale));
+                    e_.mov32(gp(op.var),
+                        mem(kScratchA, kScratchB, kCallFrameHalfScale, CallFrame::pc_offset() - kCallFrameStride));
                     if constexpr (!kMode64)
                     {
                         e_.mov32(gp_hi(op.var), 0);
                     }
-                    e_.mov32(gp(op.var),
-                        mem(kScratchA, kScratchB, kCallFrameHalfScale, CallFrame::pc_offset() - kCallFrameStride));
                 }
                 break;
 
@@ -1672,12 +1672,18 @@ namespace behl
             cache_reset();
         }
 
-        label_states_.assign(program.num_labels, LabelState{});
-        guard_slots_.assign(program.num_labels, std::vector<int32_t>{});
+        label_states_.clear();
+        guard_slots_.clear();
+        for (uint32_t i = 0; i < program.num_labels; ++i)
+        {
+            label_states_.emplace_back(state_);
+            guard_slots_.emplace_back(AutoVector<int32_t>(state_));
+        }
 
         loop_header_.assign(program.num_labels, false);
         {
-            std::vector<uint32_t> bind_pos(program.num_labels, UINT32_MAX);
+            AutoVector<uint32_t> bind_pos(state_);
+            bind_pos.assign(program.num_labels, UINT32_MAX);
             for (uint32_t i = 0; i < program.ops.size(); ++i)
             {
                 if (program.ops[i].kind == CgOpKind::kBind)

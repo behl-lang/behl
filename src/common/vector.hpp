@@ -287,6 +287,44 @@ namespace behl
         }
 
         BEHL_FORCEINLINE
+        void assign(State* state, size_t count, const T& value)
+        {
+            clear();
+            resize(state, count, value);
+        }
+
+        BEHL_FORCEINLINE
+        iterator insert(State* state, const_iterator pos, const_iterator first, const_iterator last)
+        {
+            const size_t index = static_cast<size_t>(pos - data_);
+            const size_t count = static_cast<size_t>(last - first);
+            assert(index <= size_ && "insert position out of range");
+
+            if (count == 0)
+            {
+                return data_ + index;
+            }
+
+            if (size_ + count > capacity_)
+            {
+                grow(state, size_ + count);
+            }
+
+            for (size_t i = size_; i > index; --i)
+            {
+                data_[i + count - 1] = data_[i - 1];
+            }
+            for (size_t i = 0; i < count; ++i)
+            {
+                data_[index + i] = first[i];
+            }
+
+            size_ += count;
+
+            return data_ + index;
+        }
+
+        BEHL_FORCEINLINE
         iterator insert(State* state, const_iterator pos, const T& value)
         {
             size_t index = static_cast<size_t>(pos - data_);
@@ -639,6 +677,16 @@ namespace behl
         auto insert(const_iterator pos, const T& value)
         {
             return vec_.insert(state_, pos, value);
+        }
+
+        void assign(size_t count, const T& value)
+        {
+            vec_.assign(state_, count, value);
+        }
+
+        auto insert(const_iterator pos, const_iterator first, const_iterator last)
+        {
+            return vec_.insert(state_, pos, first, last);
         }
 
         auto erase(const_iterator pos)

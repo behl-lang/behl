@@ -64,6 +64,8 @@ namespace behl
 
     bool jit_run_or_compile(State* S, const GCProto* proto);
 
+    bool jit_drive(State* S, const GCProto* proto, uint32_t entry_depth);
+
     void* jit_exec_alloc(State* S, size_t size);
     void jit_exec_commit(void* mem, size_t size);
     void jit_clear_cache(State* S) noexcept;

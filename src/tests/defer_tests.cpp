@@ -54,9 +54,9 @@ TEST_F(DeferTest, SimpleDeferStatement)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 3);
-    ASSERT_EQ(std::string(to_string(S, 0)), "start");
-    ASSERT_EQ(std::string(to_string(S, 1)), "deferred");
-    ASSERT_EQ(std::string(to_string(S, 2)), "end");
+    ASSERT_EQ(to_string(S, 0), "start");
+    ASSERT_EQ(to_string(S, 1), "deferred");
+    ASSERT_EQ(to_string(S, 2), "end");
 }
 
 TEST_F(DeferTest, DeferWithPrint)
@@ -81,9 +81,9 @@ TEST_F(DeferTest, DeferWithPrint)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 3);
-    ASSERT_EQ(std::string(to_string(S, 0)), "start");
-    ASSERT_EQ(std::string(to_string(S, 1)), "end");
-    ASSERT_EQ(std::string(to_string(S, 2)), "deferred");
+    ASSERT_EQ(to_string(S, 0), "start");
+    ASSERT_EQ(to_string(S, 1), "end");
+    ASSERT_EQ(to_string(S, 2), "deferred");
 }
 
 TEST_F(DeferTest, MultipleDeferLIFO)
@@ -109,10 +109,10 @@ TEST_F(DeferTest, MultipleDeferLIFO)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 4);
-    ASSERT_EQ(std::string(to_string(S, 0)), "body");
-    ASSERT_EQ(std::string(to_string(S, 1)), "first");
-    ASSERT_EQ(std::string(to_string(S, 2)), "second");
-    ASSERT_EQ(std::string(to_string(S, 3)), "third");
+    ASSERT_EQ(to_string(S, 0), "body");
+    ASSERT_EQ(to_string(S, 1), "first");
+    ASSERT_EQ(to_string(S, 2), "second");
+    ASSERT_EQ(to_string(S, 3), "third");
 }
 
 TEST_F(DeferTest, DeferWithBlock)
@@ -135,7 +135,7 @@ TEST_F(DeferTest, DeferWithBlock)
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(to_integer(S, 0), 100); // Should see updated value
-    ASSERT_EQ(std::string(to_string(S, 1)), "block");
+    ASSERT_EQ(to_string(S, 1), "block");
 }
 
 TEST_F(DeferTest, DeferSeesVariableMutations)
@@ -184,11 +184,11 @@ TEST_F(DeferTest, NestedScopes)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 5);
-    ASSERT_EQ(std::string(to_string(S, 0)), "outer-body");
-    ASSERT_EQ(std::string(to_string(S, 1)), "inner-body");
-    ASSERT_EQ(std::string(to_string(S, 2)), "inner"); // Inner defer executes when inner scope ends
-    ASSERT_EQ(std::string(to_string(S, 3)), "back-outer");
-    ASSERT_EQ(std::string(to_string(S, 4)), "outer"); // Outer defer executes at function end
+    ASSERT_EQ(to_string(S, 0), "outer-body");
+    ASSERT_EQ(to_string(S, 1), "inner-body");
+    ASSERT_EQ(to_string(S, 2), "inner"); // Inner defer executes when inner scope ends
+    ASSERT_EQ(to_string(S, 3), "back-outer");
+    ASSERT_EQ(to_string(S, 4), "outer"); // Outer defer executes at function end
 }
 
 TEST_F(DeferTest, DeferWithEarlyReturn)
@@ -219,8 +219,8 @@ TEST_F(DeferTest, DeferWithEarlyReturn)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 2);
-    ASSERT_EQ(std::string(to_string(S, 0)), "early-return");
-    ASSERT_EQ(std::string(to_string(S, 1)), "cleanup"); // Defer runs before return
+    ASSERT_EQ(to_string(S, 0), "early-return");
+    ASSERT_EQ(to_string(S, 1), "cleanup"); // Defer runs before return
 }
 
 TEST_F(DeferTest, DeferWithReturnValue)
@@ -272,9 +272,9 @@ TEST_F(DeferTest, MultipleDeferWithEarlyReturn)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 3);
-    ASSERT_EQ(std::string(to_string(S, 0)), "defer3");
-    ASSERT_EQ(std::string(to_string(S, 1)), "defer2");
-    ASSERT_EQ(std::string(to_string(S, 2)), "defer1");
+    ASSERT_EQ(to_string(S, 0), "defer3");
+    ASSERT_EQ(to_string(S, 1), "defer2");
+    ASSERT_EQ(to_string(S, 2), "defer1");
 }
 
 TEST_F(DeferTest, DeferInIfScope)
@@ -305,10 +305,10 @@ TEST_F(DeferTest, DeferInIfScope)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 4);
-    ASSERT_EQ(std::string(to_string(S, 0)), "start");
-    ASSERT_EQ(std::string(to_string(S, 1)), "if-body");
-    ASSERT_EQ(std::string(to_string(S, 2)), "if-defer"); // Defer executes when if-scope ends
-    ASSERT_EQ(std::string(to_string(S, 3)), "end");
+    ASSERT_EQ(to_string(S, 0), "start");
+    ASSERT_EQ(to_string(S, 1), "if-body");
+    ASSERT_EQ(to_string(S, 2), "if-defer"); // Defer executes when if-scope ends
+    ASSERT_EQ(to_string(S, 3), "end");
 }
 
 TEST_F(DeferTest, DeferAccessingLocalVariables)
@@ -355,7 +355,7 @@ TEST_F(DeferTest, DeferWithFunctionCall)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 2);
-    ASSERT_EQ(std::string(to_string(S, 0)), "done");
+    ASSERT_EQ(to_string(S, 0), "done");
     ASSERT_TRUE(to_boolean(S, 1));
 }
 
@@ -414,7 +414,7 @@ TEST_F(DeferTest, BlockDeferExecutesOnException)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "block");
+    ASSERT_EQ(to_string(S, 0), "block");
 }
 
 TEST_F(DeferTest, DeferRunsForEveryFrameWhileUnwinding)
@@ -461,7 +461,7 @@ TEST_F(DeferTest, DeferErrorReplacesOriginalError)
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_FALSE(to_boolean(S, 0));
-    ASSERT_NE(std::string(to_string(S, 1)).find("from defer"), std::string::npos);
+    ASSERT_NE(to_string(S, 1).find("from defer"), std::string_view::npos);
 }
 
 TEST_F(DeferTest, DeferDoesNotDisturbMultipleReturnValues)
@@ -541,11 +541,11 @@ TEST_F(DeferTest, DeferInsideDefer)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 5);
-    ASSERT_EQ(std::string(to_string(S, 0)), "body");
-    ASSERT_EQ(std::string(to_string(S, 1)), "outer-start");
-    ASSERT_EQ(std::string(to_string(S, 2)), "inner-body");
-    ASSERT_EQ(std::string(to_string(S, 3)), "inner");
-    ASSERT_EQ(std::string(to_string(S, 4)), "outer-end");
+    ASSERT_EQ(to_string(S, 0), "body");
+    ASSERT_EQ(to_string(S, 1), "outer-start");
+    ASSERT_EQ(to_string(S, 2), "inner-body");
+    ASSERT_EQ(to_string(S, 3), "inner");
+    ASSERT_EQ(to_string(S, 4), "outer-end");
 }
 
 TEST_F(DeferTest, NestedBlockDefersRunInnermostFirstWhileUnwinding)
@@ -569,7 +569,7 @@ TEST_F(DeferTest, NestedBlockDefersRunInnermostFirstWhileUnwinding)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "CBF");
+    ASSERT_EQ(to_string(S, 0), "CBF");
 }
 
 TEST_F(DeferTest, BlockDeferThatAlreadyRanDoesNotRunAgainOnError)
@@ -591,7 +591,7 @@ TEST_F(DeferTest, BlockDeferThatAlreadyRanDoesNotRunAgainOnError)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "bBF");
+    ASSERT_EQ(to_string(S, 0), "bBF");
 }
 
 TEST_F(DeferTest, DeferStatementNeverReachedDoesNotRunOnError)
@@ -612,7 +612,7 @@ TEST_F(DeferTest, DeferStatementNeverReachedDoesNotRunOnError)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "F");
+    ASSERT_EQ(to_string(S, 0), "F");
 }
 
 TEST_F(DeferTest, LoopBlockDeferRunsOncePerEnteredIteration)
@@ -636,7 +636,7 @@ TEST_F(DeferTest, LoopBlockDeferRunsOncePerEnteredIteration)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "LLL");
+    ASSERT_EQ(to_string(S, 0), "LLL");
 }
 
 TEST_F(DeferTest, BlockLocalIsReadableByItsDeferWhileUnwinding)
@@ -657,7 +657,7 @@ TEST_F(DeferTest, BlockLocalIsReadableByItsDeferWhileUnwinding)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "kept");
+    ASSERT_EQ(to_string(S, 0), "kept");
 }
 
 TEST_F(DeferTest, ThrowingDeferDoesNotSkipRemainingDefers)
@@ -676,9 +676,9 @@ TEST_F(DeferTest, ThrowingDeferDoesNotSkipRemainingDefers)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 3);
-    ASSERT_EQ(std::string(to_string(S, 0)), "A");
+    ASSERT_EQ(to_string(S, 0), "A");
     ASSERT_FALSE(to_boolean(S, 1));
-    ASSERT_NE(std::string(to_string(S, 2)).find("boom"), std::string::npos);
+    ASSERT_NE(to_string(S, 2).find("boom"), std::string_view::npos);
 }
 
 TEST_F(DeferTest, ThrowingBlockDeferStillRunsOuterDefersWhileUnwinding)
@@ -699,9 +699,9 @@ TEST_F(DeferTest, ThrowingBlockDeferStillRunsOuterDefersWhileUnwinding)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 3);
-    ASSERT_EQ(std::string(to_string(S, 0)), "F");
+    ASSERT_EQ(to_string(S, 0), "F");
     ASSERT_FALSE(to_boolean(S, 1));
-    ASSERT_NE(std::string(to_string(S, 2)).find("from block defer"), std::string::npos);
+    ASSERT_NE(to_string(S, 2).find("from block defer"), std::string_view::npos);
 }
 
 TEST_F(DeferTest, ThrowingDeferWhileADeeperFrameUnwinds)
@@ -728,9 +728,9 @@ TEST_F(DeferTest, ThrowingDeferWhileADeeperFrameUnwinds)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 3);
-    ASSERT_EQ(std::string(to_string(S, 0)), "io");
+    ASSERT_EQ(to_string(S, 0), "io");
     ASSERT_FALSE(to_boolean(S, 1));
-    ASSERT_NE(std::string(to_string(S, 2)).find("block"), std::string::npos);
+    ASSERT_NE(to_string(S, 2).find("block"), std::string_view::npos);
 }
 
 TEST_F(DeferTest, DeferRunsWhenBreakLeavesTheScope)
@@ -754,7 +754,7 @@ TEST_F(DeferTest, DeferRunsWhenBreakLeavesTheScope)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "dd");
+    ASSERT_EQ(to_string(S, 0), "dd");
 }
 
 TEST_F(DeferTest, DeferRunsWhenContinueLeavesTheScope)
@@ -779,7 +779,7 @@ TEST_F(DeferTest, DeferRunsWhenContinueLeavesTheScope)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), ".cc.c");
+    ASSERT_EQ(to_string(S, 0), ".cc.c");
 }
 
 TEST_F(DeferTest, DeferInNestedBlockRunsAtBlockExit)
@@ -801,7 +801,7 @@ TEST_F(DeferTest, DeferInNestedBlockRunsAtBlockExit)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "ainnerb");
+    ASSERT_EQ(to_string(S, 0), "ainnerb");
 }
 
 TEST_F(DeferTest, DeferInForBodyRunsEveryIteration)
@@ -820,7 +820,7 @@ TEST_F(DeferTest, DeferInForBodyRunsEveryIteration)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 1);
-    ASSERT_EQ(std::string(to_string(S, 0)), "012");
+    ASSERT_EQ(to_string(S, 0), "012");
 }
 
 TEST_F(DeferTest, BreakInsideDeferBodyIsRejected)
@@ -892,10 +892,10 @@ TEST_F(DeferTest, MultipleNestedScopes)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 4);
-    ASSERT_EQ(std::string(to_string(S, 0)), "L3");
-    ASSERT_EQ(std::string(to_string(S, 1)), "L2");
-    ASSERT_EQ(std::string(to_string(S, 2)), "L1");
-    ASSERT_EQ(std::string(to_string(S, 3)), "L0");
+    ASSERT_EQ(to_string(S, 0), "L3");
+    ASSERT_EQ(to_string(S, 1), "L2");
+    ASSERT_EQ(to_string(S, 2), "L1");
+    ASSERT_EQ(to_string(S, 3), "L0");
 }
 
 TEST_F(DeferTest, DeferWithTableAccess)
@@ -923,7 +923,7 @@ TEST_F(DeferTest, DeferWithTableAccess)
 
     ASSERT_NO_THROW(run_script(code));
     ASSERT_EQ(get_top(S), 2);
-    ASSERT_EQ(std::string(to_string(S, 0)), "test.txt");
+    ASSERT_EQ(to_string(S, 0), "test.txt");
     ASSERT_TRUE(to_boolean(S, 1));
 }
 

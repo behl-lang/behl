@@ -7,16 +7,30 @@
 #    include "jit/jit_compiler.hpp"
 #    include "jit/x86/emitter_x86.hpp"
 
+#    include "common/vector.hpp"
+
 #    include <cstdint>
 #    include <utility>
-#    include <vector>
 
 namespace behl
 {
     class CodegenX86
     {
     public:
-        CodegenX86() = default;
+        explicit CodegenX86(State* state)
+            : e_(state)
+            , last_pos_(state)
+            , fuse_load_(state)
+            , loop_header_(state)
+            , var_reg_(state)
+            , var_reg2_(state)
+            , var_f64_(state)
+            , slots_(state)
+            , label_states_(state)
+            , guard_slots_(state)
+            , state_(state)
+        {
+        }
 
         JitEntry generate(State* S, const CgProgram& program);
 
@@ -33,7 +47,13 @@ namespace behl
         struct LabelState
         {
             bool recorded;
-            std::vector<std::pair<int32_t, SlotState>> entries;
+            AutoVector<std::pair<int32_t, SlotState>> entries;
+
+            explicit LabelState(State* state)
+                : recorded(false)
+                , entries(state)
+            {
+            }
         };
 
         void compute_liveness(const CgProgram& program);
@@ -73,15 +93,16 @@ namespace behl
         Label label(uint32_t id) const noexcept;
 
         X86Emitter e_;
-        std::vector<uint32_t> last_pos_;
-        std::vector<bool> fuse_load_;
-        std::vector<bool> loop_header_;
-        std::vector<uint8_t> var_reg_;
-        std::vector<uint8_t> var_reg2_;
-        std::vector<bool> var_f64_;
-        std::vector<SlotState> slots_;
-        std::vector<LabelState> label_states_;
-        std::vector<std::vector<int32_t>> guard_slots_;
+        AutoVector<uint32_t> last_pos_;
+        AutoVector<bool> fuse_load_;
+        AutoVector<bool> loop_header_;
+        AutoVector<uint8_t> var_reg_;
+        AutoVector<uint8_t> var_reg2_;
+        AutoVector<bool> var_f64_;
+        AutoVector<SlotState> slots_;
+        AutoVector<LabelState> label_states_;
+        AutoVector<AutoVector<int32_t>> guard_slots_;
+        State* state_{};
         const CgProgram* program_{};
         uint32_t cur_index_{};
         bool cache_enabled_{};

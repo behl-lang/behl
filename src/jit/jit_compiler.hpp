@@ -5,8 +5,9 @@
 #include "vm/bytecode.hpp"
 
 #include <behl/types.hpp>
+#include "common/vector.hpp"
+
 #include <cstdint>
-#include <vector>
 
 namespace behl
 {
@@ -82,12 +83,17 @@ namespace behl
 
     struct CgProgram
     {
-        std::vector<CgOp> ops;
+        explicit CgProgram(State* state)
+            : ops(state)
+        {
+        }
+
+        AutoVector<CgOp> ops;
         uint32_t num_labels{};
         uint32_t num_vars{};
         bool allow_slot_cache{};
     };
 
-    bool jit_compile_proto(const GCProto* proto, CgProgram& out);
+    bool jit_compile_proto(State* S, const GCProto* proto, CgProgram& out);
 
 } // namespace behl

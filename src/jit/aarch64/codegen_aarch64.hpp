@@ -7,16 +7,27 @@
 #    include "jit/aarch64/emitter_aarch64.hpp"
 #    include "jit/jit_compiler.hpp"
 
+#    include "common/vector.hpp"
+
 #    include <cstdint>
 #    include <utility>
-#    include <vector>
 
 namespace behl
 {
     class CodegenAArch64
     {
     public:
-        CodegenAArch64() = default;
+        explicit CodegenAArch64(State* state)
+            : e_(state)
+            , last_pos_(state)
+            , var_reg_(state)
+            , var_f64_(state)
+            , slots_(state)
+            , label_states_(state)
+            , guard_slots_(state)
+            , state_(state)
+        {
+        }
 
         JitEntry generate(State* S, const CgProgram& program);
 
@@ -31,7 +42,13 @@ namespace behl
         struct LabelState
         {
             bool recorded;
-            std::vector<std::pair<int32_t, SlotState>> entries;
+            AutoVector<std::pair<int32_t, SlotState>> entries;
+
+            explicit LabelState(State* state)
+                : recorded(false)
+                , entries(state)
+            {
+            }
         };
 
         void compute_liveness(const CgProgram& program);
@@ -66,12 +83,13 @@ namespace behl
         A64Label label(uint32_t id) const noexcept;
 
         A64Emitter e_;
-        std::vector<uint32_t> last_pos_;
-        std::vector<uint8_t> var_reg_;
-        std::vector<bool> var_f64_;
-        std::vector<SlotState> slots_;
-        std::vector<LabelState> label_states_;
-        std::vector<std::vector<int32_t>> guard_slots_;
+        AutoVector<uint32_t> last_pos_;
+        AutoVector<uint8_t> var_reg_;
+        AutoVector<bool> var_f64_;
+        AutoVector<SlotState> slots_;
+        AutoVector<LabelState> label_states_;
+        AutoVector<AutoVector<int32_t>> guard_slots_;
+        State* state_{};
         const CgProgram* program_{};
         uint32_t cur_index_{};
         bool cache_enabled_{};

@@ -28,7 +28,7 @@
 namespace behl
 {
 #define BEHL_JIT_WRAP(NAME, ...)                                                                                               \
-    uint32_t BEHL_CALLCONV NAME(State* S, uint32_t raw, uint32_t pc_next) noexcept                                                           \
+    uint32_t BEHL_CALLCONV NAME(State* S, uint32_t raw, uint32_t pc_next) noexcept                                             \
     {                                                                                                                          \
         const Instruction instr{ raw };                                                                                        \
         (void)instr;                                                                                                           \
@@ -46,10 +46,6 @@ namespace behl
         }                                                                                                                      \
     }
 
-    BEHL_JIT_WRAP(jit_op_loadi, handler_loadi(S, frame, instr.a(), instr.const_or_proto_index()))
-    BEHL_JIT_WRAP(jit_op_loadf, handler_loadf(S, frame, instr.a(), instr.const_or_proto_index()))
-    BEHL_JIT_WRAP(jit_op_loads, handler_loadk(S, frame, instr.a(), instr.const_or_proto_index()))
-    BEHL_JIT_WRAP(jit_op_loadnil, handler_loadnil(S, frame, instr.a(), instr.b()))
     BEHL_JIT_WRAP(jit_op_getglobal, handler_getglobal(S, frame, instr.a(), instr.const_or_proto_index()))
     BEHL_JIT_WRAP(jit_op_setglobal, handler_setglobal(S, frame, instr.a(), instr.const_or_proto_index()))
     BEHL_JIT_WRAP(jit_op_getupval, handler_getupval(S, frame, instr.a(), instr.b()))
@@ -212,7 +208,7 @@ namespace behl
 
 #undef BEHL_JIT_WRAP
 
-    int64_t BEHL_CALLCONV jit_i64_mod(int64_t a, int64_t b) noexcept
+    int64_t BEHL_CALLCONV jit_soft_i64_mod(int64_t a, int64_t b) noexcept
     {
         if (b == -1)
         {
@@ -221,7 +217,7 @@ namespace behl
         return a % b;
     }
 
-    uint64_t BEHL_CALLCONV jit_u64_div(uint64_t a, uint64_t b) noexcept
+    uint64_t BEHL_CALLCONV jit_soft_u64_div(uint64_t a, uint64_t b) noexcept
     {
         if (b == 0)
         {
@@ -333,10 +329,19 @@ namespace behl
 
             if (depth < kJitNestLimit)
             {
-                handler_call<true>(S, frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
+                handler_call<false>(S, frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
                 if (callstack.size() > depth)
                 {
-                    run_interpreter(S, depth - 1, depth);
+                    const GCProto* callee = callstack.back().proto;
+
+                    if (callee->jit_code != nullptr && S->jit_enabled && !S->debug.enabled)
+                    {
+                        jit_drive(S, callee, static_cast<uint32_t>(callstack.size()));
+                    }
+                    else if (!jit_try_execute(S, callee))
+                    {
+                        run_interpreter(S, depth - 1, depth);
+                    }
                 }
                 return callstack.back().pc;
             }

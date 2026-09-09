@@ -1008,8 +1008,13 @@ namespace behl
             cache_reset();
         }
 
-        label_states_.assign(program.num_labels, LabelState{});
-        guard_slots_.assign(program.num_labels, std::vector<int32_t>{});
+        label_states_.clear();
+        guard_slots_.clear();
+        for (uint32_t i = 0; i < program.num_labels; ++i)
+        {
+            label_states_.emplace_back(state_);
+            guard_slots_.emplace_back(AutoVector<int32_t>(state_));
+        }
 
         for (uint32_t i = 0; i < program.num_labels; ++i)
         {

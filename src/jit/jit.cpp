@@ -9,7 +9,6 @@
 
 #include <cstring>
 #include <utility>
-#include <vector>
 
 #if BEHL_JIT_SUPPORTED
 #    include "jit_compiler.hpp"
@@ -52,8 +51,14 @@ namespace behl
 
     struct JitArena
     {
-        std::vector<JitChunk> chunks;
-        std::vector<JitFreeBlock> free_blocks;
+        AutoVector<JitChunk> chunks;
+        AutoVector<JitFreeBlock> free_blocks;
+
+        explicit JitArena(State* state)
+            : chunks(state)
+            , free_blocks(state)
+        {
+        }
     };
 
     static constexpr size_t kJitChunkSize = 64 * 1024;
@@ -88,8 +93,7 @@ namespace behl
         {
             return nullptr;
         }
-        return reinterpret_cast<VirtualAlloc2Fn>(
-            reinterpret_cast<void (*)()>(GetProcAddress(kernelbase, "VirtualAlloc2")));
+        return reinterpret_cast<VirtualAlloc2Fn>(reinterpret_cast<void (*)()>(GetProcAddress(kernelbase, "VirtualAlloc2")));
     }();
 
     static void* jit_alloc_via_valloc2(uintptr_t base, size_t size) noexcept
@@ -107,8 +111,7 @@ namespace behl
         param.Type = MemExtendedParameterAddressRequirements;
         param.Pointer = &requirements;
 
-        return virtual_alloc2(
-            GetCurrentProcess(), nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE, &param, 1);
+        return virtual_alloc2(GetCurrentProcess(), nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE, &param, 1);
     }
 
     static void* jit_alloc_via_query_walk(uintptr_t base, size_t size) noexcept
@@ -218,15 +221,15 @@ namespace behl
     JitEntry jit_compile(State* S, const GCProto* proto)
     {
 #if BEHL_JIT_SUPPORTED
-        CgProgram program;
-        if (!jit_compile_proto(proto, program))
+        CgProgram program(S);
+        if (!jit_compile_proto(S, proto, program))
         {
             return nullptr;
         }
 #    if BEHL_JIT_X86
-        CodegenX86 backend;
+        CodegenX86 backend(S);
 #    else
-        CodegenAArch64 backend;
+        CodegenAArch64 backend(S);
 #    endif
         return backend.generate(S, program);
 #else
@@ -259,7 +262,7 @@ namespace behl
     {
         if (S->jit_arena == nullptr)
         {
-            S->jit_arena = mem_create<JitArena>(S);
+            S->jit_arena = mem_create<JitArena>(S, S);
         }
         auto& arena = *S->jit_arena;
 
@@ -395,36 +398,9 @@ namespace behl
         }
     };
 
-    bool jit_run_or_compile(State* S, const GCProto* proto)
+    bool jit_drive(State* S, const GCProto* proto, uint32_t entry_depth)
     {
 #if BEHL_JIT_SUPPORTED
-        if (S->call_stack.size() > kJitMaxCallDepth)
-        {
-            return false;
-        }
-
-        const JitDepthGuard depth_guard{ S };
-
-        if (proto->jit_code == nullptr)
-        {
-            if (proto->jit_declined)
-            {
-                return false;
-            }
-            JitEntry entry = jit_compile(S, proto);
-            if (entry == nullptr)
-            {
-                proto->jit_declined = true;
-                return false;
-            }
-            proto->jit_code = entry;
-        }
-
-        // Driver loop. A call from compiled code returns kJitResultCall with the
-        // callee frame pushed; running it here rather than from inside the call
-        // helper keeps one C frame for the whole behl call chain.
-        const auto entry_depth = static_cast<uint32_t>(S->call_stack.size());
-
         for (;;)
         {
             const uint32_t result = proto->jit_code(S);
@@ -470,6 +446,40 @@ namespace behl
                 }
             }
         }
+#else
+        (void)S;
+        (void)proto;
+        (void)entry_depth;
+        return false;
+#endif
+    }
+
+    bool jit_run_or_compile(State* S, const GCProto* proto)
+    {
+#if BEHL_JIT_SUPPORTED
+        if (S->call_stack.size() > kJitMaxCallDepth)
+        {
+            return false;
+        }
+
+        const JitDepthGuard depth_guard{ S };
+
+        if (proto->jit_code == nullptr)
+        {
+            if (proto->jit_declined)
+            {
+                return false;
+            }
+            JitEntry entry = jit_compile(S, proto);
+            if (entry == nullptr)
+            {
+                proto->jit_declined = true;
+                return false;
+            }
+            proto->jit_code = entry;
+        }
+
+        return jit_drive(S, proto, static_cast<uint32_t>(S->call_stack.size()));
 #else
         (void)S;
         (void)proto;

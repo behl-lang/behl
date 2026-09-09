@@ -13,10 +13,11 @@ namespace behl
 {
     struct GCProto;
 
-    // Split so the fields the interpreter dispatch loop and the JIT touch stay in
-    // one 16 byte record. The stride being a power of two also lets the JIT index
-    // the call stack with a shift instead of a multiply.
-    struct CallFrame
+#if defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable : 4324)
+#endif
+    struct alignas(8) CallFrame
     {
         const GCProto* proto;
         uint32_t pc;
@@ -39,9 +40,10 @@ namespace behl
 #    pragma GCC diagnostic pop
 #endif
     };
+#if defined(_MSC_VER)
+#    pragma warning(pop)
+#endif
 
-    // Everything a frame needs that is not on the dispatch or JIT hot path. Kept
-    // in State::call_headers, index for index with State::call_stack.
     struct CallFrameHeader
     {
         uint32_t top;

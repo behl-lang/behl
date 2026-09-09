@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstddef>
+#include "common/vector.hpp"
+
 #include <cstdint>
-#include <vector>
 
 namespace behl
 {
+    struct State;
     enum class A64Reg : uint8_t
     {
         x0 = 0,
@@ -81,7 +83,13 @@ namespace behl
 
     struct A64Emitter
     {
-        A64Emitter() = default;
+        explicit A64Emitter(State* state)
+            : buffer_(state)
+            , labels_(state)
+            , nodes_(state)
+            , node_prefix_(state)
+        {
+        }
 
         void mov(A64Reg dst, A64Reg src);
         void mov(A64Reg dst, uint64_t imm);
@@ -176,10 +184,10 @@ namespace behl
         uint32_t node_offset(uint32_t index) const noexcept;
         uint32_t label_offset(uint32_t id) const noexcept;
 
-        std::vector<uint32_t> buffer_;
-        std::vector<LabelState> labels_;
-        std::vector<PatchNode> nodes_;
-        std::vector<uint32_t> node_prefix_;
+        AutoVector<uint32_t> buffer_;
+        AutoVector<LabelState> labels_;
+        AutoVector<PatchNode> nodes_;
+        AutoVector<uint32_t> node_prefix_;
         bool relax_failed_{};
     };
 

@@ -18,14 +18,6 @@ namespace behl
                 return jit_op_defer;
             case OpCode::kOpSaveRet:
                 return jit_op_saveret;
-            case OpCode::kOpLoadI:
-                return jit_op_loadi;
-            case OpCode::kOpLoadF:
-                return jit_op_loadf;
-            case OpCode::kOpLoadS:
-                return jit_op_loads;
-            case OpCode::kOpLoadNil:
-                return jit_op_loadnil;
             case OpCode::kOpGetGlobal:
                 return jit_op_getglobal;
             case OpCode::kOpSetGlobal:
@@ -349,10 +341,15 @@ namespace behl
         class AbstractCompiler
         {
         public:
-            explicit AbstractCompiler(const GCProto* proto, CgProgram& out)
+            AbstractCompiler(State* state, const GCProto* proto, CgProgram& out)
                 : proto_(proto)
                 , out_(out)
                 , n_(proto->code.size())
+                , jump_targets_(state)
+                , pc_labels_(state)
+                , cold_blocks_(state)
+                , resume_pcs_(state)
+                , state_(state)
             {
             }
 
@@ -569,14 +566,15 @@ namespace behl
             const GCProto* proto_;
             CgProgram& out_;
             size_t n_;
-            std::vector<bool> jump_targets_;
-            std::vector<uint32_t> pc_labels_;
-            std::vector<ColdBlock> cold_blocks_;
+            AutoVector<bool> jump_targets_;
+            AutoVector<uint32_t> pc_labels_;
+            AutoVector<ColdBlock> cold_blocks_;
             uint32_t err_{};
             uint32_t ret_stub_{};
             uint32_t tail_stub_{};
             uint32_t call_stub_{};
-            std::vector<uint32_t> resume_pcs_;
+            AutoVector<uint32_t> resume_pcs_;
+            State* state_{};
             size_t entry_dispatch_at_{};
             bool failed_{};
         };
@@ -698,7 +696,7 @@ namespace behl
 
         bool AbstractCompiler::defer_return_dispatch(uint32_t block, uint32_t result)
         {
-            std::vector<uint32_t> targets;
+            AutoVector<uint32_t> targets(state_);
 
             for (uint32_t pc = 0; pc < n_; ++pc)
             {
@@ -853,8 +851,8 @@ namespace behl
                     {
                         return false;
                     }
-                    const auto ptr_bits =
-                        static_cast<int64_t>(reinterpret_cast<uintptr_t>(proto_->str_constants[kidx].get_string()));
+                    const auto ptr_bits = static_cast<int64_t>(
+                        reinterpret_cast<uintptr_t>(proto_->str_constants[kidx].get_string()));
                     store_tag(ins.a(), Type::kString);
                     const uint32_t v = const_i64(ptr_bits);
                     store(CgOpKind::kStoreI64, ins.a(), v);
@@ -869,16 +867,9 @@ namespace behl
                     {
                         return false;
                     }
-                    if (ins.b() < 8)
+                    for (int32_t i = first; i <= last; ++i)
                     {
-                        for (int32_t i = first; i <= last; ++i)
-                        {
-                            store_tag(i, Type::kNil);
-                        }
-                    }
-                    else
-                    {
-                        helper_call(jit_op_loadnil, ins.raw, pcn);
+                        store_tag(i, Type::kNil);
                     }
                     break;
                 }
@@ -1286,8 +1277,7 @@ namespace behl
                         return false;
                     }
                     const uint32_t r = helper_call(jit_op_defercall, ins.raw, pcn);
-                    pc_dispatch(r, { static_cast<int64_t>(pcn),
-                                       static_cast<int64_t>(proto_->defer_blocks[ins.a()].entry_pc) });
+                    pc_dispatch(r, { static_cast<int64_t>(pcn), static_cast<int64_t>(proto_->defer_blocks[ins.a()].entry_pc) });
                     break;
                 }
 
@@ -1330,7 +1320,8 @@ namespace behl
                 {
                     const int32_t off = ins.signed_offset();
                     const int64_t exit_pc = static_cast<int64_t>(pcn) + off + 1;
-                    if (!valid_pc(static_cast<int64_t>(pcn)) || !valid_pc(static_cast<int64_t>(pcn) + off) || !valid_pc(exit_pc))
+                    if (!valid_pc(static_cast<int64_t>(pcn)) || !valid_pc(static_cast<int64_t>(pcn) + off)
+                        || !valid_pc(exit_pc))
                     {
                         return false;
                     }
@@ -1724,11 +1715,9 @@ namespace behl
             tail_stub_ = new_label();
             call_stub_ = new_label();
 
-            {
-                // Reserve the entry dispatch slot; it is filled in after the body
-                // is compiled, once every resume pc is known.
-                entry_dispatch_at_ = out_.ops.size();
-            }
+            // Reserve the entry dispatch slot; it is filled in after the body
+            // is compiled, once every resume pc is known.
+            entry_dispatch_at_ = out_.ops.size();
 
             for (uint32_t pc = 0; pc < n_; ++pc)
             {
@@ -1748,7 +1737,7 @@ namespace behl
 
             if (!resume_pcs_.empty())
             {
-                std::vector<CgOp> dispatch;
+                AutoVector<CgOp> dispatch(state_);
 
                 CgOp load{};
                 load.kind = CgOpKind::kLoadFramePc;
@@ -1769,8 +1758,8 @@ namespace behl
                     dispatch.push_back(br);
                 }
 
-                out_.ops.insert(out_.ops.begin() + static_cast<ptrdiff_t>(entry_dispatch_at_), dispatch.begin(),
-                    dispatch.end());
+                out_.ops.insert(
+                    out_.ops.begin() + static_cast<ptrdiff_t>(entry_dispatch_at_), dispatch.begin(), dispatch.end());
             }
 
             bind(err_, true);
@@ -1787,9 +1776,9 @@ namespace behl
 
     } // namespace
 
-    bool jit_compile_proto(const GCProto* proto, CgProgram& out)
+    bool jit_compile_proto(State* S, const GCProto* proto, CgProgram& out)
     {
-        AbstractCompiler compiler(proto, out);
+        AbstractCompiler compiler(S, proto, out);
         if (!compiler.compile())
         {
             return false;

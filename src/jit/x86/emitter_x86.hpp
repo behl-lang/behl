@@ -1,11 +1,13 @@
 #pragma once
 
+#include "common/vector.hpp"
+
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 
 namespace behl
 {
+    struct State;
     enum class GpReg : uint8_t
     {
         r0 = 0,
@@ -82,8 +84,12 @@ namespace behl
 
     struct X86Emitter
     {
-        explicit X86Emitter(bool mode64 = sizeof(void*) == 8) noexcept
-            : mode64_(mode64)
+        explicit X86Emitter(State* state, bool mode64 = sizeof(void*) == 8) noexcept
+            : buffer_(state)
+            , labels_(state)
+            , nodes_(state)
+            , node_prefix_(state)
+            , mode64_(mode64)
         {
         }
 
@@ -210,10 +216,10 @@ namespace behl
         void emit_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
         void emit_modrm_mem(uint8_t reg, const Mem& mem);
 
-        std::vector<uint8_t> buffer_;
-        std::vector<LabelState> labels_;
-        std::vector<PatchNode> nodes_;
-        std::vector<uint32_t> node_prefix_;
+        AutoVector<uint8_t> buffer_;
+        AutoVector<LabelState> labels_;
+        AutoVector<PatchNode> nodes_;
+        AutoVector<uint32_t> node_prefix_;
         uint8_t relax_mode_{};
         bool relax_failed_{};
         bool mode64_;
