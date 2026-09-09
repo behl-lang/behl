@@ -14,9 +14,22 @@
 namespace behl
 {
 
+    struct State;
+
+    inline constexpr uint32_t kMaxDeferBlocks = 32;
+
+    struct DeferBlock
+    {
+        uint32_t entry_pc;
+        Reg link_reg;
+    };
+
     struct GCProto : GCObject
     {
         static constexpr auto kObjectType = GCType::kProto;
+
+        mutable uint32_t (*jit_code)(State*){};
+        mutable bool jit_declined{};
 
         Vector<Instruction> code;
         Vector<Value> str_constants;
@@ -26,6 +39,8 @@ namespace behl
         Vector<GCString*> upvalue_names;
         Vector<int> line_info;
         Vector<int> column_info;
+        Vector<DeferBlock> defer_blocks;
+        uint32_t defer_unwind_pc{};
         GCString* source_name;
         GCString* source_path; // Absolute path to source file for module resolution
         GCString* name;        // Function name for debugging

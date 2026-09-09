@@ -71,6 +71,7 @@ endif()
 
 set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_call.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_internal.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_global.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_load.cpp
@@ -92,6 +93,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/hash_map.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/hash_set.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/print.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/print.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/string.hpp
@@ -119,10 +121,25 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_string.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_table.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gc/gco_userdata.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/codegen_aarch64.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/codegen_aarch64.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/emitter_aarch64.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/aarch64/emitter_aarch64.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_core.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_fs.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_gc.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_jit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_math.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_os.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_process.cpp
@@ -163,6 +180,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_controlflow.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_debug.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_detail.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_handlers.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_load.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_metatable.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_operands.hpp
@@ -240,63 +258,67 @@ endif()
 # Tests
 if(BEHL_BUILD_TESTS)
     set(BEHL_TEST_SOURCES
-        tests/main.cpp
-        tests/api_tests.cpp
-        tests/bitwise_tests.cpp
-        tests/callstack_tests.cpp
-        tests/cfunction_tests.cpp
-        tests/compare_tests.cpp
-        tests/const_tests.cpp
-        tests/controflow_tests.cpp
-        tests/debug_tests.cpp
-        tests/defer_tests.cpp
-        tests/edge_case_tests.cpp
-        tests/error_tests.cpp
-        tests/format_tests.cpp
-        tests/string_format_tests.cpp
-        tests/function_tests.cpp
-        tests/hash_map_tests.cpp
-        tests/gc_list_tests.cpp
-        tests/gc_stress_tests.cpp
-        tests/gc_tests.cpp
-        tests/lexer_tests.cpp
-        tests/load_tests.cpp
-        tests/logical_operator_tests.cpp
-        tests/metatable_tests.cpp
-        tests/module_tests.cpp
-        tests/multireturn_tests.cpp
-        tests/numeric_tests.cpp
-        tests/numeric_literal_tests.cpp
-        tests/integer_wrapping_tests.cpp
-        tests/operator_tests.cpp
-        tests/parser_tests.cpp
-        tests/pcall_tests.cpp
-        tests/pinning_tests.cpp
-        tests/process_tests.cpp
-        tests/recursion_tests.cpp
-        tests/register_tests.cpp
-        tests/regression_tests.cpp
-        tests/table_tests.cpp
-        tests/tonumber_tests.cpp
-        tests/tostring_tests.cpp
-        tests/typecheck_tests.cpp
-        tests/userdata_tests.cpp
-        tests/varargs_tests.cpp
-        tests/variable_tests.cpp
-        tests/vector_tests.cpp
-        tests/while_loop_tests.cpp
-        tests/scoping_tests.cpp
-        tests/operator_precedence_tests.cpp
-        tests/closure_tests.cpp
-        tests/loop_tests.cpp
-        tests/optimizations_tests.cpp
-        tests/table_construction_tests.cpp
+        src/tests/main.cpp
+        src/tests/api_tests.cpp
+        src/tests/bitwise_tests.cpp
+        src/tests/callstack_tests.cpp
+        src/tests/cfunction_tests.cpp
+        src/tests/compare_tests.cpp
+        src/tests/concat_tests.cpp
+        src/tests/const_tests.cpp
+        src/tests/controflow_tests.cpp
+        src/tests/debug_tests.cpp
+        src/tests/defer_tests.cpp
+        src/tests/edge_case_tests.cpp
+        src/tests/error_tests.cpp
+        src/tests/format_tests.cpp
+        src/tests/string_format_tests.cpp
+        src/tests/string_key_tests.cpp
+        src/tests/function_tests.cpp
+        src/tests/hash_map_tests.cpp
+        src/tests/jit_unwind_tests.cpp
+        src/tests/hash_set_tests.cpp
+        src/tests/gc_list_tests.cpp
+        src/tests/gc_stress_tests.cpp
+        src/tests/gc_tests.cpp
+        src/tests/lexer_tests.cpp
+        src/tests/load_tests.cpp
+        src/tests/logical_operator_tests.cpp
+        src/tests/metatable_tests.cpp
+        src/tests/module_tests.cpp
+        src/tests/multireturn_tests.cpp
+        src/tests/numeric_tests.cpp
+        src/tests/numeric_literal_tests.cpp
+        src/tests/integer_wrapping_tests.cpp
+        src/tests/operator_tests.cpp
+        src/tests/parser_tests.cpp
+        src/tests/pcall_tests.cpp
+        src/tests/pinning_tests.cpp
+        src/tests/process_tests.cpp
+        src/tests/recursion_tests.cpp
+        src/tests/register_tests.cpp
+        src/tests/regression_tests.cpp
+        src/tests/table_tests.cpp
+        src/tests/tonumber_tests.cpp
+        src/tests/tostring_tests.cpp
+        src/tests/typecheck_tests.cpp
+        src/tests/userdata_tests.cpp
+        src/tests/varargs_tests.cpp
+        src/tests/variable_tests.cpp
+        src/tests/vector_tests.cpp
+        src/tests/while_loop_tests.cpp
+        src/tests/scoping_tests.cpp
+        src/tests/operator_precedence_tests.cpp
+        src/tests/closure_tests.cpp
+        src/tests/loop_tests.cpp
+        src/tests/optimizations_tests.cpp
+        src/tests/table_construction_tests.cpp
     )
 
     add_executable(behl_tests)
     set_target_properties(behl_tests PROPERTIES FOLDER "tests")
     target_sources(behl_tests PRIVATE ${BEHL_TEST_SOURCES})
-    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/tests PREFIX "tests" FILES ${BEHL_TEST_SOURCES})
+    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src/tests PREFIX "tests" FILES ${BEHL_TEST_SOURCES})
 
     target_include_directories(behl_tests
         PRIVATE
@@ -344,18 +366,18 @@ endif()
 # Benchmarks
 if(BEHL_BUILD_BENCHMARKS AND NOT EMSCRIPTEN)
     set(BENCHMARK_SOURCES
-        benchmarks/lexer_benchmarks.cpp
-        benchmarks/parser_benchmarks.cpp
-        benchmarks/semantic_benchmarks.cpp
-        benchmarks/compiler_benchmarks.cpp
-        benchmarks/scriptcall_benchmarks.cpp
+        src/benchmarks/lexer_benchmarks.cpp
+        src/benchmarks/parser_benchmarks.cpp
+        src/benchmarks/semantic_benchmarks.cpp
+        src/benchmarks/compiler_benchmarks.cpp
+        src/benchmarks/scriptcall_benchmarks.cpp
     )
 
     add_executable(benchmarks)
     set_target_properties(benchmarks PROPERTIES FOLDER "benchmarks")
 
     target_sources(benchmarks PRIVATE ${BENCHMARK_SOURCES})
-    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks PREFIX "benchmarks" FILES ${BENCHMARK_SOURCES})
+    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src/benchmarks PREFIX "benchmarks" FILES ${BENCHMARK_SOURCES})
 
     target_include_directories(benchmarks
         PRIVATE

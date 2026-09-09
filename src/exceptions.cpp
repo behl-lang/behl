@@ -1,22 +1,24 @@
 #include "behl/exceptions.hpp"
 
 #include "common/format.hpp"
+#include "gc/gco_string.hpp"
 
 namespace behl
 {
     std::string SourceLocation::to_string() const
     {
+        const std::string_view name = filename != nullptr ? filename->view() : std::string_view{};
         if (line > 0 && column > 0)
         {
-            return behl::format("{}:{}:{}", filename, line, column);
+            return behl::format("{}:{}:{}", name, line, column);
         }
         else if (line > 0)
         {
-            return behl::format("{}:{}", filename, line);
+            return behl::format("{}:{}", name, line);
         }
         else
         {
-            return filename;
+            return std::string(name);
         }
     }
 
@@ -33,17 +35,18 @@ namespace behl
 
     std::string BehlException::format_message(std::string_view type, std::string_view message, const SourceLocation& location)
     {
-        if (!location.filename.empty() && location.line > 0 && location.column > 0)
+        const std::string_view name = location.filename != nullptr ? location.filename->view() : std::string_view{};
+        if (!name.empty() && location.line > 0 && location.column > 0)
         {
-            return behl::format("{}({},{}): {}: {}", location.filename, location.line, location.column, type, message);
+            return behl::format("{}({},{}): {}: {}", name, location.line, location.column, type, message);
         }
-        else if (!location.filename.empty() && location.line > 0)
+        else if (!name.empty() && location.line > 0)
         {
-            return behl::format("{}({}): {}: {}", location.filename, location.line, type, message);
+            return behl::format("{}({}): {}: {}", name, location.line, type, message);
         }
-        else if (!location.filename.empty())
+        else if (!name.empty())
         {
-            return behl::format("{}: {}: {}", location.filename, type, message);
+            return behl::format("{}: {}: {}", name, type, message);
         }
         else
         {

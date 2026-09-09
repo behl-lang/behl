@@ -2,6 +2,8 @@
 
 #include "gc_types.hpp"
 
+#include <cstdint>
+
 namespace behl
 {
 
@@ -9,6 +11,10 @@ namespace behl
     {
         GCType type{};
         GCColor color{};
+
+        // Only strings use this; it sits in padding that already existed, so
+        // GCObject stays 32 bytes and the pointer offsets below are unchanged.
+        uint32_t str_hash{};
 
         GCObject* next{};
         GCObject* prev{};

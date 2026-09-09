@@ -268,6 +268,7 @@ namespace behl
     BEHL_API void load_lib_core(State* S);    // Core functions (print, typeof, tonumber, tostring, etc.)
     BEHL_API void load_lib_table(State* S);   // Table manipulation functions
     BEHL_API void load_lib_gc(State* S);      // Garbage collector controls
+    BEHL_API void load_lib_jit(State* S);     // JIT compiler controls
     BEHL_API void load_lib_debug(State* S);   // Debug utilities
     BEHL_API void load_lib_math(State* S);    // Math functions
     BEHL_API void load_lib_os(State* S);      // OS functions (time, exit, etc.)

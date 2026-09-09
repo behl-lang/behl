@@ -19,7 +19,8 @@ namespace behl
     {
         if (!frame.proto)
         {
-            return SourceLocation("<native>");
+            static constexpr GCString native{ true, "<native>" };
+            return SourceLocation(&native);
         }
 
         int line = 0;
@@ -37,10 +38,7 @@ namespace behl
             }
         }
 
-        std::string source = !frame.proto->source_name || frame.proto->source_name->size() == 0
-            ? "<script>"
-            : std::string(frame.proto->source_name->view());
-        return SourceLocation(source, line, column);
+        return SourceLocation(frame.proto->source_name, line, column);
     }
 
     BEHL_FORCEINLINE
@@ -68,6 +66,20 @@ namespace behl
         const Value& const_val = proto->fp_constants[index];
         assert(const_val.is_fp() && "get_fp_constant: constant is not a number");
         return const_cast<Value&>(const_val);
+    }
+
+    // The header sits at the same index as its frame in State::call_stack.
+    BEHL_FORCEINLINE
+    CallFrameHeader& frame_header(State* S, const CallFrame& frame) noexcept
+    {
+        return S->call_headers[static_cast<size_t>(&frame - S->call_stack.data())];
+    }
+
+    BEHL_FORCEINLINE
+    void pop_call_frame(State* S) noexcept
+    {
+        S->call_stack.pop_back();
+        S->call_headers.pop_back();
     }
 
     BEHL_FORCEINLINE

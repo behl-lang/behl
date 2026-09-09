@@ -10,6 +10,7 @@
 #include "gco_string.hpp"
 #include "gco_table.hpp"
 #include "gco_userdata.hpp"
+#include "jit/jit.hpp"
 #include "memory.hpp"
 #include "state.hpp"
 #include "vm/bytecode.hpp"
@@ -276,6 +277,8 @@ namespace behl
                     new_obj->storage.heap.len = total_size_required;
                 }
 
+                new_obj->str_hash = string_hash32(new_obj->view());
+
                 gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
                 return new_obj;
@@ -313,6 +316,8 @@ namespace behl
             new_obj->storage.heap.len = total_size_required;
             new_obj->storage.heap.flag = GCString::kHeapFlag;
         }
+
+        new_obj->str_hash = string_hash32(new_obj->view());
 
         gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -490,6 +495,12 @@ namespace behl
 
     static void destroy_proto(State* S, GCProto* proto)
     {
+        if (proto->jit_code != nullptr)
+        {
+            jit_release(S, proto->jit_code);
+            proto->jit_code = nullptr;
+        }
+
         proto->code.destroy(S);
         proto->str_constants.destroy(S);
         proto->int_constants.destroy(S);
@@ -498,6 +509,7 @@ namespace behl
         proto->upvalue_names.destroy(S);
         proto->line_info.destroy(S);
         proto->column_info.destroy(S);
+        proto->defer_blocks.destroy(S);
 
         mem_destroy(S, proto);
     }
@@ -753,6 +765,13 @@ namespace behl
         // Mark roots
         gc_log("Marking roots...");
 
+        // Results parked by SAVERET are only reachable from here.
+        gc_log("Marking saved return values ({} entries)", S->ret_scratch.size());
+        for (size_t i = 0; i < S->ret_scratch.size(); ++i)
+        {
+            mark_value(S, S->ret_scratch[i]);
+        }
+
         // Module paths
         gc_log("Marking module paths ({} paths)", S->module_paths.size());
         for (size_t i = 0; i < S->module_paths.size(); ++i)
@@ -774,6 +793,19 @@ namespace behl
         {
             mark_gray(S, it->first);
             mark_value(S, it->second);
+        }
+
+        gc_log("Marking breakpoints ({} entries)", S->debug.breakpoints.size());
+        for (const Breakpoint& bp : S->debug.breakpoints)
+        {
+            if (bp.file != nullptr)
+            {
+                mark_gray(S, bp.file);
+            }
+        }
+        if (S->debug.last_file != nullptr)
+        {
+            mark_gray(S, S->debug.last_file);
         }
 
         // Globals table
@@ -1056,7 +1088,7 @@ namespace behl
                                 for (size_t f = 0; f < S->call_stack.size(); ++f)
                                 {
                                     const auto& frame = S->call_stack[f];
-                                    gc_log("!!!   Frame {}: base={}, top={}", f, frame.base, frame.top);
+                                    gc_log("!!!   Frame {}: base={}, top={}", f, frame.base, S->call_headers[f].top);
                                 }
                             }
                         }

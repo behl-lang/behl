@@ -1,10 +1,11 @@
 #pragma once
 
+#include "common/hash_set.hpp"
 #include "common/string.hpp"
+#include "gc/gco_string.hpp"
 
 #include <behl/debug.hpp>
 #include <functional>
-#include <unordered_set>
 
 namespace behl
 {
@@ -31,12 +32,24 @@ namespace behl
 
     struct Breakpoint
     {
-        std::string file; // Empty means any file
+        GCString* file; // Null means any file
         int line;
 
         bool operator==(const Breakpoint& other) const
         {
-            return line == other.line && file == other.file;
+            if (line != other.line)
+            {
+                return false;
+            }
+            if (file == other.file)
+            {
+                return true;
+            }
+            if (file == nullptr || other.file == nullptr)
+            {
+                return false;
+            }
+            return GCString::equals(file, other.file);
         }
     };
 
@@ -45,7 +58,7 @@ namespace behl
         size_t operator()(const Breakpoint& bp) const noexcept
         {
             size_t h1 = std::hash<int>{}(bp.line);
-            size_t h2 = std::hash<std::string>{}(std::string(bp.file));
+            size_t h2 = bp.file != nullptr ? GCStringHash{}(bp.file) : 0;
             return h1 ^ (h2 << 1);
         }
     };
@@ -56,7 +69,7 @@ namespace behl
         bool paused = false;
 
         // Breakpoints
-        std::unordered_set<Breakpoint, BreakpointHash> breakpoints;
+        HashSet<Breakpoint, BreakpointHash> breakpoints;
 
         // Pending command from debugger
         DebugCommand pending_command = DebugCommand::None;
@@ -68,11 +81,13 @@ namespace behl
         StepMode step_mode = StepMode::None;
         int step_target_depth = -1;
         int last_line = -1;
-        std::string last_file;
+        GCString* last_file{};
 
         // Track if we just completed a step (to emit event)
         bool step_completed = false;
         DebugEvent pending_event = DebugEvent::Paused;
     };
+
+    static_assert(std::is_standard_layout_v<DebugState>);
 
 } // namespace behl

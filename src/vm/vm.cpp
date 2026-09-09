@@ -19,258 +19,28 @@
 #include "vm_controlflow.hpp"
 #include "vm_debug.hpp"
 #include "vm_detail.hpp"
+#include "vm_handlers.hpp"
 #include "vm_load.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
 #include "vm_table.hpp"
 #include "vm_upvalues.hpp"
 
+#include "jit/jit.hpp"
+
 #include <behl/exceptions.hpp>
 #include <cassert>
 
 namespace behl
 {
-    //////////////////////////////////////////////////////////////////////////
-    // Other
-
-    BEHL_FORCEINLINE
-    static void handler_len(State* S, CallFrame& frame, Reg a, Reg b)
-    {
-        const Value& val = get_register(S, frame, b);
-
-        // Try __len metamethod first for tables
-        if (val.is_table_like())
-        {
-            auto result = try_unary_metamethod<MetaMethodType::kLen>(S, val);
-            if (result.has_value())
-            {
-                get_register(S, frame, a) = result;
-                return;
-            }
-        }
-
-        // No metamethod, use default length
-        if (val.is_table())
-        {
-            const auto* table_data = val.get_table();
-
-            size_t len = 0;
-            for (; len < table_data->array.size(); ++len)
-            {
-                if (table_data->array[len].is_nil())
-                {
-                    break;
-                }
-            }
-            get_register(S, frame, a).emplace<Integer>(static_cast<Integer>(len));
-        }
-        else if (val.is_string())
-        {
-            auto* str_data = val.get_string();
-            get_register(S, frame, a).emplace<Integer>(static_cast<Integer>(str_data->size()));
-        }
-        else
-        {
-            throw TypeError("attempt to get length of a non-table/non-string value", get_current_location(frame));
-        }
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_tostring(State* S, CallFrame& frame, Reg a, Reg b)
-    {
-        const Value& val = get_register(S, frame, b);
-
-        Value result = vm_tostring(S, val, frame);
-        get_register(S, frame, a) = result;
-
-        // TOSTRING produces exactly 1 result in register a, so top = base + a + 1
-        frame.top = frame.base + a + 1;
-
-        gc_step(S);
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_tonumber(State* S, CallFrame& frame, Reg a, Reg b)
-    {
-        const Value& val = get_register(S, frame, b);
-
-        Value result = vm_tonumber(S, val);
-        get_register(S, frame, a) = result;
-
-        // TONUMBER produces exactly 1 result in register a, so top = base + a + 1
-        frame.top = frame.base + a + 1;
-    }
-
-    ///////////////////////////////////////////////////////////////////////////
-    // For Loop
-
-    BEHL_FORCEINLINE
-    static void handler_forprep(State* S, CallFrame& frame, Reg a, int32_t offset)
-    {
-        Value& init = get_register(S, frame, a);
-        Value& limit = get_register(S, frame, a + 1);
-        Value& step = get_register(S, frame, a + 2);
-
-        if (init.is_integer() && limit.is_integer() && step.is_integer())
-        {
-            // Counted loop: prove the types and compute the trip count once so
-            // FORLOOP only decrements a counter per iteration. The count lives
-            // in the internal register the compiler reserves at a+3.
-            const auto i = init.get_integer();
-            const auto l = limit.get_integer();
-            const auto s = step.get_integer();
-
-            if ((s > 0) ? (i > l) : (i < l))
-            {
-                // Zero iterations: skip past the FORLOOP instruction
-                frame.pc += static_cast<uint32_t>(offset) + 1;
-                return;
-            }
-
-            using UInt = std::make_unsigned_t<Integer>;
-            UInt remaining;
-            if (s > 0)
-            {
-                remaining = (static_cast<UInt>(l) - static_cast<UInt>(i)) / static_cast<UInt>(s);
-            }
-            else if (s < 0)
-            {
-                remaining = (static_cast<UInt>(i) - static_cast<UInt>(l)) / (0 - static_cast<UInt>(s));
-            }
-            else
-            {
-                // A zero step never advances; mirror the old endless behavior
-                remaining = ~static_cast<UInt>(0);
-            }
-
-            get_register(S, frame, a + 3).emplace<Integer>(static_cast<Integer>(remaining));
-
-            // Fall through into the body with the loop variable at its start value
-            return;
-        }
-
-        if (init.is_numeric() && step.is_numeric())
-        {
-            const FP i = init.is_integer() ? static_cast<FP>(init.get_integer()) : init.get_fp();
-            const FP s = step.is_integer() ? static_cast<FP>(step.get_integer()) : step.get_fp();
-            init.emplace<FP>(i - s);
-
-            // FORLOOP distinguishes counted loops by an integer step, so float
-            // loops always carry a float step
-            step.emplace<FP>(s);
-            if (limit.is_integer())
-            {
-                limit.emplace<FP>(static_cast<FP>(limit.get_integer()));
-            }
-
-            frame.pc += static_cast<uint32_t>(offset);
-            return;
-        }
-
-        throw TypeError("numeric for-loop requires number initial and step values", get_current_location(frame));
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_forloop(State* S, CallFrame& frame, Reg a, int32_t offset)
-    {
-        Value& idx = get_register(S, frame, a);
-        const Value& limit = get_register(S, frame, a + 1);
-        const Value& step = get_register(S, frame, a + 2);
-
-        if (step.is_integer())
-        {
-            // Counted loop: FORPREP proved idx/limit/step are integers and left
-            // the remaining iteration count in the internal register at a+3
-            Value& count = get_register(S, frame, a + 3);
-            using UInt = std::make_unsigned_t<Integer>;
-            const auto remaining = static_cast<UInt>(count.get_integer());
-
-            // The index keeps advancing on the final iteration so it ends on
-            // the first failing value, same as the generic path
-            idx.update(int_op::add(idx.get_integer(), step.get_integer()));
-
-            if (remaining != 0)
-            {
-                count.update(static_cast<Integer>(remaining - 1));
-                frame.pc += static_cast<uint32_t>(offset - 1);
-            }
-            return;
-        }
-
-        if (idx.is_numeric() && limit.is_numeric() && step.is_numeric())
-        {
-            const FP i = idx.is_integer() ? static_cast<FP>(idx.get_integer()) : idx.get_fp();
-            const FP l = limit.is_integer() ? static_cast<FP>(limit.get_integer()) : limit.get_fp();
-            const FP s = step.is_integer() ? static_cast<FP>(step.get_integer()) : step.get_fp();
-
-            const FP new_idx = i + s;
-            idx.emplace<FP>(new_idx);
-
-            const bool continue_loop = (s > 0) ? (new_idx <= l) : (new_idx >= l);
-            if (continue_loop)
-            {
-                frame.pc += static_cast<uint32_t>(offset - 1);
-            }
-
-            return;
-        }
-
-        throw TypeError("numeric for-loop requires number index/limit/step values", get_current_location(frame));
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_closure(State* S, CallFrame& frame, Reg a, uint32_t proto_idx)
-    {
-        assert(proto_idx < frame.proto->protos.size() && "handler_closure: proto index out of bounds");
-        GCProto* nested_proto = frame.proto->protos[proto_idx];
-        assert(nested_proto != nullptr && "handler_closure: nested proto is null");
-
-        auto* obj = gc_new_closure(S, nested_proto);
-        assert(obj != nullptr);
-
-        get_register(S, frame, a).emplace<GCClosure*>(obj);
-
-        auto& upvalue_indices = obj->upvalue_indices;
-
-        for (size_t i = 0; i < nested_proto->upvalue_names.size(); ++i)
-        {
-            const Instruction& cap = frame.proto->code[frame.pc++];
-
-            std::invoke([&]() {
-                if (cap.op() == OpCode::kOpMove)
-                {
-                    const auto stack_idx = frame.base + cap.b();
-                    const auto uv_idx = find_or_create_upvalue(S, stack_idx);
-
-                    upvalue_indices.push_back(S, uv_idx);
-                    return;
-                }
-
-                if (cap.op() == OpCode::kOpGetUpval)
-                {
-                    const auto& parent_upvalue_indices = S->stack[frame.base].get_closure()->upvalue_indices;
-                    assert(cap.b() < parent_upvalue_indices.size() && "handler_closure : upvalue index out of bounds");
-                    const auto uv_idx = parent_upvalue_indices[cap.b()];
-                    upvalue_indices.push_back(S, uv_idx);
-                    return;
-                }
-
-                assert(false && "Invalid upvalue capture instruction");
-            });
-        }
-
-        gc_validate_on_stack(S, obj);
-        gc_step(S);
-    }
-
     BEHL_FORCEINLINE
     static void handler_varargprep(State* S, CallFrame& frame, uint8_t num_params)
     {
         // Calculate how many extra args were passed
-        const auto total_args = frame.top - frame.base - 1;
+        const auto total_args = frame_header(S, frame).top - frame.base - 1;
         const auto num_varargs = (total_args > num_params) ? (total_args - num_params) : 0;
 
-        frame.num_varargs = num_varargs;
+        frame_header(S, frame).num_varargs = num_varargs;
 
         if (num_varargs == 0)
         {
@@ -306,13 +76,13 @@ namespace behl
         // expects results, which stays at the original call site even though the locals
         // base moves past the varargs.
         frame.base = new_base;
-        frame.top = new_base + 1 + num_params;
+        frame_header(S, frame).top = new_base + 1 + num_params;
     }
 
     BEHL_FORCEINLINE
     static void handler_vararg(State* S, CallFrame& frame, Reg a, uint8_t num)
     {
-        const auto num_varargs = frame.num_varargs;
+        const auto num_varargs = frame_header(S, frame).num_varargs;
 
         // Varargs are at: base - num_varargs ... base - 1
         const auto vararg_start = frame.base - num_varargs;
@@ -334,7 +104,7 @@ namespace behl
                 S->stack[dest + i] = S->stack[vararg_start + i];
             }
 
-            frame.top = target_end;
+            frame_header(S, frame).top = target_end;
             return;
         }
 
@@ -359,7 +129,7 @@ namespace behl
     BEHL_FORCEINLINE
     static void handler_varargexpand(State* S, CallFrame& frame, Reg table_reg, uint32_t start_idx)
     {
-        const auto num_varargs = frame.num_varargs;
+        const auto num_varargs = frame_header(S, frame).num_varargs;
 
         // Get the table
         Value& table = get_register(S, frame, table_reg);
@@ -400,25 +170,9 @@ namespace behl
     }
 
     template<bool TDebugMode>
-    inline static void execute_closure(State* S, const Value& func_value, int args, int nresults)
+    inline static void interpreter_loop(State* S, uint32_t entry_call_depth, uint32_t stop_depth)
     {
         auto& callstack = S->call_stack;
-
-        auto* closure_data = func_value.get_closure();
-        assert(closure_data != nullptr);
-        assert(closure_data->proto != nullptr && "Closure proto should not be nullptr");
-        assert(!closure_data->proto->code.empty() && "Empty function proto (compiler bug)");
-
-        const auto entry_call_depth = static_cast<uint32_t>(callstack.size());
-        const auto num_args = static_cast<uint32_t>(args);
-        const auto new_base = static_cast<uint32_t>(S->stack.size()) - num_args - 1;
-
-        assert(new_base < S->stack.size() && "Frame base out of range");
-
-        const auto* proto = closure_data->proto;
-        const auto nres = (nresults == kMultRet) ? static_cast<uint8_t>(kMultRet) : static_cast<uint8_t>(nresults);
-        setup_call_frame(S, proto, new_base, num_args, new_base, nres);
-        prepare_call(S, proto->max_stack_size, new_base, num_args);
 
         CallFrame* frame = &callstack.back();
         const Instruction* code = frame->proto->code.data();
@@ -523,46 +277,46 @@ namespace behl
                     break;
 
                 case OpCode::kOpAdd:
-                    handler_add(S, *frame, instr.a(), instr.b(), instr.c());
+                    handler_add_fast(S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpSub:
-                    handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpMul:
-                    handler_numeric<MetaMethodType::kMul, false, NumericMulOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kMul, false, NumericMulOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpDiv:
-                    handler_numeric<MetaMethodType::kDiv, true, NumericDivOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kDiv, true, NumericDivOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpMod:
-                    handler_mod(S, *frame, instr.a(), instr.b(), instr.c());
+                    handler_mod_fast(S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpPow:
-                    handler_numeric<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
 
                 case OpCode::kOpBand:
-                    handler_bitwise<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpBor:
-                    handler_bitwise<MetaMethodType::kBOr, BitwiseOrOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBOr, BitwiseOrOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpBxor:
-                    handler_bitwise<MetaMethodType::kBXor, BitwiseXorOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBXor, BitwiseXorOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpShl:
-                    handler_bitwise<MetaMethodType::kBShl, BitwiseShlOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBShl, BitwiseShlOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpShr:
-                    handler_bitwise<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
 
@@ -591,6 +345,77 @@ namespace behl
                         S, *frame, instr.a(), instr.b(), instr.signed_immediate_9bit());
                     break;
 
+                case OpCode::kOpMMSub:
+                    handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMMul:
+                    handler_numeric<MetaMethodType::kMul, false, NumericMulOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMDiv:
+                    handler_numeric<MetaMethodType::kDiv, true, NumericDivOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMMod:
+                    handler_mod(S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMPow:
+                    handler_numeric<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMBand:
+                    handler_bitwise<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMBor:
+                    handler_bitwise<MetaMethodType::kBOr, BitwiseOrOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMBxor:
+                    handler_bitwise<MetaMethodType::kBXor, BitwiseXorOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMShl:
+                    handler_bitwise<MetaMethodType::kBShl, BitwiseShlOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMShr:
+                    handler_bitwise<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpDefer:
+                    handler_defer(S, *frame, instr.a());
+                    break;
+                case OpCode::kOpDeferCall:
+                    handler_defercall(S, *frame, instr.a());
+                    break;
+                case OpCode::kOpEndDefer:
+                    handler_enddefer(S, *frame, instr.a());
+                    break;
+                case OpCode::kOpSaveRet:
+                    handler_saveret(S, *frame, instr.a(), instr.b());
+                    break;
+                case OpCode::kOpRetSaved:
+                    if (!handler_retsaved(S, *frame, entry_call_depth))
+                    {
+                        return;
+                    }
+                    if (callstack.size() <= stop_depth)
+                    {
+                        return;
+                    }
+                    --frame;
+                    code = frame->proto->code.data();
+                    break;
+                case OpCode::kOpEndUnwind:
+                    return;
+                case OpCode::kOpMMAdd:
+                    handler_add(S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpAddKS:
+                    handler_add_ks(S, *frame, instr.a(), instr.b(), instr.small_const_index());
+                    break;
                 case OpCode::kOpAddKI:
                     handler_numeric<MetaMethodType::kAdd, false, NumericAddOp, operand_reg, operand_const_int>(
                         S, *frame, instr.a(), instr.b(), instr.small_const_index());
@@ -627,8 +452,7 @@ namespace behl
                     handler_dec_upvalue(S, *frame, instr.a());
                     break;
                 case OpCode::kOpAddLocal:
-                    handler_numeric<MetaMethodType::kAdd, false, NumericAddOp, operand_reg, operand_reg>(
-                        S, *frame, instr.a(), instr.a(), instr.b());
+                    handler_add(S, *frame, instr.a(), instr.a(), instr.b());
                     break;
 
                 case OpCode::kOpEq:
@@ -743,12 +567,20 @@ namespace behl
                     {
                         return;
                     }
+                    if (callstack.size() <= stop_depth)
+                    {
+                        return;
+                    }
                     frame = &callstack.back();
                     code = frame->proto->code.data();
                     break;
 
                 case OpCode::kOpReturn:
                     if (!handler_return(S, *frame, instr.a(), instr.b(), entry_call_depth))
+                    {
+                        return;
+                    }
+                    if (callstack.size() <= stop_depth)
                     {
                         return;
                     }
@@ -761,12 +593,20 @@ namespace behl
                     {
                         return;
                     }
+                    if (callstack.size() <= stop_depth)
+                    {
+                        return;
+                    }
                     --frame;
                     code = frame->proto->code.data();
                     break;
 
                 case OpCode::kOpReturn1:
                     if (!handler_return1(S, *frame, instr.a(), entry_call_depth))
+                    {
+                        return;
+                    }
+                    if (callstack.size() <= stop_depth)
                     {
                         return;
                     }
@@ -793,6 +633,40 @@ namespace behl
 #endif
             }
         }
+    }
+
+    template<bool TDebugMode>
+    inline static void execute_closure(State* S, const Value& func_value, int args, int nresults)
+    {
+        auto& callstack = S->call_stack;
+
+        auto* closure_data = func_value.get_closure();
+        assert(closure_data != nullptr);
+        assert(closure_data->proto != nullptr && "Closure proto should not be nullptr");
+        assert(!closure_data->proto->code.empty() && "Empty function proto (compiler bug)");
+
+        const auto entry_call_depth = static_cast<uint32_t>(callstack.size());
+        const auto num_args = static_cast<uint32_t>(args);
+        const auto new_base = static_cast<uint32_t>(S->stack.size()) - num_args - 1;
+
+        assert(new_base < S->stack.size() && "Frame base out of range");
+
+        const auto* proto = closure_data->proto;
+        const auto nres = (nresults == kMultRet) ? static_cast<uint8_t>(kMultRet) : static_cast<uint8_t>(nresults);
+        setup_call_frame(S, proto, new_base, num_args, new_base, nres);
+        prepare_call(S, proto->max_stack_size, new_base, num_args);
+
+#if BEHL_JIT_SUPPORTED
+        if constexpr (!TDebugMode)
+        {
+            if (jit_try_execute(S, proto))
+            {
+                return;
+            }
+        }
+#endif
+
+        interpreter_loop<TDebugMode>(S, entry_call_depth, entry_call_depth);
     }
 
     bool perform_call(State* S, int nargs, int nresults, size_t func_pos)
@@ -825,6 +699,58 @@ namespace behl
         }
 
         return true;
+    }
+
+    void run_interpreter(State* S, uint32_t entry_call_depth, uint32_t stop_depth)
+    {
+        interpreter_loop<false>(S, entry_call_depth, stop_depth);
+    }
+
+    void truncate_call_frames(State* S, size_t count)
+    {
+        S->call_stack.resize(S, count);
+        S->call_headers.resize(S, count);
+    }
+
+    void unwind_call_frames(State* S, size_t target_depth, std::exception_ptr& pending)
+    {
+        while (S->call_stack.size() > target_depth)
+        {
+            const auto index = static_cast<uint32_t>(S->call_stack.size() - 1);
+
+            for (;;)
+            {
+                CallFrame& frame = S->call_stack[index];
+
+                if (frame.proto == nullptr || frame_header(S, frame).defer_mask == 0 || frame.proto->defer_unwind_pc == 0)
+                {
+                    break;
+                }
+
+                frame.pc = frame.proto->defer_unwind_pc;
+                S->stack.resize(S, frame.base + frame.proto->max_stack_size);
+
+                try
+                {
+                    if (S->debug.enabled) [[unlikely]]
+                    {
+                        interpreter_loop<true>(S, index, index);
+                    }
+                    else
+                    {
+                        interpreter_loop<false>(S, index, index);
+                    }
+                    break;
+                }
+                catch (...)
+                {
+                    pending = std::current_exception();
+                    unwind_call_frames(S, static_cast<size_t>(index) + 1, pending);
+                }
+            }
+
+            truncate_call_frames(S, index);
+        }
     }
 
 } // namespace behl

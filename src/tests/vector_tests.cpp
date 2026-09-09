@@ -323,3 +323,145 @@ TEST_F(VectorTest, EraseRangeNonTrivialType)
 
     EXPECT_EQ(NonTrivial::construct_count, NonTrivial::destruct_count);
 }
+
+TEST_F(VectorTest, AssignFillsAndReplaces)
+{
+    Vector<int> vec;
+    vec.init(state, 0);
+
+    vec.push_back(state, 9);
+    vec.push_back(state, 8);
+
+    vec.assign(state, 4, 7);
+
+    ASSERT_EQ(vec.size(), 4);
+    for (size_t i = 0; i < vec.size(); ++i)
+    {
+        ASSERT_EQ(vec[i], 7);
+    }
+
+    vec.assign(state, 0, 1);
+    ASSERT_EQ(vec.size(), 0);
+    ASSERT_TRUE(vec.empty());
+
+    vec.destroy(state);
+}
+
+TEST_F(VectorTest, AssignGrowsBeyondCapacity)
+{
+    Vector<int> vec;
+    vec.init(state, 2);
+
+    vec.assign(state, 64, 3);
+
+    ASSERT_EQ(vec.size(), 64);
+    ASSERT_GE(vec.capacity(), 64u);
+    ASSERT_EQ(vec[0], 3);
+    ASSERT_EQ(vec[63], 3);
+
+    vec.destroy(state);
+}
+
+TEST_F(VectorTest, InsertRangeInMiddle)
+{
+    Vector<int> vec;
+    vec.init(state, 0);
+
+    for (int i = 0; i < 4; ++i)
+    {
+        vec.push_back(state, i); // 0 1 2 3
+    }
+
+    const int extra[] = { 90, 91, 92 };
+    auto it = vec.insert(state, vec.begin() + 2, extra, extra + 3);
+
+    ASSERT_EQ(vec.size(), 7);
+    ASSERT_EQ(*it, 90);
+
+    const int expected[] = { 0, 1, 90, 91, 92, 2, 3 };
+    for (size_t i = 0; i < vec.size(); ++i)
+    {
+        ASSERT_EQ(vec[i], expected[i]);
+    }
+
+    vec.destroy(state);
+}
+
+TEST_F(VectorTest, InsertRangeAtBeginAndEnd)
+{
+    Vector<int> vec;
+    vec.init(state, 0);
+
+    vec.push_back(state, 5);
+
+    const int head[] = { 1, 2 };
+    vec.insert(state, vec.begin(), head, head + 2);
+
+    const int tail[] = { 7, 8 };
+    vec.insert(state, vec.end(), tail, tail + 2);
+
+    const int expected[] = { 1, 2, 5, 7, 8 };
+    ASSERT_EQ(vec.size(), 5);
+    for (size_t i = 0; i < vec.size(); ++i)
+    {
+        ASSERT_EQ(vec[i], expected[i]);
+    }
+
+    vec.destroy(state);
+}
+
+TEST_F(VectorTest, InsertRangeEmptyIsNoOp)
+{
+    Vector<int> vec;
+    vec.init(state, 0);
+
+    vec.push_back(state, 1);
+    vec.push_back(state, 2);
+
+    const int none[] = { 0 };
+    auto it = vec.insert(state, vec.begin() + 1, none, none);
+
+    ASSERT_EQ(vec.size(), 2);
+    ASSERT_EQ(*it, 2);
+    ASSERT_EQ(vec[0], 1);
+    ASSERT_EQ(vec[1], 2);
+
+    vec.destroy(state);
+}
+
+TEST_F(VectorTest, InsertRangeIntoEmptyVectorGrows)
+{
+    Vector<int> vec;
+    vec.init(state, 0);
+
+    const int values[] = { 4, 5, 6, 7, 8, 9, 10, 11 };
+    vec.insert(state, vec.begin(), values, values + 8);
+
+    ASSERT_EQ(vec.size(), 8);
+    ASSERT_GE(vec.capacity(), 8u);
+    for (size_t i = 0; i < vec.size(); ++i)
+    {
+        ASSERT_EQ(vec[i], values[i]);
+    }
+
+    vec.destroy(state);
+}
+
+TEST_F(VectorTest, AutoVectorAssignAndInsertRange)
+{
+    AutoVector<int> vec(state);
+
+    vec.assign(3, 2);
+    ASSERT_EQ(vec.size(), 3);
+    ASSERT_EQ(vec[2], 2);
+
+    const int extra[] = { 40, 41 };
+    vec.insert(vec.begin() + 1, extra, extra + 2);
+
+    const int expected[] = { 2, 40, 41, 2, 2 };
+    ASSERT_EQ(vec.size(), 5);
+    for (size_t i = 0; i < vec.size(); ++i)
+    {
+        ASSERT_EQ(vec[i], expected[i]);
+    }
+}

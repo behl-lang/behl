@@ -1,15 +1,36 @@
 #pragma once
 
 #include "common/string.hpp"
+#include "platform.hpp"
 #include "gc_object.hpp"
 
 #include <array>
 #include <behl/config.hpp>
 #include <bit>
+#include <cassert>
 #include <cstdint>
+#include <string_view>
 
 namespace behl
 {
+
+    // Both a GCString key and a string_view lookup must derive the stored hash
+    // identically, or transparent lookups silently miss.
+    BEHL_FORCEINLINE static size_t string_key_hash(uint32_t h) noexcept
+    {
+        uint64_t k = h;
+        k ^= k >> 33;
+        k *= 0xff51afd7ed558ccdULL;
+        k ^= k >> 33;
+        k *= 0xc4ceb9fe1a85ec53ULL;
+        k ^= k >> 33;
+        return static_cast<size_t>(k);
+    }
+
+    BEHL_FORCEINLINE static uint32_t string_hash32(std::string_view sv) noexcept
+    {
+        return static_cast<uint32_t>(StringHash{}(sv));
+    }
 
     struct GCString : GCObject
     {
@@ -46,6 +67,21 @@ namespace behl
         } storage{};
 
         static_assert(sizeof(Storage) == 32, "GCString::Storage must be 32 bytes");
+
+        constexpr GCString() = default;
+
+        constexpr GCString([[maybe_unused]] bool sso, std::string_view str) noexcept
+            : GCObject(GCType::kString)
+        {
+            assert(sso && str.size() < kSSOCapacity);
+            storage.sso = {};
+            for (size_t i = 0; i < str.size(); ++i)
+            {
+                storage.sso.buffer[i] = str[i];
+            }
+            storage.sso.buffer[str.size()] = '\0';
+            storage.sso.len = static_cast<uint8_t>(str.size());
+        }
 
         [[nodiscard]] constexpr bool is_sso() const noexcept
         {
@@ -178,16 +214,14 @@ namespace behl
     {
         using is_transparent = void;
 
-        StringHash _hasher;
-
         size_t operator()(const GCString* str) const noexcept
         {
-            return _hasher(str->view());
+            return string_key_hash(str->str_hash);
         }
 
         size_t operator()(const std::string_view str) const noexcept
         {
-            return _hasher(str);
+            return string_key_hash(string_hash32(str));
         }
     };
 

@@ -37,6 +37,12 @@ namespace behl
     }
 
     BEHL_FORCEINLINE
+    const Value& operand_const_str(State*, CallFrame& frame, ConstIndex k)
+    {
+        return get_string_constant(frame.proto, k);
+    }
+
+    BEHL_FORCEINLINE
     Value operand_imm(State*, CallFrame&, int32_t imm)
     {
         return Value(static_cast<Integer>(imm));

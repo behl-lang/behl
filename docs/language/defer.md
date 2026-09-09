@@ -94,6 +94,85 @@ validate(-5);
 // Output: Invalid input, Validation complete
 ```
 
+The return expression is evaluated first, then the defers run, then the function returns. A defer therefore cannot change the value that was already computed, but it does observe the state left behind by the return expression:
+
+```javascript
+function test() {
+    let x = 1;
+    defer x = 99;
+    return x;
+}
+// Returns 1, not 99
+```
+
+Multiple return values, including forwarded calls like `return f();` and `return ...;`, are preserved across the defers.
+
+## Break and Continue
+
+`break` and `continue` also leave the scope, so the defers above the loop's scope run before the jump:
+
+```javascript
+function test() {
+    for (let i = 0; i < 3; i++) {
+        defer print("defer-" + tostring(i));
+        if (i == 1) {
+            break;
+        }
+        print("loop-" + tostring(i));
+    }
+}
+// Output: loop-0, defer-0, defer-1
+```
+
+## Errors and Unwinding
+
+Defers run while an error unwinds, in the frame that raised and in every frame above it:
+
+```javascript
+function inner() {
+    defer print("inner cleanup");
+    error("boom");
+}
+
+function outer() {
+    defer print("outer cleanup");
+    inner();
+}
+
+let ok, err = pcall(outer);
+// Output: inner cleanup, outer cleanup
+// ok is false, err is "boom"
+```
+
+Defer does not catch the error, it only runs on the way out. Use `pcall` to handle it.
+
+If a defer itself raises, its error replaces the one that was propagating, matching Go. The frame's remaining defers still run:
+
+```javascript
+function test() {
+    defer print("still runs");
+    defer error("from defer");
+    error("original");
+}
+
+let ok, err = pcall(test);
+// Output: still runs
+// err is "from defer"
+```
+
+## Restrictions
+
+`break` and `continue` are not allowed inside a defer body. The loop they would target has already finished compiling by the time the body is emitted, so this is a compile error:
+
+```javascript
+while (i < 3) {
+    defer { break; }  // Error: break statement outside of loop
+    i = i + 1;
+}
+```
+
+A single function may contain at most 32 `defer` statements. Exceeding that is a compile error, `too many defer statements in one function`. The limit is on `defer` statements written in the function body, not on how many times they execute, so a defer inside a loop counts once.
+
 ## Nested Scopes
 
 Defers are scope-aware and execute at their enclosing scope's end:
@@ -136,12 +215,13 @@ function test() {
 
 ```javascript
 function processFile(filename) {
-    let file = os.open(filename, "r");
-    defer os.close(file);
+    let file = fs.open(filename, "r");
+    defer file:close();
     
     // Process file
-    // File is automatically closed even if error occurs
-    return file.read("*a");
+    // File is closed on the normal return and while an error unwinds
+    let contents, bytes = file:read(1024);
+    return contents;
 }
 ```
 
@@ -175,10 +255,12 @@ function measureTime() {
 
 1. **LIFO Order**: Defers execute in reverse order of declaration
 2. **Final Values**: Variables have their final values when defer executes
-3. **Scope-Based**: Executes at scope end (function or block)
-4. **Return Safety**: Runs before return statements
-5. **No Error Recovery**: Defer does NOT catch errors - use `pcall` for error handling
-6. **Performance**: Minimal overhead - suitable for performance-critical code
+3. **Scope-Based**: Executes at scope end (function or block), including on `break` and `continue`
+4. **Return Safety**: Runs after the return expression is evaluated and before the function returns, leaving the returned values untouched
+5. **Runs While Unwinding**: Defers still run when an error propagates, in the raising frame and every frame above it
+6. **No Error Recovery**: Defer does NOT catch errors - use `pcall` for error handling. A defer that raises replaces the propagating error
+7. **Restrictions**: No `break` or `continue` inside a defer body, and at most 32 `defer` statements per function
+8. **Performance**: Minimal overhead - a defer that never executes costs nothing at runtime
 
 ## Defer vs Try-Finally
 

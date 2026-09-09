@@ -243,7 +243,7 @@ function fib(n) {
 
 ### Automatic Detection
 
-The optimization fires when a call expression's function position is a bare identifier whose name matches the name of the enclosing function. Detection is by name spelling only — see *Caveat* below. The flag is set by semantic analysis (`semantics_pass.cpp`) and acted on by the compiler (which skips emitting the function load) and the VM (which uses the current frame's proto directly instead of reading the stack slot).
+The optimization fires when a call expression's function position is a bare identifier whose name matches the name of the enclosing function. Detection is by name spelling only - see *Caveat* below. The flag is set by semantic analysis (`semantics_pass.cpp`) and acted on by the compiler (which skips emitting the function load) and the VM (which uses the current frame's proto directly instead of reading the stack slot).
 
 Both regular calls and tail calls are optimized.
 
@@ -646,3 +646,34 @@ When optimizing code:
 1. **Profile first** - Identify bottlenecks before optimizing
 2. **Measure impact** - Compare before/after performance
 3. **Verify correctness** - Ensure optimizations don't change behavior
+
+---
+
+## JIT Compilation
+
+### Description
+
+In addition to the compile-time optimizations above, Behl includes a baseline just-in-time compiler that translates functions to native machine code on their first call. Primitive operations (arithmetic, comparisons, loads, stores, loops) are compiled inline with fast paths for integers and floats; structural operations (table access, calls, closure creation) call into the runtime directly, eliminating interpreter dispatch overhead either way.
+
+The JIT preserves interpreter semantics exactly: the value stack and program counter stay consistent, so errors, stack traces, debugging, and garbage collection behave identically to interpreted execution. Functions using features the JIT does not support simply run in the interpreter.
+
+### Supported Platforms
+
+- **x86-64** - Windows, Linux, macOS
+- **x86 (32-bit)** - Windows, Linux
+- **AArch64** - Windows, Linux, macOS (Apple Silicon)
+
+On other architectures the JIT is inactive and all code runs in the interpreter.
+
+### Runtime Control
+
+The [jit module](stdlib/jit) exposes runtime control:
+
+```cpp
+const jit = import("jit");
+
+jit.status();          // true when active
+jit.optimized(func);   // has this function been compiled?
+jit.off();             // disable and clear the code cache
+jit.on();              // re-enable
+```
