@@ -420,16 +420,21 @@ namespace behl
             proto->jit_code = entry;
         }
 
+        // Driver loop. A call from compiled code returns kJitResultCall with the
+        // callee frame pushed; running it here rather than from inside the call
+        // helper keeps one C frame for the whole behl call chain.
+        const auto entry_depth = static_cast<uint32_t>(S->call_stack.size());
+
         for (;;)
         {
             const uint32_t result = proto->jit_code(S);
-            if (result == kJitResultOk)
-            {
-                return true;
-            }
             if (result == kJitResultError)
             {
                 std::rethrow_exception(std::exchange(S->jit_exception, nullptr));
+            }
+            if (result == kJitResultOk && S->call_stack.size() < entry_depth)
+            {
+                return true;
             }
 
             proto = S->call_stack.back().proto;
@@ -449,7 +454,21 @@ namespace behl
 
             const auto size = static_cast<uint32_t>(S->call_stack.size());
             run_interpreter(S, jit_return_entry_depth(S, S->call_stack.back()), size - 1);
-            return true;
+            if (S->call_stack.size() < entry_depth)
+            {
+                return true;
+            }
+            proto = S->call_stack.back().proto;
+            if (proto->jit_code == nullptr)
+            {
+                // The resumed caller is not compiled; let the interpreter finish it.
+                const auto caller_size = static_cast<uint32_t>(S->call_stack.size());
+                run_interpreter(S, jit_return_entry_depth(S, S->call_stack.back()), caller_size - 1);
+                if (S->call_stack.size() < entry_depth)
+                {
+                    return true;
+                }
+            }
         }
 #else
         (void)S;

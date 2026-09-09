@@ -274,6 +274,7 @@ namespace behl
                 case CgOpKind::kAddI64Imm:
                 case CgOpKind::kBranchI64Imm:
                 case CgOpKind::kBranchVarEqU32:
+                case CgOpKind::kLoadFramePc:
                     last_pos_[op.var] = i;
                     break;
                 case CgOpKind::kAddI64:
@@ -318,6 +319,7 @@ namespace behl
             case CgOpKind::kAddI64Imm:
             case CgOpKind::kBranchI64Imm:
             case CgOpKind::kBranchVarEqU32:
+            case CgOpKind::kLoadFramePc:
             case CgOpKind::kCvtSlotToF64:
                 if (last_pos_[op.var] == index)
                 {
@@ -921,6 +923,19 @@ namespace behl
                         e_.cmpw(gp(op.var), kScratch);
                     }
                     e_.bcond(A64Cond::eq, label(op.label));
+                }
+                break;
+
+            case CgOpKind::kLoadFramePc:
+                alloc_i64(op.var);
+                if (!failed_)
+                {
+                    e_.ldr(A64Reg::x0, mem(kStateReg, State::call_stack_data_offset()));
+                    e_.ldr(A64Reg::x1, mem(kStateReg, State::call_stack_size_offset()));
+                    e_.sub(A64Reg::x1, A64Reg::x1, 1);
+                    e_.mov32(A64Reg::x2, static_cast<uint32_t>(sizeof(CallFrame)));
+                    e_.madd(A64Reg::x0, A64Reg::x1, A64Reg::x2, A64Reg::x0);
+                    e_.ldrw(gp(op.var), mem(A64Reg::x0, CallFrame::pc_offset()));
                 }
                 break;
 

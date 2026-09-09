@@ -12,6 +12,10 @@ namespace behl
     {
         switch (op)
         {
+            case OpCode::kOpDefer:
+                return jit_op_defer;
+            case OpCode::kOpSaveRet:
+                return jit_op_saveret;
             case OpCode::kOpLoadI:
                 return jit_op_loadi;
             case OpCode::kOpLoadF:
@@ -205,6 +209,9 @@ namespace behl
             case OpCode::kOpReturn:
             case OpCode::kOpReturn0:
             case OpCode::kOpReturn1:
+            case OpCode::kOpRetSaved:
+            case OpCode::kOpEndDefer:
+            case OpCode::kOpEndUnwind:
             case OpCode::kOpJmp:
             case OpCode::kOpTailCall:
                 return false;
@@ -551,6 +558,7 @@ namespace behl
             }
 
             void pc_dispatch(uint32_t result, std::initializer_list<int64_t> candidates);
+            bool defer_return_dispatch(uint32_t block, uint32_t result);
             bool compile_op(uint32_t& pc, const Instruction& ins);
             void emit_cold_blocks();
             bool collect_jump_targets();
@@ -564,6 +572,9 @@ namespace behl
             uint32_t err_{};
             uint32_t ret_stub_{};
             uint32_t tail_stub_{};
+            uint32_t call_stub_{};
+            std::vector<uint32_t> resume_pcs_;
+            size_t entry_dispatch_at_{};
             bool failed_{};
         };
 
@@ -611,6 +622,16 @@ namespace behl
                     case OpCode::kOpTailCall:
                         mark(0);
                         break;
+                    case OpCode::kOpDeferCall:
+                    {
+                        if (ins.a() >= proto_->defer_blocks.size())
+                        {
+                            return false;
+                        }
+                        mark(pcn);
+                        mark(static_cast<int64_t>(proto_->defer_blocks[ins.a()].entry_pc));
+                        break;
+                    }
                     case OpCode::kOpClosure:
                     {
                         const uint32_t proto_idx = ins.const_or_proto_index();
@@ -670,6 +691,38 @@ namespace behl
                 branch_var_eq_u32(result, static_cast<uint32_t>(targets[i]), pc_labels_[static_cast<size_t>(targets[i])]);
             }
             jump(pc_labels_[static_cast<size_t>(targets[count - 1])]);
+        }
+
+        bool AbstractCompiler::defer_return_dispatch(uint32_t block, uint32_t result)
+        {
+            std::vector<uint32_t> targets;
+
+            for (uint32_t pc = 0; pc < n_; ++pc)
+            {
+                const Instruction ins = proto_->code[pc];
+                if (ins.op() != OpCode::kOpDeferCall || ins.a() != block)
+                {
+                    continue;
+                }
+                if (!valid_pc(static_cast<int64_t>(pc) + 1))
+                {
+                    return false;
+                }
+                targets.push_back(pc + 1);
+            }
+
+            if (targets.empty())
+            {
+                return false;
+            }
+
+            for (size_t i = 0; i + 1 < targets.size(); ++i)
+            {
+                branch_var_eq_u32(result, targets[i], pc_labels_[targets[i]]);
+            }
+            jump(pc_labels_[targets.back()]);
+
+            return true;
         }
 
         bool AbstractCompiler::compile_op(uint32_t& pc, const Instruction& ins)
@@ -1168,8 +1221,12 @@ namespace behl
                 }
 
                 case OpCode::kOpCall:
-                    helper_call(jit_op_call, ins.raw, pcn);
+                {
+                    const uint32_t r = helper_call(jit_op_call, ins.raw, pcn);
+                    branch_var_eq_u32(r, kJitCallPushed, call_stub_);
+                    resume_pcs_.push_back(pcn);
                     break;
+                }
 
                 case OpCode::kOpClosure:
                 {
@@ -1208,6 +1265,37 @@ namespace behl
                     helper_call(jit_op_return, ins.raw, pcn);
                     jump(ret_stub_);
                     break;
+
+                case OpCode::kOpRetSaved:
+                    helper_call(jit_op_retsaved, ins.raw, pcn);
+                    jump(ret_stub_);
+                    break;
+
+                case OpCode::kOpEndUnwind:
+                    helper_call(jit_op_endunwind, ins.raw, pcn);
+                    jump(err_);
+                    break;
+
+                case OpCode::kOpDeferCall:
+                {
+                    if (ins.a() >= proto_->defer_blocks.size())
+                    {
+                        return false;
+                    }
+                    const uint32_t r = helper_call(jit_op_defercall, ins.raw, pcn);
+                    pc_dispatch(r, { static_cast<int64_t>(pcn),
+                                       static_cast<int64_t>(proto_->defer_blocks[ins.a()].entry_pc) });
+                    break;
+                }
+
+                case OpCode::kOpEndDefer:
+                {
+                    if (!defer_return_dispatch(ins.a(), helper_call(jit_op_enddefer, ins.raw, pcn)))
+                    {
+                        return false;
+                    }
+                    break;
+                }
 
                 case OpCode::kOpReturn0:
                     helper_call(jit_op_return0, ins.raw, pcn);
@@ -1631,6 +1719,13 @@ namespace behl
             err_ = new_label();
             ret_stub_ = new_label();
             tail_stub_ = new_label();
+            call_stub_ = new_label();
+
+            {
+                // Reserve the entry dispatch slot; it is filled in after the body
+                // is compiled, once every resume pc is known.
+                entry_dispatch_at_ = out_.ops.size();
+            }
 
             for (uint32_t pc = 0; pc < n_; ++pc)
             {
@@ -1648,12 +1743,41 @@ namespace behl
                 return false;
             }
 
+            if (!resume_pcs_.empty())
+            {
+                std::vector<CgOp> dispatch;
+
+                CgOp load{};
+                load.kind = CgOpKind::kLoadFramePc;
+                load.var = new_var();
+                dispatch.push_back(load);
+
+                for (const uint32_t r : resume_pcs_)
+                {
+                    if (!valid_pc(static_cast<int64_t>(r)))
+                    {
+                        return false;
+                    }
+                    CgOp br{};
+                    br.kind = CgOpKind::kBranchVarEqU32;
+                    br.var = load.var;
+                    br.imm = static_cast<int64_t>(r);
+                    br.label = pc_labels_[r];
+                    dispatch.push_back(br);
+                }
+
+                out_.ops.insert(out_.ops.begin() + static_cast<ptrdiff_t>(entry_dispatch_at_), dispatch.begin(),
+                    dispatch.end());
+            }
+
             bind(err_, true);
             push(CgOpKind::kReturnResult).imm = kJitResultError;
             bind(ret_stub_, true);
             push(CgOpKind::kReturnResult).imm = kJitResultOk;
             bind(tail_stub_, true);
             push(CgOpKind::kReturnResult).imm = kJitResultTailCall;
+            bind(call_stub_, true);
+            push(CgOpKind::kReturnResult).imm = kJitResultCall;
 
             return true;
         }

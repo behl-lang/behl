@@ -41,12 +41,20 @@ namespace behl
     constexpr uint32_t kJitResultOk = 0;
     constexpr uint32_t kJitResultError = 1;
     constexpr uint32_t kJitResultTailCall = 2;
+    // A script frame was pushed by a call; the driver runs it and then re-enters
+    // this function at the saved pc instead of nesting a C frame per call.
+    constexpr uint32_t kJitResultCall = 3;
 
     constexpr uint32_t kJitError = 0xFFFFFFFFu;
     constexpr uint32_t kJitTailReplaced = 0xFFFFFFFEu;
     constexpr uint32_t kJitTailReturned = 0xFFFFFFFDu;
+    constexpr uint32_t kJitCallPushed = 0xFFFFFFFCu;
 
-    constexpr size_t kJitMaxCallDepth = 200;
+    // Nesting a C frame per behl call is faster (no driver round trip) but eats
+    // the C stack, so only do it while the call stack is shallow. Past this the
+    // call helper hands the frame to the driver, which runs it with a flat stack.
+    constexpr size_t kJitNestLimit = 150;
+    constexpr size_t kJitMaxCallDepth = 1000000;
 
     bool jit_supported() noexcept;
 

@@ -54,6 +54,7 @@ namespace behl
         kBranchF64,
         kBranchTruthy,
         kBranchVarEqU32,
+        kLoadFramePc,
         kHelperCall,
         kSyncFrame,
         kReturnResult,

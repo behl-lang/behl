@@ -65,6 +65,10 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_newtable, handler_newtable(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_setlist, handler_setlist(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_self, handler_self(S, frame, instr.a(), instr.b(), instr.c()))
+    BEHL_JIT_WRAP(jit_op_defer, handler_defer(frame, instr.a()))
+    BEHL_JIT_WRAP(jit_op_defercall, handler_defercall(S, frame, instr.a()))
+    BEHL_JIT_WRAP(jit_op_enddefer, handler_enddefer(S, frame, instr.a()))
+    BEHL_JIT_WRAP(jit_op_saveret, handler_saveret(S, frame, instr.a(), instr.b()))
     BEHL_JIT_WRAP(jit_op_add, handler_add(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_mmadd, handler_add(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_mmsub,
@@ -291,6 +295,31 @@ namespace behl
         }
     }
 
+    uint32_t BEHL_CALLCONV jit_op_retsaved(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    {
+        (void)raw;
+        try
+        {
+            CallFrame& frame = S->call_stack.back();
+            frame.pc = pc_next;
+            handler_retsaved(S, frame, jit_return_entry_depth(S, frame));
+            return 0;
+        }
+        catch (...)
+        {
+            S->jit_exception = std::current_exception();
+            return kJitError;
+        }
+    }
+
+    uint32_t BEHL_CALLCONV jit_op_endunwind(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    {
+        (void)raw;
+        (void)pc_next;
+        S->jit_exception = std::make_exception_ptr(RuntimeError("defer unwind chain reached from compiled code"));
+        return kJitError;
+    }
+
     uint32_t BEHL_CALLCONV jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
         const Instruction instr{ raw };
@@ -301,11 +330,24 @@ namespace behl
             frame.pc = pc_next;
 
             const auto depth = static_cast<uint32_t>(callstack.size());
-            handler_call(S, frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
+
+            if (depth < kJitNestLimit)
+            {
+                handler_call<true>(S, frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
+                if (callstack.size() > depth)
+                {
+                    run_interpreter(S, depth - 1, depth);
+                }
+                return callstack.back().pc;
+            }
+
+            handler_call<false>(S, frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
 
             if (callstack.size() > depth)
             {
-                run_interpreter(S, depth - 1, depth);
+                // Too deep to keep nesting: hand the frame to the driver so the
+                // C stack stays flat for the rest of the chain.
+                return kJitCallPushed;
             }
             return callstack.back().pc;
         }

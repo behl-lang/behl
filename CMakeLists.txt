@@ -272,8 +272,10 @@ if(BEHL_BUILD_TESTS)
         src/tests/error_tests.cpp
         src/tests/format_tests.cpp
         src/tests/string_format_tests.cpp
+        src/tests/string_key_tests.cpp
         src/tests/function_tests.cpp
         src/tests/hash_map_tests.cpp
+        src/tests/jit_unwind_tests.cpp
         src/tests/hash_set_tests.cpp
         src/tests/gc_list_tests.cpp
         src/tests/gc_stress_tests.cpp

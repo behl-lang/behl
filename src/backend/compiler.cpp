@@ -47,22 +47,48 @@ namespace behl
     {
         AutoVector<size_t> break_list;    // Positions of break JMP instructions to patch
         AutoVector<size_t> continue_list; // Positions of continue JMP instructions to patch
+        int32_t scope_level;              // Scope depth outside the loop body
 
-        LoopContext(State* S)
+        LoopContext(State* S, int32_t level)
             : break_list(S)
             , continue_list(S)
+            , scope_level(level)
         {
         }
     };
 
-    struct DeferInfo
+    struct ActiveDefer
     {
-        const AstNode* defer_body; // The body of the defer statement
-        int32_t scope_level;       // Track which scope this defer belongs to
+        Reg block;
+        int32_t scope_level;
 
-        DeferInfo(const AstNode* body, int32_t level)
-            : defer_body(body)
+        ActiveDefer(Reg block_index, int32_t level)
+            : block(block_index)
             , scope_level(level)
+        {
+        }
+    };
+
+    struct PendingDefer
+    {
+        const AstNode* body;
+        AutoVector<Local> visible;
+        Reg block;
+        Reg link_reg;
+        uint8_t freereg;
+        uint8_t min_freereg;
+        int32_t line;
+        int32_t column;
+
+        PendingDefer(State* state, const AstNode* defer_body, Reg block_index, Reg link)
+            : body(defer_body)
+            , visible(state)
+            , block(block_index)
+            , link_reg(link)
+            , freereg(0)
+            , min_freereg(0)
+            , line(1)
+            , column(1)
         {
         }
     };
@@ -76,7 +102,10 @@ namespace behl
         AutoVector<AutoVector<Local>> scopes;
         AutoVector<UpvalueInfo> upvalues;
         AutoVector<LoopContext> loop_stack; // Stack of loop contexts for break/continue
-        AutoVector<DeferInfo> defer_stack;  // Stack of defer statements (LIFO order)
+        AutoVector<ActiveDefer> active_defers; // Defers whose scope is still open (LIFO order)
+        AutoVector<PendingDefer> pending_defers;
+        uint32_t defer_count{};
+        size_t loop_floor{};
         AutoHashMap<std::string_view, size_t, StringHash, StringEq> upvalue_indices;
         int32_t lastline = 1;
         int32_t lastcolumn = 1;
@@ -92,7 +121,8 @@ namespace behl
             , scopes(state)
             , upvalues(state)
             , loop_stack(state)
-            , defer_stack(state)
+            , active_defers(state)
+            , pending_defers(state)
             , upvalue_indices(state)
         {
         }
@@ -222,7 +252,87 @@ namespace behl
     }
 
     struct VisitorAdapter;
-    static void emit_defers_for_scope(CompilerState& C, VisitorAdapter& visitor, int32_t target_scope_level);
+
+    static void emit_pending_defer_bodies(CompilerState& C, VisitorAdapter& visitor);
+
+    static void emit_defer_calls_above_scope(CompilerState& C, int32_t level)
+    {
+        for (size_t i = C.active_defers.size(); i-- > 0;)
+        {
+            if (C.active_defers[i].scope_level > level)
+            {
+                emit(C, make_op_defercall(C.active_defers[i].block), C.lastline);
+            }
+        }
+    }
+
+    static void emit_defer_calls_for_scope(CompilerState& C, int32_t target_scope_level)
+    {
+        for (size_t i = C.active_defers.size(); i-- > 0;)
+        {
+            if (C.active_defers[i].scope_level >= target_scope_level)
+            {
+                emit(C, make_op_defercall(C.active_defers[i].block), C.lastline);
+            }
+        }
+
+        while (!C.active_defers.empty() && C.active_defers.back().scope_level >= target_scope_level)
+        {
+            C.active_defers.pop_back();
+        }
+    }
+
+    static void emit_return_with_defers(CompilerState& C, Reg first, uint8_t count)
+    {
+        const bool run_defers = !C.active_defers.empty();
+
+        if (run_defers && count != 0)
+        {
+            emit(C, make_op_saveret(first, count), C.lastline);
+        }
+
+        if (run_defers)
+        {
+            for (size_t i = C.active_defers.size(); i-- > 0;)
+            {
+                emit(C, make_op_defercall(C.active_defers[i].block), C.lastline);
+            }
+        }
+
+        if (count == 0)
+        {
+            emit(C, make_op_return0(), C.lastline);
+        }
+        else if (run_defers)
+        {
+            emit(C, make_op_retsaved(), C.lastline);
+        }
+        else if (count == 1)
+        {
+            emit(C, make_op_return1(first), C.lastline);
+        }
+        else
+        {
+            emit(C, make_op_return(first, count), C.lastline);
+        }
+    }
+
+    static void emit_defer_unwind_chain(CompilerState& C)
+    {
+        if (C.defer_count == 0)
+        {
+            return;
+        }
+
+        C.current_proto->defer_unwind_pc = static_cast<uint32_t>(C.current_proto->code.size());
+
+        for (uint32_t i = C.defer_count; i-- > 0;)
+        {
+            emit(C, make_op_defercall(static_cast<Reg>(i)), 0, 0);
+        }
+
+        emit(C, make_op_endunwind(), 0, 0);
+    }
 
     static int32_t current_scope_level(const CompilerState& C)
     {
@@ -1917,6 +2027,9 @@ namespace behl
             emit(child, make_op_return0(), 0, 0);
         }
 
+        emit_pending_defer_bodies(child, child_visitor);
+        emit_defer_unwind_chain(child);
+
         child.current_proto->num_params = param_count;
 
         leave_scope(child);
@@ -2775,7 +2888,7 @@ namespace behl
         jump_patch_location = nullptr;
 
         // Push loop context for break/continue tracking
-        C.loop_stack.emplace_back(C.S);
+        C.loop_stack.emplace_back(C.S, current_scope_level(C));
 
         if (node.block)
         {
@@ -2913,7 +3026,7 @@ namespace behl
         size_t loop_start = C.current_proto->code.size();
 
         // Push loop context for break/continue tracking
-        C.loop_stack.emplace_back(C.S);
+        C.loop_stack.emplace_back(C.S, current_scope_level(C));
 
         // Save freereg before calling iterator
         Reg loop_body_freereg = C.freereg;
@@ -3038,7 +3151,7 @@ namespace behl
         }
 
         // Push loop context for break/continue tracking
-        C.loop_stack.emplace_back(C.S);
+        C.loop_stack.emplace_back(C.S, current_scope_level(C));
 
         if (node.block)
         {
@@ -3155,7 +3268,7 @@ namespace behl
         emit(C, make_op_forprep(base, 0), C.lastline);
 
         // Push loop context for break/continue tracking
-        C.loop_stack.emplace_back(C.S);
+        C.loop_stack.emplace_back(C.S, current_scope_level(C));
 
         if (node.block)
         {
@@ -3319,11 +3432,13 @@ namespace behl
         C.lastline = node.line;
         C.lastcolumn = node.column;
 
-        // Emit all defer statements before returning (scope level 1 = function scope)
-        emit_defers_for_scope(C, *this, 1);
+        // An active defer disables the tail call paths, because a tail call
+        // replaces the frame and the deferred code would never get to run.
+        const bool has_defers = !C.active_defers.empty();
 
         // Check if single expr that is a function call
-        if (node.first_expr && !node.first_expr->next_child && node.first_expr->type == AstNodeType::kFuncCall)
+        if (!has_defers && node.first_expr && !node.first_expr->next_child
+            && node.first_expr->type == AstNodeType::kFuncCall)
         {
             const auto& call_node = static_cast<const AstFuncCall&>(*node.first_expr);
 
@@ -3455,7 +3570,7 @@ namespace behl
         if (!node.first_expr)
         {
             // Explicit empty return: return 0 values
-            emit(C, make_op_return0(), C.lastline);
+            emit_return_with_defers(C, 0, 0);
         }
         else if (!node.first_expr->next_child)
         {
@@ -3465,14 +3580,14 @@ namespace behl
             {
                 compile_call(*call_expr, static_cast<uint8_t>(kMultRet));
                 Reg call_reg = C.freereg - 1;
-                emit(C, make_op_return(call_reg, static_cast<uint8_t>(kMultRet)), C.lastline);
+                emit_return_with_defers(C, call_reg, static_cast<uint8_t>(kMultRet));
             }
             else if (node.first_expr->try_as<AstVararg>())
             {
                 // return ... spreads every vararg, so emit a multret VARARG and return all of it
                 node.first_expr->accept(*this);
                 Reg result_reg = C.freereg - 1;
-                emit(C, make_op_return(result_reg, static_cast<uint8_t>(kMultRet)), C.lastline);
+                emit_return_with_defers(C, result_reg, static_cast<uint8_t>(kMultRet));
             }
             else
             {
@@ -3481,7 +3596,7 @@ namespace behl
                     int32_t loc = resolve_local(C, ident->name->view());
                     if (loc >= 0)
                     {
-                        emit(C, make_op_return1(static_cast<uint8_t>(loc)), C.lastline);
+                        emit_return_with_defers(C, static_cast<uint8_t>(loc), 1);
                         return;
                     }
                     uint32_t up = resolve_upvalue(C, ident->name->view());
@@ -3489,14 +3604,14 @@ namespace behl
                     {
                         Reg reg = alloc_reg(C);
                         emit(C, make_op_getupval(reg, static_cast<uint8_t>(up)), C.lastline);
-                        emit(C, make_op_return1(reg), C.lastline);
+                        emit_return_with_defers(C, reg, 1);
                         return;
                     }
                 }
 
                 node.first_expr->accept(*this);
                 Reg result_reg = C.freereg - 1;
-                emit(C, make_op_return1(result_reg), C.lastline);
+                emit_return_with_defers(C, result_reg, 1);
             }
         }
         else
@@ -3534,7 +3649,7 @@ namespace behl
 
                 Reg vararg_pos = first_return_reg + static_cast<Reg>(result_regs.size());
                 emit(C, make_op_vararg(vararg_pos, 0), C.lastline);
-                emit(C, make_op_return(first_return_reg, static_cast<uint8_t>(kMultRet)), C.lastline);
+                emit_return_with_defers(C, first_return_reg, static_cast<uint8_t>(kMultRet));
             }
             else if (last_call)
             {
@@ -3557,7 +3672,7 @@ namespace behl
                     emit(C, make_op_move(call_pos, result_regs.back()), C.lastline);
                 }
 
-                emit(C, make_op_return(first_return_reg, static_cast<uint8_t>(kMultRet)), C.lastline);
+                emit_return_with_defers(C, first_return_reg, static_cast<uint8_t>(kMultRet));
             }
             else
             {
@@ -3583,7 +3698,7 @@ namespace behl
                     }
                 }
 
-                emit(C, make_op_return(first_return_reg, static_cast<uint8_t>(expr_count)), C.lastline);
+                emit_return_with_defers(C, first_return_reg, static_cast<uint8_t>(expr_count));
             }
         }
         C.freereg = 0;
@@ -3591,10 +3706,13 @@ namespace behl
 
     void VisitorAdapter::visit(const AstBreak&)
     {
-        if (C.loop_stack.empty())
+        if (C.loop_stack.size() <= C.loop_floor)
         {
             throw SemanticError("break statement outside of loop", get_location(C));
         }
+
+        emit_defer_calls_above_scope(C, C.loop_stack.back().scope_level);
+
         size_t jmp_pos = C.current_proto->code.size();
         emit(C, make_op_jmp(0), C.lastline);
         C.loop_stack.back().break_list.push_back(jmp_pos);
@@ -3602,10 +3720,13 @@ namespace behl
 
     void VisitorAdapter::visit(const AstContinue&)
     {
-        if (C.loop_stack.empty())
+        if (C.loop_stack.size() <= C.loop_floor)
         {
             throw SemanticError("continue statement outside of loop", get_location(C));
         }
+
+        emit_defer_calls_above_scope(C, C.loop_stack.back().scope_level);
+
         size_t jmp_pos = C.current_proto->code.size();
         emit(C, make_op_jmp(0), C.lastline);
         C.loop_stack.back().continue_list.push_back(jmp_pos);
@@ -3616,10 +3737,84 @@ namespace behl
         C.lastline = node.line;
         C.lastcolumn = node.column;
 
-        // Store the defer statement in the defer stack
-        // It will be executed in LIFO order when scope exits
-        int32_t scope_level = current_scope_level(C);
-        C.defer_stack.emplace_back(node.body, scope_level);
+        if (C.defer_count >= kMaxDeferBlocks)
+        {
+            throw SemanticError("too many defer statements in one function", get_location(C));
+        }
+
+        const auto block = static_cast<Reg>(C.defer_count++);
+
+        C.current_proto->defer_blocks.push_back(C.S, DeferBlock{});
+
+        const Reg link_reg = alloc_reg(C);
+        emit(C, make_op_defer(block), C.lastline);
+
+        C.pending_defers.emplace_back(C.S, node.body, block, link_reg);
+
+        PendingDefer& pending = C.pending_defers.back();
+        pending.freereg = C.freereg;
+        pending.min_freereg = C.freereg;
+        pending.line = C.lastline;
+        pending.column = C.lastcolumn;
+
+        for (const auto& scope : C.scopes)
+        {
+            for (const auto& local : scope)
+            {
+                pending.visible.push_back(local);
+            }
+        }
+
+        free_reg(C, link_reg);
+
+        C.active_defers.emplace_back(block, current_scope_level(C));
+    }
+
+    static void emit_pending_defer_bodies(CompilerState& C, VisitorAdapter& visitor)
+    {
+        for (size_t i = 0; i < C.pending_defers.size(); ++i)
+        {
+            AutoVector<Local> visible = std::move(C.pending_defers[i].visible);
+            const AstNode* body = C.pending_defers[i].body;
+            const Reg block = C.pending_defers[i].block;
+            const Reg link_reg = C.pending_defers[i].link_reg;
+            const uint8_t body_freereg = C.pending_defers[i].freereg;
+            const uint8_t body_min_freereg = C.pending_defers[i].min_freereg;
+
+            C.lastline = C.pending_defers[i].line;
+            C.lastcolumn = C.pending_defers[i].column;
+
+            C.current_proto->defer_blocks[block]
+                = DeferBlock{ static_cast<uint32_t>(C.current_proto->code.size()), link_reg };
+
+            const uint8_t saved_freereg = C.freereg;
+            const uint8_t saved_min_freereg = C.min_freereg;
+            const size_t saved_loop_floor = C.loop_floor;
+
+            C.freereg = body_freereg;
+            C.min_freereg = body_min_freereg;
+            C.loop_floor = C.loop_stack.size();
+
+            enter_scope(C);
+            for (const auto& local : visible)
+            {
+                C.scopes.back().push_back(local);
+            }
+
+            if (body)
+            {
+                body->accept(visitor);
+            }
+
+            emit_defer_calls_for_scope(C, current_scope_level(C));
+            C.scopes.pop_back();
+
+            C.loop_floor = saved_loop_floor;
+            C.freereg = saved_freereg;
+            C.min_freereg = saved_min_freereg;
+
+            emit(C, make_op_enddefer(block), C.lastline);
+        }
     }
 
     void VisitorAdapter::visit(const AstScope& node)
@@ -3631,7 +3826,7 @@ namespace behl
             node.block->accept(*this);
         }
         // Emit defers for this scope before leaving
-        emit_defers_for_scope(C, *this, scope_level);
+        emit_defer_calls_for_scope(C, scope_level);
         leave_scope(C);
     }
 
@@ -3654,7 +3849,7 @@ namespace behl
             stat->accept(*this);
         }
         // Emit defers for this scope before leaving
-        emit_defers_for_scope(C, *this, scope_level);
+        emit_defer_calls_for_scope(C, scope_level);
         leave_scope(C);
     }
 
@@ -3680,41 +3875,6 @@ namespace behl
     void VisitorAdapter::visit(const AstExportList&)
     {
         // Export list will be handled by export transform pass
-    }
-
-    // Emit all defer statements from the current scope level and above (in LIFO order)
-    static void emit_defers_for_scope(CompilerState& C, VisitorAdapter& visitor, int32_t target_scope_level)
-    {
-        // Save the current freereg to restore later
-        uint8_t saved_freereg = C.freereg;
-
-        // Iterate backwards through defer stack (LIFO)
-        for (auto it = C.defer_stack.rbegin(); it != C.defer_stack.rend();)
-        {
-            if (it->scope_level >= target_scope_level)
-            {
-                // Execute this defer statement
-                if (it->defer_body)
-                {
-                    it->defer_body->accept(visitor);
-                }
-
-                // Remove from the defer stack (we've executed it)
-                // Convert reverse iterator to forward iterator for erase
-                auto forward_it = std::next(it).base();
-                C.defer_stack.erase(forward_it);
-
-                // After erase, rbegin() gives us a new iterator
-                it = C.defer_stack.rbegin();
-            }
-            else
-            {
-                ++it;
-            }
-        }
-
-        // Restore freereg
-        C.freereg = saved_freereg;
     }
 
     GCProto* compile(State* state, const AstProgram* program, std::string_view source_name)
@@ -3746,6 +3906,9 @@ namespace behl
 
         // Return nothing (0 values) - export transform pass will add explicit return if module
         emit(C, make_op_return0(), 0, 0);
+
+        emit_pending_defer_bodies(C, V);
+        emit_defer_unwind_chain(C);
 
         return proto;
     }

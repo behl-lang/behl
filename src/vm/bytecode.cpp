@@ -126,6 +126,18 @@ namespace behl
             case OpCode::kOpAdd:
                 opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
                 break;
+            case OpCode::kOpDefer:
+            case OpCode::kOpDeferCall:
+            case OpCode::kOpEndDefer:
+                opcode_str = behl::format("{:<9} #{}", meta.name, instr.a());
+                break;
+            case OpCode::kOpSaveRet:
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), static_cast<int32_t>(instr.b()));
+                break;
+            case OpCode::kOpRetSaved:
+            case OpCode::kOpEndUnwind:
+                opcode_str = behl::format("{:<9}", meta.name);
+                break;
             case OpCode::kOpMMAdd:
                 opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
                 break;

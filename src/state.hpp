@@ -29,6 +29,7 @@ namespace behl
 
         Vector<Value> stack;
         Vector<CallFrame> call_stack;
+        Vector<Value> ret_scratch;
 
         Vector<Value> pinned;
         Vector<size_t> free_pinned_indices;

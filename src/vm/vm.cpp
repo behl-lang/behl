@@ -384,6 +384,32 @@ namespace behl
                     handler_bitwise<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
+                case OpCode::kOpDefer:
+                    handler_defer(*frame, instr.a());
+                    break;
+                case OpCode::kOpDeferCall:
+                    handler_defercall(S, *frame, instr.a());
+                    break;
+                case OpCode::kOpEndDefer:
+                    handler_enddefer(S, *frame, instr.a());
+                    break;
+                case OpCode::kOpSaveRet:
+                    handler_saveret(S, *frame, instr.a(), instr.b());
+                    break;
+                case OpCode::kOpRetSaved:
+                    if (!handler_retsaved(S, *frame, entry_call_depth))
+                    {
+                        return;
+                    }
+                    if (callstack.size() <= stop_depth)
+                    {
+                        return;
+                    }
+                    --frame;
+                    code = frame->proto->code.data();
+                    break;
+                case OpCode::kOpEndUnwind:
+                    return;
                 case OpCode::kOpMMAdd:
                     handler_add(S, *frame, instr.a(), instr.b(), instr.c());
                     break;
@@ -678,6 +704,47 @@ namespace behl
     void run_interpreter(State* S, uint32_t entry_call_depth, uint32_t stop_depth)
     {
         interpreter_loop<false>(S, entry_call_depth, stop_depth);
+    }
+
+    void unwind_call_frames(State* S, size_t target_depth, std::exception_ptr& pending)
+    {
+        while (S->call_stack.size() > target_depth)
+        {
+            const auto index = static_cast<uint32_t>(S->call_stack.size() - 1);
+
+            for (;;)
+            {
+                CallFrame& frame = S->call_stack[index];
+
+                if (frame.proto == nullptr || frame.defer_mask == 0 || frame.proto->defer_unwind_pc == 0)
+                {
+                    break;
+                }
+
+                frame.pc = frame.proto->defer_unwind_pc;
+                S->stack.resize(S, frame.base + frame.proto->max_stack_size);
+
+                try
+                {
+                    if (S->debug.enabled) [[unlikely]]
+                    {
+                        interpreter_loop<true>(S, index, index);
+                    }
+                    else
+                    {
+                        interpreter_loop<false>(S, index, index);
+                    }
+                    break;
+                }
+                catch (...)
+                {
+                    pending = std::current_exception();
+                    unwind_call_frames(S, static_cast<size_t>(index) + 1, pending);
+                }
+            }
+
+            S->call_stack.resize(S, index);
+        }
     }
 
 } // namespace behl

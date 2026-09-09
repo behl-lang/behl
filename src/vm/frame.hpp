@@ -22,6 +22,8 @@ namespace behl
         uint32_t call_pos;
         uint8_t nresults;
         uint32_t num_varargs;
+        uint32_t defer_mask;
+        uint32_t ret_base;
 
 #if defined(__GNUC__)
 #    pragma GCC diagnostic push
@@ -30,6 +32,16 @@ namespace behl
         static constexpr int32_t base_offset()
         {
             return static_cast<int32_t>(offsetof(CallFrame, base));
+        }
+
+        static constexpr int32_t pc_offset()
+        {
+            return static_cast<int32_t>(offsetof(CallFrame, pc));
+        }
+
+        static constexpr int32_t defer_mask_offset()
+        {
+            return static_cast<int32_t>(offsetof(CallFrame, defer_mask));
         }
 #if defined(__GNUC__)
 #    pragma GCC diagnostic pop

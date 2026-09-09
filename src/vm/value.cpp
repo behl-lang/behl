@@ -9,6 +9,7 @@
 #include "gc/gco_table.hpp"
 
 #include <bit>
+#include <cassert>
 #include <cstddef>
 #include <limits>
 #include <utility>
@@ -33,8 +34,7 @@ namespace behl
 
     size_t ValueHash::operator()(const std::string_view key) const noexcept
     {
-        StringHash str_hash;
-        return str_hash(key);
+        return string_key_hash(string_hash32(key));
     }
 
     static inline uint64_t fmix64(uint64_t k) noexcept
@@ -115,8 +115,10 @@ namespace behl
             case Type::kString:
             {
                 auto* val = get_string();
-                StringHash str_hash;
-                return str_hash(val->view());
+                // The cache must always agree with a fresh hash of the contents;
+                // a recycled or half-built string would silently miss otherwise.
+                assert(val->str_hash == string_hash32(val->view()) && "stale cached string hash");
+                return string_key_hash(val->str_hash);
             }
 
             case Type::kClosure:

@@ -199,6 +199,18 @@ namespace behl
         { OpCode::kOpReturn1, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, true, false, "RETURN1" },
         // kOpAddKS - R(A) = R(B) .. KS(C), string concatenation with a constant
         { OpCode::kOpAddKS, OpMode::kWrite, OpMode::kRead, OpMode::kNone, true, false, false, "ADDKS" },
+        // kOpDefer - mark defer block A active for the current frame
+        { OpCode::kOpDefer, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, false, false, "DEFER" },
+        // kOpDeferCall - run defer block A if it is active
+        { OpCode::kOpDeferCall, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, true, "DEFERCALL" },
+        // kOpEndDefer - leave defer block A, resuming after the DEFERCALL that entered it
+        { OpCode::kOpEndDefer, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, true, "ENDDEFER" },
+        // kOpSaveRet - stash the B results at R(A) until the defer blocks have run
+        { OpCode::kOpSaveRet, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, false, false, "SAVERET" },
+        // kOpRetSaved - return the results stashed by SAVERET
+        { OpCode::kOpRetSaved, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, false, "RETSAVED" },
+        // kOpEndUnwind - stop after running the defer blocks of a frame being unwound
+        { OpCode::kOpEndUnwind, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, false, "ENDUNWIND" },
         // kOpMMAdd - slow path for kOpAdd: string concat, metamethod or error
         { OpCode::kOpMMAdd, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMADD" },
         { OpCode::kOpMMSub, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSUB" },

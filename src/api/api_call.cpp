@@ -33,10 +33,14 @@ namespace behl
         }
         catch (...)
         {
+            std::exception_ptr pending = std::current_exception();
+
+            unwind_call_frames(S, call_frame_pos, pending);
+
             S->stack.resize(S, func_pos);
             S->call_stack.resize(S, call_frame_pos);
 
-            throw;
+            std::rethrow_exception(pending);
         }
     }
 

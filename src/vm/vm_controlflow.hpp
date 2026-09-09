@@ -56,6 +56,35 @@ namespace behl
         throw TypeError(full_msg, loc);
     }
 
+    BEHL_FORCEINLINE
+    static void handler_defer(CallFrame& frame, Reg block)
+    {
+        frame.defer_mask |= (1u << block);
+    }
+
+    BEHL_FORCEINLINE
+    static void handler_defercall(State* S, CallFrame& frame, Reg block)
+    {
+        const uint32_t bit = 1u << block;
+        if ((frame.defer_mask & bit) == 0)
+        {
+            return;
+        }
+
+        frame.defer_mask &= ~bit;
+
+        const DeferBlock& info = frame.proto->defer_blocks[block];
+        get_register(S, frame, info.link_reg) = Value(static_cast<Integer>(frame.pc));
+        frame.pc = info.entry_pc;
+    }
+
+    BEHL_FORCEINLINE
+    static void handler_enddefer(State* S, CallFrame& frame, Reg block)
+    {
+        const DeferBlock& info = frame.proto->defer_blocks[block];
+        frame.pc = static_cast<uint32_t>(get_register(S, frame, info.link_reg).get_integer());
+    }
+
     // Setup a new call frame for any function call
     BEHL_FORCEINLINE
     CallFrame& setup_call_frame(
@@ -68,6 +97,7 @@ namespace behl
         new_frame.top = new_base + actual_num_args + 1;
         new_frame.call_pos = call_pos;
         new_frame.nresults = nresults;
+        new_frame.defer_mask = 0;
 
         if (proto && proto->is_vararg) [[unlikely]]
         {
@@ -263,6 +293,100 @@ namespace behl
         return false;
     }
 
+    BEHL_FORCEINLINE
+    static void handler_saveret(State* S, CallFrame& frame, Reg a, uint8_t num_results)
+    {
+        auto& stack = S->stack;
+        const uint32_t result_base = frame.base + a;
+
+        uint32_t num_available;
+        if (num_results == static_cast<uint8_t>(kMultRet))
+        {
+            num_available = (frame.top > result_base) ? (frame.top - result_base) : 0;
+        }
+        else
+        {
+            num_available = num_results;
+        }
+
+        const auto stack_size = static_cast<uint32_t>(stack.size());
+        const uint32_t present = (result_base < stack_size) ? std::min(num_available, stack_size - result_base) : 0;
+
+        frame.ret_base = static_cast<uint32_t>(S->ret_scratch.size());
+
+        for (uint32_t i = 0; i < present; ++i)
+        {
+            S->ret_scratch.push_back(S, stack[result_base + i]);
+        }
+        for (uint32_t i = present; i < num_available; ++i)
+        {
+            S->ret_scratch.push_back(S, Value());
+        }
+    }
+
+    BEHL_FORCEINLINE
+    static bool handler_retsaved(State* S, const CallFrame& frame, uint32_t entry_call_depth)
+    {
+        auto& call_stack = S->call_stack;
+        auto& stack = S->stack;
+
+        const uint32_t saved_base = frame.ret_base;
+        const auto num_available = static_cast<uint32_t>(S->ret_scratch.size()) - saved_base;
+
+        const uint8_t wanted = frame.nresults;
+        const uint32_t num_to_move = (wanted == static_cast<uint8_t>(kMultRet)) ? num_available : wanted;
+
+        const uint32_t dest = frame.call_pos;
+
+        if (frame.proto->has_upvalues) [[unlikely]]
+        {
+            close_upvalues(S, frame.base);
+        }
+
+        uint32_t min_final_size = 0;
+        if (call_stack.size() >= 2)
+        {
+            const auto& caller = call_stack[call_stack.size() - 2];
+            if (caller.proto != nullptr && frame.call_pos < caller.base + caller.proto->max_stack_size)
+            {
+                min_final_size = caller.base + caller.proto->max_stack_size;
+            }
+        }
+
+        stack.resize(S, std::max(dest + num_to_move, min_final_size));
+
+        for (uint32_t i = 0; i < num_to_move; ++i)
+        {
+            if (i < num_available)
+            {
+                stack[dest + i] = S->ret_scratch[saved_base + i];
+            }
+            else
+            {
+                stack[dest + i].set_nil();
+            }
+        }
+
+        S->ret_scratch.resize(S, saved_base);
+
+        call_stack.pop_back();
+
+        if (call_stack.empty() || call_stack.size() <= entry_call_depth)
+        {
+            return false;
+        }
+
+        auto& next_frame = call_stack.back();
+        next_frame.top = dest + num_to_move;
+
+        if (next_frame.proto != nullptr)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     // Execute C function implementation
     BEHL_FORCEINLINE
     static uint32_t execute_native_impl(State* S, CFunction cfunc, uint32_t func_pos, uint32_t num_args)
@@ -390,8 +514,9 @@ namespace behl
     }
 
     // Call instruction handler
-    BEHL_FORCEINLINE
-    CallFrame* handler_call(State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
+    template<bool TExecuteCallee = true>
+    BEHL_FORCEINLINE CallFrame* handler_call(
+        State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
     {
         if (S->gc.gc_debt > 0)
         {
@@ -423,9 +548,12 @@ namespace behl
             CallFrame& new_frame = setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
             prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
 #if BEHL_JIT_SUPPORTED
-            if (!S->debug.enabled && jit_try_execute(S, proto))
+            if constexpr (TExecuteCallee)
             {
-                return &S->call_stack.back();
+                if (!S->debug.enabled && jit_try_execute(S, proto))
+                {
+                    return &S->call_stack.back();
+                }
             }
 #endif
             return &new_frame;
@@ -443,9 +571,12 @@ namespace behl
 
             S->stack.resize(S, stack_after_call);
 #if BEHL_JIT_SUPPORTED
-            if (S->call_stack.size() > depth_before && !S->debug.enabled && jit_try_execute(S, new_frame.proto))
+            if constexpr (TExecuteCallee)
             {
-                return &S->call_stack.back();
+                if (S->call_stack.size() > depth_before && !S->debug.enabled && jit_try_execute(S, new_frame.proto))
+                {
+                    return &S->call_stack.back();
+                }
             }
 #endif
             return &new_frame;
