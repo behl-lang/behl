@@ -132,6 +132,14 @@ namespace behl
         emit_modrm_mem(xmm_low(src), dst);
     }
 
+    void X86Emitter::movsd_reg(XmmReg dst, XmmReg src)
+    {
+        emit8(0xF2);
+        emit8(0x0F);
+        emit8(0x10);
+        emit_modrm(0b11, xmm_low(dst), xmm_low(src));
+    }
+
     void X86Emitter::movq(XmmReg dst, GpReg src)
     {
         assert(mode64_ && "movq xmm, r64 requires 64 bit mode");
@@ -440,6 +448,13 @@ namespace behl
         emit_rex_natural(false, false, reg_ext(src.base));
         emit8(0xF7);
         emit_modrm_mem(4, src);
+    }
+
+    void X86Emitter::div(Mem src)
+    {
+        emit_rex_natural(false, false, reg_ext(src.base));
+        emit8(0xF7);
+        emit_modrm_mem(6, src);
     }
 
     void X86Emitter::sar(GpReg reg, uint8_t imm)

@@ -227,6 +227,11 @@ namespace behl
         emit(0x9AC00C00u | (uint32_t{ rn(rhs) } << 16) | (uint32_t{ rn(lhs) } << 5) | rn(dst));
     }
 
+    void A64Emitter::udiv(A64Reg dst, A64Reg lhs, A64Reg rhs)
+    {
+        emit(0x9AC00800u | (uint32_t{ rn(rhs) } << 16) | (uint32_t{ rn(lhs) } << 5) | rn(dst));
+    }
+
     void A64Emitter::lslv(A64Reg dst, A64Reg lhs, A64Reg rhs)
     {
         emit(0x9AC02000u | (uint32_t{ rn(rhs) } << 16) | (uint32_t{ rn(lhs) } << 5) | rn(dst));
@@ -302,6 +307,12 @@ namespace behl
     void A64Emitter::fcmp(A64Vec lhs, A64Vec rhs)
     {
         emit(0x1E602000u | (uint32_t{ vn(rhs) } << 16) | (uint32_t{ vn(lhs) } << 5));
+    }
+
+    void A64Emitter::fmov_d(A64Vec dst, A64Vec src)
+    {
+        // FMOV Dd, Dn
+        emit(0x1E604000u | (uint32_t{ vn(src) } << 5) | vn(dst));
     }
 
     void A64Emitter::fmov(A64Vec dst, A64Reg src)

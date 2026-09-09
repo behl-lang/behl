@@ -111,6 +111,7 @@ namespace behl
         void madd(A64Reg dst, A64Reg lhs, A64Reg rhs, A64Reg addend);
         void msub(A64Reg dst, A64Reg lhs, A64Reg rhs, A64Reg minuend);
         void sdiv(A64Reg dst, A64Reg lhs, A64Reg rhs);
+        void udiv(A64Reg dst, A64Reg lhs, A64Reg rhs);
         void lslv(A64Reg dst, A64Reg lhs, A64Reg rhs);
         void asrv(A64Reg dst, A64Reg lhs, A64Reg rhs);
         void lsl(A64Reg dst, A64Reg src, uint8_t shift);
@@ -128,6 +129,7 @@ namespace behl
         void fdiv(A64Vec dst, A64Vec lhs, A64Vec rhs);
         void fcmp(A64Vec lhs, A64Vec rhs);
         void fmov(A64Vec dst, A64Reg src);
+        void fmov_d(A64Vec dst, A64Vec src);
         void scvtf(A64Vec dst, A64Reg src);
 
         void call(uintptr_t target);

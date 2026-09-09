@@ -56,8 +56,6 @@ namespace behl
                 return jit_op_div;
             case OpCode::kOpMod:
                 return jit_op_mod;
-            case OpCode::kOpPow:
-                return jit_op_pow;
             case OpCode::kOpBand:
                 return jit_op_band;
             case OpCode::kOpBor:
@@ -84,6 +82,30 @@ namespace behl
                 return jit_op_subki;
             case OpCode::kOpAddKF:
                 return jit_op_addkf;
+            case OpCode::kOpAddKS:
+                return jit_op_addks;
+            case OpCode::kOpMMAdd:
+                return jit_op_mmadd;
+            case OpCode::kOpMMSub:
+                return jit_op_mmsub;
+            case OpCode::kOpMMMul:
+                return jit_op_mmmul;
+            case OpCode::kOpMMDiv:
+                return jit_op_mmdiv;
+            case OpCode::kOpMMMod:
+                return jit_op_mmmod;
+            case OpCode::kOpMMPow:
+                return jit_op_mmpow;
+            case OpCode::kOpMMBand:
+                return jit_op_mmband;
+            case OpCode::kOpMMBor:
+                return jit_op_mmbor;
+            case OpCode::kOpMMBxor:
+                return jit_op_mmbxor;
+            case OpCode::kOpMMShl:
+                return jit_op_mmshl;
+            case OpCode::kOpMMShr:
+                return jit_op_mmshr;
             case OpCode::kOpSubKF:
                 return jit_op_subkf;
             case OpCode::kOpIncGlobal:
@@ -133,12 +155,46 @@ namespace behl
                 return jit_op_lef;
             case OpCode::kOpGTF:
                 return jit_op_gtf;
+            case OpCode::kOpPow:
+                return jit_op_pow;
             case OpCode::kOpTest:
                 return jit_op_test;
             case OpCode::kOpTestSet:
                 return jit_op_testset;
             default:
                 return nullptr;
+        }
+    }
+
+    // A kOpMM* whose fast half the backend compiles natively is unreachable in
+    // compiled code: both the fast path and its cold block jump past it. Pow has
+    // no native path, so its follower stays live.
+    static bool mm_unreachable(OpCode mm, OpCode prev) noexcept
+    {
+        switch (mm)
+        {
+            case OpCode::kOpMMAdd:
+                return prev == OpCode::kOpAdd;
+            case OpCode::kOpMMSub:
+                return prev == OpCode::kOpSub;
+            case OpCode::kOpMMMul:
+                return prev == OpCode::kOpMul;
+            case OpCode::kOpMMDiv:
+                return prev == OpCode::kOpDiv;
+            case OpCode::kOpMMMod:
+                return prev == OpCode::kOpMod;
+            case OpCode::kOpMMBand:
+                return prev == OpCode::kOpBand;
+            case OpCode::kOpMMBor:
+                return prev == OpCode::kOpBor;
+            case OpCode::kOpMMBxor:
+                return prev == OpCode::kOpBxor;
+            case OpCode::kOpMMShl:
+                return prev == OpCode::kOpShl;
+            case OpCode::kOpMMShr:
+                return prev == OpCode::kOpShr;
+            default:
+                return false;
         }
     }
 
@@ -300,6 +356,7 @@ namespace behl
                 kAddSubImm,
                 kCmpImm,
                 kForLoop,
+                kForPrep,
                 kArithF64,
                 kHelperOnly,
                 kAddSubK,
@@ -348,6 +405,29 @@ namespace behl
                 CgOp& op = push(CgOpKind::kBind);
                 op.label = label;
                 op.flag = is_join;
+                op.slot = kClobberAll;
+            }
+
+            // The split arithmetic opcodes skip their kOpMM* follower on the
+            // numeric path, so both the fast path and the cold block resume at
+            // the instruction after it.
+            bool set_mm_resume(ColdBlock& cb, uint32_t pcn)
+            {
+                if (!valid_pc(static_cast<int64_t>(pcn) + 1))
+                {
+                    return false;
+                }
+                cb.resume = pc_labels_[static_cast<size_t>(pcn) + 1];
+                return true;
+            }
+
+            void bind_resume(uint32_t label, int32_t clobbered_slot, uint32_t cold_entry)
+            {
+                CgOp& op = push(CgOpKind::kBind);
+                op.label = label;
+                op.flag = false;
+                op.slot = clobbered_slot;
+                op.label2 = cold_entry;
             }
 
             void jump(uint32_t label)
@@ -596,6 +676,11 @@ namespace behl
         {
             const uint32_t pcn = pc + 1;
 
+            if (pc > 0 && !jump_targets_[pc] && mm_unreachable(ins.op(), proto_->code[pc - 1].op()))
+            {
+                return true;
+            }
+
             switch (ins.op())
             {
                 case OpCode::kOpJmp:
@@ -635,7 +720,7 @@ namespace behl
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.a());
                     add_i64_imm(v, is_inc ? 1 : -1);
                     store(CgOpKind::kStoreI64, ins.a(), v);
-                    bind(cb.resume, false);
+                    bind_resume(cb.resume, ins.a(), cb.entry);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -652,7 +737,7 @@ namespace behl
                     add_i64_imm(v, is_add ? static_cast<int64_t>(imm) : -static_cast<int64_t>(imm));
                     store(CgOpKind::kStoreI64, ins.a(), v);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    bind_resume(cb.resume, ins.a(), cb.entry);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -768,7 +853,7 @@ namespace behl
                     }
                     store(CgOpKind::kStoreI64, ins.a(), v);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    bind_resume(cb.resume, ins.a(), cb.entry);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -791,7 +876,7 @@ namespace behl
                     arith(is_add ? CgOpKind::kAddF64 : CgOpKind::kSubF64, t, c);
                     store(CgOpKind::kStoreF64, ins.a(), t);
                     store_tag(ins.a(), Type::kNumber);
-                    bind(cb.resume, false);
+                    bind_resume(cb.resume, ins.a(), cb.entry);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -806,7 +891,12 @@ namespace behl
                     const uint8_t lhs = is_addlocal ? ins.a() : ins.b();
                     const uint8_t rhs = is_addlocal ? ins.b() : ins.c();
                     JitOpFn fn = is_sub ? jit_op_sub : (is_addlocal ? jit_op_addlocal : jit_op_add);
+                    const bool has_mm = !is_addlocal;
                     ColdBlock cb{ new_label(), new_label(), fn, ins.raw, pcn, ColdKind::kArithF64, 0 };
+                    if (has_mm && !set_mm_resume(cb, pcn))
+                    {
+                        return false;
+                    }
                     guard_tag(lhs, Type::kInteger, cb.entry);
                     guard_tag(rhs, Type::kInteger, cb.entry);
                     const uint32_t v1 = load(CgOpKind::kLoadI64, lhs);
@@ -814,7 +904,14 @@ namespace behl
                     arith(is_sub ? CgOpKind::kSubI64 : CgOpKind::kAddI64, v1, v2);
                     store(CgOpKind::kStoreI64, dst, v1);
                     store_tag(dst, Type::kInteger);
-                    bind(cb.resume, false);
+                    if (has_mm)
+                    {
+                        jump(cb.resume);
+                    }
+                    else
+                    {
+                        bind_resume(cb.resume, ins.a(), cb.entry);
+                    }
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -822,6 +919,10 @@ namespace behl
                 case OpCode::kOpMul:
                 {
                     ColdBlock cb{ new_label(), new_label(), jit_op_mul, ins.raw, pcn, ColdKind::kArithF64, 0 };
+                    if (!set_mm_resume(cb, pcn))
+                    {
+                        return false;
+                    }
                     guard_tag(ins.b(), Type::kInteger, cb.entry);
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v1 = load(CgOpKind::kLoadI64, ins.b());
@@ -829,7 +930,7 @@ namespace behl
                     arith(CgOpKind::kMulI64, v1, v2);
                     store(CgOpKind::kStoreI64, ins.a(), v1);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    jump(cb.resume);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -837,6 +938,10 @@ namespace behl
                 case OpCode::kOpDiv:
                 {
                     ColdBlock cb{ new_label(), new_label(), jit_op_div, ins.raw, pcn, ColdKind::kArithF64, 0 };
+                    if (!set_mm_resume(cb, pcn))
+                    {
+                        return false;
+                    }
                     guard_tag(ins.b(), Type::kInteger, cb.entry);
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t t1 = load(CgOpKind::kCvtSlotToF64, ins.b());
@@ -844,7 +949,7 @@ namespace behl
                     arith(CgOpKind::kDivF64, t1, t2);
                     store(CgOpKind::kStoreF64, ins.a(), t1);
                     store_tag(ins.a(), Type::kNumber);
-                    bind(cb.resume, false);
+                    jump(cb.resume);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -855,6 +960,10 @@ namespace behl
                     const bool is_shl = ins.op() == OpCode::kOpShl;
                     ColdBlock cb{ new_label(), new_label(), is_shl ? jit_op_shl : jit_op_shr, ins.raw, pcn,
                         ColdKind::kHelperOnly, 0 };
+                    if (!set_mm_resume(cb, pcn))
+                    {
+                        return false;
+                    }
                     guard_tag(ins.b(), Type::kInteger, cb.entry);
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.b());
@@ -862,7 +971,7 @@ namespace behl
                     arith(is_shl ? CgOpKind::kShlI64 : CgOpKind::kShrI64, v, cnt);
                     store(CgOpKind::kStoreI64, ins.a(), v);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    jump(cb.resume);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -884,6 +993,10 @@ namespace behl
                         fn = jit_op_bxor;
                     }
                     ColdBlock cb{ new_label(), new_label(), fn, ins.raw, pcn, ColdKind::kHelperOnly, 0 };
+                    if (!set_mm_resume(cb, pcn))
+                    {
+                        return false;
+                    }
                     guard_tag(ins.b(), Type::kInteger, cb.entry);
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v1 = load(CgOpKind::kLoadI64, ins.b());
@@ -891,7 +1004,7 @@ namespace behl
                     arith(bop, v1, v2);
                     store(CgOpKind::kStoreI64, ins.a(), v1);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    jump(cb.resume);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -905,7 +1018,7 @@ namespace behl
                     arith(CgOpKind::kXorI64, v, c);
                     store(CgOpKind::kStoreI64, ins.a(), v);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    bind_resume(cb.resume, ins.a(), cb.entry);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -919,7 +1032,7 @@ namespace behl
                     arith(CgOpKind::kSubI64, z, v);
                     store(CgOpKind::kStoreI64, ins.a(), z);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    bind_resume(cb.resume, ins.a(), cb.entry);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -927,6 +1040,10 @@ namespace behl
                 case OpCode::kOpMod:
                 {
                     ColdBlock cb{ new_label(), new_label(), jit_op_mod, ins.raw, pcn, ColdKind::kHelperOnly, 0 };
+                    if (!set_mm_resume(cb, pcn))
+                    {
+                        return false;
+                    }
                     guard_tag(ins.b(), Type::kInteger, cb.entry);
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v1 = load(CgOpKind::kLoadI64, ins.b());
@@ -937,7 +1054,7 @@ namespace behl
                     mod_op.label = cb.entry;
                     store(CgOpKind::kStoreI64, ins.a(), v1);
                     store_tag(ins.a(), Type::kInteger);
-                    bind(cb.resume, false);
+                    jump(cb.resume);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -1121,9 +1238,82 @@ namespace behl
                 case OpCode::kOpForPrep:
                 {
                     const int32_t off = ins.signed_offset();
-                    const uint32_t r = helper_call(jit_op_forprep, ins.raw, pcn);
-                    pc_dispatch(
-                        r, { static_cast<int64_t>(pcn), static_cast<int64_t>(pcn) + off, static_cast<int64_t>(pcn) + off + 1 });
+                    const int64_t exit_pc = static_cast<int64_t>(pcn) + off + 1;
+                    if (!valid_pc(static_cast<int64_t>(pcn)) || !valid_pc(static_cast<int64_t>(pcn) + off) || !valid_pc(exit_pc))
+                    {
+                        return false;
+                    }
+
+                    const int32_t a = ins.a();
+                    ColdBlock cb{ new_label(), 0, jit_op_forprep, ins.raw, pcn, ColdKind::kForPrep, off };
+                    cb.resume = cb.entry;
+
+                    guard_tag(a, Type::kInteger, cb.entry);
+                    guard_tag(a + 1, Type::kInteger, cb.entry);
+                    guard_tag(a + 2, Type::kInteger, cb.entry);
+
+                    const uint32_t neg_step = new_label();
+                    const uint32_t zero_step = new_label();
+                    const uint32_t zero_trip = new_label();
+                    const uint32_t prepared = new_label();
+
+                    {
+                        const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
+                        branch_i64_imm(s, 0, CgCmp::kEq, zero_step);
+                    }
+                    {
+                        const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
+                        branch_i64_imm(s, 0, CgCmp::kLt, neg_step);
+                    }
+
+                    {
+                        const uint32_t i = load(CgOpKind::kLoadI64, a);
+                        const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
+                        branch_i64(i, l, CgCmp::kGt, zero_trip);
+                    }
+                    {
+                        const uint32_t t = load(CgOpKind::kLoadI64, a + 1);
+                        const uint32_t i = load(CgOpKind::kLoadI64, a);
+                        arith(CgOpKind::kSubI64, t, i);
+                        const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
+                        arith(CgOpKind::kDivU64, t, s);
+                        store(CgOpKind::kStoreI64, a + 3, t);
+                        store_tag(a + 3, Type::kInteger);
+                        jump(prepared);
+                    }
+
+                    bind(neg_step, false);
+                    {
+                        const uint32_t i = load(CgOpKind::kLoadI64, a);
+                        const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
+                        branch_i64(i, l, CgCmp::kLt, zero_trip);
+                    }
+                    {
+                        const uint32_t t = load(CgOpKind::kLoadI64, a);
+                        const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
+                        arith(CgOpKind::kSubI64, t, l);
+                        const uint32_t d = const_i64(0);
+                        const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
+                        arith(CgOpKind::kSubI64, d, s);
+                        arith(CgOpKind::kDivU64, t, d);
+                        store(CgOpKind::kStoreI64, a + 3, t);
+                        store_tag(a + 3, Type::kInteger);
+                        jump(prepared);
+                    }
+
+                    bind(zero_step, false);
+                    {
+                        const uint32_t v = const_i64(-1);
+                        store(CgOpKind::kStoreI64, a + 3, v);
+                        store_tag(a + 3, Type::kInteger);
+                        jump(prepared);
+                    }
+
+                    bind(zero_trip, false);
+                    jump(pc_labels_[static_cast<size_t>(exit_pc)]);
+
+                    bind(prepared, false);
+                    cold_blocks_.push_back(cb);
                     break;
                 }
 
@@ -1235,6 +1425,15 @@ namespace behl
                         bind(help, true);
                         const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
                         pc_dispatch(r, { static_cast<int64_t>(cb.pcn), static_cast<int64_t>(cb.pcn) + 1 });
+                        break;
+                    }
+
+                    case ColdKind::kForPrep:
+                    {
+                        const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
+                        pc_dispatch(r,
+                            { static_cast<int64_t>(cb.pcn), static_cast<int64_t>(cb.pcn) + cb.offset,
+                                static_cast<int64_t>(cb.pcn) + cb.offset + 1 });
                         break;
                     }
 
@@ -1464,7 +1663,13 @@ namespace behl
     bool jit_compile_proto(const GCProto* proto, CgProgram& out)
     {
         AbstractCompiler compiler(proto, out);
-        return compiler.compile();
+        if (!compiler.compile())
+        {
+            return false;
+        }
+
+        out.allow_slot_cache = proto->protos.empty();
+        return true;
     }
 
 } // namespace behl

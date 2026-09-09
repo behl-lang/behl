@@ -394,32 +394,163 @@ namespace behl
         numeric_binop<MMIndex, DivByZeroCheck>(S, dst, lhs, rhs, frame, NumericOp{ frame });
     }
 
+    // Numeric-only core shared by the fast halves of the split arithmetic
+    // opcodes. Returns false when the operands are not a numeric pair, leaving
+    // the following kOpMM* instruction to handle concat, metamethods or errors.
+    template<bool AsFloat, typename Op>
+    BEHL_FORCEINLINE bool try_numeric_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    {
+        switch (make_type_pair(a, b))
+        {
+            case kTypePairIntInt:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                if constexpr (AsFloat)
+                {
+                    dst.emplace<FP>(op(static_cast<FP>(a.get_integer()), static_cast<FP>(b.get_integer())));
+                }
+                else
+                {
+                    dst.emplace<Integer>(op(a.get_integer(), b.get_integer()));
+                }
+                return true;
+            }
+            case kTypePairIntFloat:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                dst.emplace<FP>(op(static_cast<FP>(a.get_integer()), b.get_fp()));
+                return true;
+            }
+            case kTypePairFloatInt:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                dst.emplace<FP>(op(a.get_fp(), static_cast<FP>(b.get_integer())));
+                return true;
+            }
+            case kTypePairFloatFloat:
+            {
+                Value& dst = get_register(S, frame, dst_reg);
+                dst.emplace<FP>(op(a.get_fp(), b.get_fp()));
+                return true;
+            }
+            default:
+                return false;
+        }
+    }
+
+    template<MetaMethodType MMIndex, bool AsFloat, typename NumericOp, auto GetLhs, auto GetRhs, typename... Args>
+    BEHL_FORCEINLINE void handler_numeric_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    {
+        const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
+        const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
+        if (try_numeric_fast<AsFloat>(S, dst, lhs, rhs, frame, NumericOp{}))
+        {
+            frame.pc++;
+        }
+    }
+
+    BEHL_FORCEINLINE
+    void handler_mod_fast(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
+    {
+        const Value& lhs = get_register(S, frame, b);
+        const Value& rhs = get_register(S, frame, c);
+        if (try_numeric_fast<false>(S, a, lhs, rhs, frame, NumericModOp{ frame }))
+        {
+            frame.pc++;
+        }
+    }
+
+    // Numeric-only fast path for kOpAdd. On success the following kOpMMAdd is
+    // skipped; otherwise it falls through and kOpMMAdd handles concat,
+    // metamethods and errors.
+    BEHL_FORCEINLINE
+    void handler_add_fast(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
+    {
+        const Value& lhs = get_register(S, frame, b);
+        const Value& rhs = get_register(S, frame, c);
+
+        switch (make_type_pair(lhs, rhs))
+        {
+            case kTypePairIntInt:
+            {
+                const Integer r = NumericAddOp{}(lhs.get_integer(), rhs.get_integer());
+                get_register(S, frame, a).emplace<Integer>(r);
+                break;
+            }
+            case kTypePairIntFloat:
+            {
+                const FP r = NumericAddOp{}(static_cast<FP>(lhs.get_integer()), rhs.get_fp());
+                get_register(S, frame, a).emplace<FP>(r);
+                break;
+            }
+            case kTypePairFloatInt:
+            {
+                const FP r = NumericAddOp{}(lhs.get_fp(), static_cast<FP>(rhs.get_integer()));
+                get_register(S, frame, a).emplace<FP>(r);
+                break;
+            }
+            case kTypePairFloatFloat:
+            {
+                const FP r = NumericAddOp{}(lhs.get_fp(), rhs.get_fp());
+                get_register(S, frame, a).emplace<FP>(r);
+                break;
+            }
+            default:
+                return;
+        }
+
+        frame.pc++;
+    }
+
+    BEHL_FORCEINLINE
+    void handler_add_ks(State* S, CallFrame& frame, Reg a, Reg b, ConstIndex k)
+    {
+        const Value& lhs = get_register(S, frame, b);
+
+        if (!lhs.is_string()) [[unlikely]]
+        {
+            throw TypeError(behl::format("can only concatenate string with string, not with {}", lhs.get_type_string()),
+                get_current_location(frame));
+        }
+
+        const Value& rhs = get_string_constant(frame.proto, k);
+        const auto* ls = lhs.get_string();
+        const auto* rs = rhs.get_string();
+        auto* obj = gc_new_string(S, { ls->view(), rs->view() });
+        get_register(S, frame, a) = Value(obj);
+        gc_validate_on_stack(S, obj);
+        gc_step(S);
+    }
+
     BEHL_FORCEINLINE
     void handler_add(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
     {
         const Value& lhs = get_register(S, frame, b);
         const Value& rhs = get_register(S, frame, c);
 
-        if (lhs.is_string())
+        if (make_type_pair(lhs, rhs) != kTypePairIntInt) [[unlikely]]
         {
-            const auto* ls = lhs.get_string();
+            if (lhs.is_string())
+            {
+                const auto* ls = lhs.get_string();
+                if (rhs.is_string())
+                {
+                    const auto* rs = rhs.get_string();
+                    auto* obj = gc_new_string(S, { ls->view(), rs->view() });
+                    get_register(S, frame, a) = Value(obj);
+                    gc_validate_on_stack(S, obj);
+                    gc_step(S);
+                    return;
+                }
+                throw TypeError(behl::format("can only concatenate string with string, not with {}", rhs.get_type_string()),
+                    get_current_location(frame));
+            }
+
             if (rhs.is_string())
             {
-                const auto* rs = rhs.get_string();
-                auto* obj = gc_new_string(S, { ls->view(), rs->view() });
-                get_register(S, frame, a) = Value(obj);
-                gc_validate_on_stack(S, obj);
-                gc_step(S);
-                return;
+                throw TypeError(behl::format("can only concatenate string with string, not with {}", lhs.get_type_string()),
+                    get_current_location(frame));
             }
-            throw TypeError(behl::format("can only concatenate string with string, not with {}", rhs.get_type_string()),
-                get_current_location(frame));
-        }
-
-        if (rhs.is_string())
-        {
-            throw TypeError(behl::format("can only concatenate string with string, not with {}", lhs.get_type_string()),
-                get_current_location(frame));
         }
 
         numeric_binop<MetaMethodType::kAdd, false>(S, a, lhs, rhs, frame, NumericAddOp{});

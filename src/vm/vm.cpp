@@ -277,46 +277,46 @@ namespace behl
                     break;
 
                 case OpCode::kOpAdd:
-                    handler_add(S, *frame, instr.a(), instr.b(), instr.c());
+                    handler_add_fast(S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpSub:
-                    handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpMul:
-                    handler_numeric<MetaMethodType::kMul, false, NumericMulOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kMul, false, NumericMulOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpDiv:
-                    handler_numeric<MetaMethodType::kDiv, true, NumericDivOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kDiv, true, NumericDivOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpMod:
-                    handler_mod(S, *frame, instr.a(), instr.b(), instr.c());
+                    handler_mod_fast(S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpPow:
-                    handler_numeric<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
+                    handler_numeric_fast<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
 
                 case OpCode::kOpBand:
-                    handler_bitwise<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpBor:
-                    handler_bitwise<MetaMethodType::kBOr, BitwiseOrOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBOr, BitwiseOrOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpBxor:
-                    handler_bitwise<MetaMethodType::kBXor, BitwiseXorOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBXor, BitwiseXorOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpShl:
-                    handler_bitwise<MetaMethodType::kBShl, BitwiseShlOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBShl, BitwiseShlOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
                 case OpCode::kOpShr:
-                    handler_bitwise<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
+                    handler_bitwise_fast<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
 
@@ -345,6 +345,51 @@ namespace behl
                         S, *frame, instr.a(), instr.b(), instr.signed_immediate_9bit());
                     break;
 
+                case OpCode::kOpMMSub:
+                    handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMMul:
+                    handler_numeric<MetaMethodType::kMul, false, NumericMulOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMDiv:
+                    handler_numeric<MetaMethodType::kDiv, true, NumericDivOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMMod:
+                    handler_mod(S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMPow:
+                    handler_numeric<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMBand:
+                    handler_bitwise<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMBor:
+                    handler_bitwise<MetaMethodType::kBOr, BitwiseOrOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMBxor:
+                    handler_bitwise<MetaMethodType::kBXor, BitwiseXorOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMShl:
+                    handler_bitwise<MetaMethodType::kBShl, BitwiseShlOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMShr:
+                    handler_bitwise<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
+                        S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpMMAdd:
+                    handler_add(S, *frame, instr.a(), instr.b(), instr.c());
+                    break;
+                case OpCode::kOpAddKS:
+                    handler_add_ks(S, *frame, instr.a(), instr.b(), instr.small_const_index());
+                    break;
                 case OpCode::kOpAddKI:
                     handler_numeric<MetaMethodType::kAdd, false, NumericAddOp, operand_reg, operand_const_int>(
                         S, *frame, instr.a(), instr.b(), instr.small_const_index());
@@ -381,8 +426,7 @@ namespace behl
                     handler_dec_upvalue(S, *frame, instr.a());
                     break;
                 case OpCode::kOpAddLocal:
-                    handler_numeric<MetaMethodType::kAdd, false, NumericAddOp, operand_reg, operand_reg>(
-                        S, *frame, instr.a(), instr.a(), instr.b());
+                    handler_add(S, *frame, instr.a(), instr.a(), instr.b());
                     break;
 
                 case OpCode::kOpEq:

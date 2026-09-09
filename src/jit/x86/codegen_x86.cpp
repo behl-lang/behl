@@ -103,6 +103,19 @@ namespace behl
                 return static_cast<uint8_t>(i);
             }
         }
+
+        if (cache_enabled_ && evict_one(false))
+        {
+            for (size_t i = 0; i < kGpPoolSize; ++i)
+            {
+                if ((gp_used_ & (1u << i)) == 0)
+                {
+                    gp_used_ |= (1u << i);
+                    return static_cast<uint8_t>(i);
+                }
+            }
+        }
+
         failed_ = true;
         return 0;
     }
@@ -129,6 +142,20 @@ namespace behl
                 return;
             }
         }
+
+        if (cache_enabled_ && evict_one(true))
+        {
+            for (size_t i = 0; i < kXmmPoolSize; ++i)
+            {
+                if ((xmm_used_ & (1u << i)) == 0)
+                {
+                    xmm_used_ |= (1u << i);
+                    var_reg_[var] = static_cast<uint8_t>(i);
+                    return;
+                }
+            }
+        }
+
         failed_ = true;
         var_reg_[var] = 0;
     }
@@ -395,6 +422,7 @@ namespace behl
                 case CgOpKind::kSubI64:
                 case CgOpKind::kMulI64:
                 case CgOpKind::kModI64:
+                case CgOpKind::kDivU64:
                 case CgOpKind::kShlI64:
                 case CgOpKind::kShrI64:
                 case CgOpKind::kAndI64:
@@ -442,6 +470,7 @@ namespace behl
             case CgOpKind::kSubI64:
             case CgOpKind::kMulI64:
             case CgOpKind::kModI64:
+            case CgOpKind::kDivU64:
             case CgOpKind::kShlI64:
             case CgOpKind::kShrI64:
             case CgOpKind::kAndI64:
@@ -467,11 +496,317 @@ namespace behl
         }
     }
 
+
+    static constexpr uint8_t kTagUnknown = 0xFF;
+
+    bool CodegenX86::slot_in_reg(int32_t slot, bool want_f64) const
+    {
+        if (slot < 0 || static_cast<size_t>(slot) >= slots_.size())
+        {
+            return false;
+        }
+        const SlotState& st = slots_[static_cast<size_t>(slot)];
+        return st.reg != kNoReg && st.is_f64 == want_f64;
+    }
+
+    void CodegenX86::cache_reset()
+    {
+        for (SlotState& st : slots_)
+        {
+            st.reg = kNoReg;
+            st.is_f64 = false;
+            st.dirty = false;
+            st.tag = kTagUnknown;
+            st.tag_dirty = false;
+        }
+    }
+
+    void CodegenX86::flush_slot(int32_t slot)
+    {
+        SlotState& st = slots_[static_cast<size_t>(slot)];
+        if (!st.dirty && !st.tag_dirty)
+        {
+            return;
+        }
+
+        assert(base_valid_ && "flushing a cached slot without a valid frame base");
+
+        if (st.dirty)
+        {
+            if (st.is_f64)
+            {
+                e_.movsd(slot_payload(slot), kXmmPool[st.reg]);
+            }
+            else
+            {
+                e_.mov(slot_payload(slot), kGpPool[st.reg]);
+            }
+            st.dirty = false;
+        }
+
+        if (st.tag_dirty)
+        {
+            e_.mov32(slot_tag(slot), st.tag);
+            st.tag_dirty = false;
+        }
+    }
+
+    void CodegenX86::cache_flush_dirty()
+    {
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            flush_slot(static_cast<int32_t>(i));
+        }
+    }
+
+    void CodegenX86::cache_drop_slot(int32_t slot)
+    {
+        if (slot < 0 || static_cast<size_t>(slot) >= slots_.size())
+        {
+            return;
+        }
+
+        flush_slot(slot);
+
+        SlotState& st = slots_[static_cast<size_t>(slot)];
+        if (st.reg != kNoReg)
+        {
+            if (st.is_f64)
+            {
+                xmm_used_ &= ~(1u << st.reg);
+            }
+            else
+            {
+                gp_used_ &= ~(1u << st.reg);
+            }
+            st.reg = kNoReg;
+        }
+        st.tag = kTagUnknown;
+    }
+
+    void CodegenX86::discard_payload(int32_t slot)
+    {
+        if (slot < 0 || static_cast<size_t>(slot) >= slots_.size())
+        {
+            return;
+        }
+
+        SlotState& st = slots_[static_cast<size_t>(slot)];
+        if (st.reg != kNoReg)
+        {
+            if (st.is_f64)
+            {
+                xmm_used_ &= ~(1u << st.reg);
+            }
+            else
+            {
+                gp_used_ &= ~(1u << st.reg);
+            }
+            st.reg = kNoReg;
+        }
+        st.dirty = false;
+    }
+
+    void CodegenX86::cache_drop_all()
+    {
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            cache_drop_slot(static_cast<int32_t>(i));
+        }
+    }
+
+    void CodegenX86::cache_forget_tags()
+    {
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            flush_slot(static_cast<int32_t>(i));
+            slots_[i].tag = kTagUnknown;
+        }
+    }
+
+    uint32_t CodegenX86::next_slot_use(int32_t slot, uint32_t from) const
+    {
+        const size_t count = program_->ops.size();
+        const size_t limit = (count - from > 256) ? from + 256 : count;
+
+        for (size_t i = from; i < limit; ++i)
+        {
+            const CgOp& op = program_->ops[i];
+            switch (op.kind)
+            {
+                case CgOpKind::kGuardTag:
+                case CgOpKind::kStoreTag:
+                case CgOpKind::kLoadI64:
+                case CgOpKind::kLoadF64:
+                case CgOpKind::kStoreI64:
+                case CgOpKind::kStoreF64:
+                case CgOpKind::kCvtSlotToF64:
+                case CgOpKind::kBranchTruthy:
+                    if (op.slot == slot)
+                    {
+                        return static_cast<uint32_t>(i);
+                    }
+                    break;
+                case CgOpKind::kCopySlot:
+                    if (op.slot == slot || op.imm == slot)
+                    {
+                        return static_cast<uint32_t>(i);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return UINT32_MAX;
+    }
+
+    int32_t CodegenX86::pick_victim(bool want_f64) const
+    {
+        int32_t best = -1;
+        uint32_t best_use = 0;
+
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            const SlotState& st = slots_[i];
+            if (st.reg == kNoReg || st.is_f64 != want_f64)
+            {
+                continue;
+            }
+
+            const uint32_t use = next_slot_use(static_cast<int32_t>(i), cur_index_ + 1);
+            if (best < 0 || use > best_use)
+            {
+                best = static_cast<int32_t>(i);
+                best_use = use;
+            }
+        }
+
+        return best;
+    }
+
+    bool CodegenX86::evict_one(bool want_f64)
+    {
+        const int32_t victim = pick_victim(want_f64);
+        if (victim < 0)
+        {
+            return false;
+        }
+
+        cache_drop_slot(victim);
+        return true;
+    }
+
+    void CodegenX86::take_ownership(int32_t slot, uint32_t var, bool is_f64)
+    {
+        SlotState& st = slots_[static_cast<size_t>(slot)];
+
+        if (st.reg != kNoReg)
+        {
+            if (st.is_f64)
+            {
+                xmm_used_ &= ~(1u << st.reg);
+            }
+            else
+            {
+                gp_used_ &= ~(1u << st.reg);
+            }
+            st.reg = kNoReg;
+        }
+
+        st.reg = var_reg_[var];
+        st.is_f64 = is_f64;
+        st.dirty = false;
+
+        var_reg_[var] = kNoReg;
+        var_reg2_[var] = kNoReg;
+    }
+
+    void CodegenX86::record_label_state(uint32_t label)
+    {
+        LabelState& ls = label_states_[label];
+        ls.recorded = true;
+        ls.entries.clear();
+
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            if (slots_[i].reg != kNoReg)
+            {
+                ls.entries.emplace_back(static_cast<int32_t>(i), slots_[i]);
+            }
+        }
+    }
+
+    void CodegenX86::restore_label_state(uint32_t label)
+    {
+        const LabelState& ls = label_states_[label];
+
+        cache_drop_all();
+
+        if (gp_used_ != 0 || xmm_used_ != 0)
+        {
+            failed_ = true;
+            return;
+        }
+
+        ensure_base();
+
+        for (const auto& entry : ls.entries)
+        {
+            const int32_t slot = entry.first;
+            const SlotState& want = entry.second;
+
+            if (want.is_f64)
+            {
+                e_.movsd(kXmmPool[want.reg], slot_payload(slot));
+                xmm_used_ |= (1u << want.reg);
+            }
+            else
+            {
+                e_.mov(kGpPool[want.reg], slot_payload(slot));
+                gp_used_ |= (1u << want.reg);
+            }
+
+            SlotState& st = slots_[static_cast<size_t>(slot)];
+            st.reg = want.reg;
+            st.is_f64 = want.is_f64;
+            st.dirty = false;
+            st.tag = kTagUnknown;
+            st.tag_dirty = false;
+        }
+    }
+
     void CodegenX86::lower(const CgOp& op, uint32_t index)
     {
         switch (op.kind)
         {
             case CgOpKind::kBind:
+                if (cache_enabled_)
+                {
+                    if (op.slot < 0)
+                    {
+                        cache_flush_dirty();
+                        cache_drop_all();
+                    }
+                    else
+                    {
+                        if (static_cast<size_t>(op.slot) < slots_.size())
+                        {
+                            flush_slot(op.slot);
+                            slots_[static_cast<size_t>(op.slot)].tag = kTagUnknown;
+                        }
+                        for (const int32_t guarded : guard_slots_[op.label2])
+                        {
+                            if (static_cast<size_t>(guarded) < slots_.size())
+                            {
+                                flush_slot(guarded);
+                                slots_[static_cast<size_t>(guarded)].tag = kTagUnknown;
+                            }
+                        }
+                        cache_flush_dirty();
+                        record_label_state(op.label);
+                    }
+                }
                 if (loop_header_[op.label])
                 {
                     e_.align(16);
@@ -484,27 +819,86 @@ namespace behl
                 break;
 
             case CgOpKind::kJump:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    if (label_states_[op.label].recorded)
+                    {
+                        restore_label_state(op.label);
+                        if (failed_)
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        cache_drop_all();
+                    }
+                }
                 e_.jmp(label(op.label));
                 break;
 
             case CgOpKind::kGuardTag:
+                if (cache_enabled_)
+                {
+                    if (slots_[static_cast<size_t>(op.slot)].tag == op.tag)
+                    {
+                        break;
+                    }
+                    cache_flush_dirty();
+                    guard_slots_[op.label].push_back(op.slot);
+                }
                 ensure_base();
                 e_.cmp8(slot_tag(op.slot), op.tag);
                 e_.jcc(Cond::ne, label(op.label));
+                if (cache_enabled_)
+                {
+                    slots_[static_cast<size_t>(op.slot)].tag = op.tag;
+                }
                 break;
 
             case CgOpKind::kCopySlot:
+            {
+                const int32_t src_slot = static_cast<int32_t>(op.imm);
+                if (cache_enabled_)
+                {
+                    flush_slot(src_slot);
+                    cache_drop_slot(op.slot);
+                }
                 ensure_base();
-                e_.movups(XmmReg::xmm5, slot_tag(static_cast<int32_t>(op.imm)));
+                e_.movups(XmmReg::xmm5, slot_tag(src_slot));
                 e_.movups(slot_tag(op.slot), XmmReg::xmm5);
+                if (cache_enabled_)
+                {
+                    slots_[static_cast<size_t>(op.slot)].tag = slots_[static_cast<size_t>(src_slot)].tag;
+                }
                 break;
+            }
 
             case CgOpKind::kStoreTag:
+                if (cache_enabled_ && slots_[static_cast<size_t>(op.slot)].tag == op.tag)
+                {
+                    break;
+                }
                 ensure_base();
                 e_.mov32(slot_tag(op.slot), op.tag);
+                if (cache_enabled_)
+                {
+                    slots_[static_cast<size_t>(op.slot)].tag = op.tag;
+                }
                 break;
 
             case CgOpKind::kLoadI64:
+                if (cache_enabled_ && slot_in_reg(op.slot, false))
+                {
+                    const GpReg src = kGpPool[slots_[static_cast<size_t>(op.slot)].reg];
+                    alloc_i64(op.var);
+                    if (!failed_)
+                    {
+                        e_.mov(gp(op.var), src);
+                    }
+                    break;
+                }
                 ensure_base();
                 alloc_i64(op.var);
                 if (!failed_)
@@ -518,6 +912,16 @@ namespace behl
                 break;
 
             case CgOpKind::kLoadF64:
+                if (cache_enabled_ && slot_in_reg(op.slot, true))
+                {
+                    const XmmReg src = kXmmPool[slots_[static_cast<size_t>(op.slot)].reg];
+                    alloc_f64(op.var);
+                    if (!failed_)
+                    {
+                        e_.movsd_reg(xmm(op.var), src);
+                    }
+                    break;
+                }
                 ensure_base();
                 alloc_f64(op.var);
                 if (!failed_)
@@ -547,6 +951,10 @@ namespace behl
                 break;
 
             case CgOpKind::kStoreI64:
+                if (cache_enabled_)
+                {
+                    discard_payload(op.slot);
+                }
                 ensure_base();
                 if (!failed_)
                 {
@@ -555,14 +963,26 @@ namespace behl
                     {
                         e_.mov(slot_payload_hi(op.slot), gp_hi(op.var));
                     }
+                    if (cache_enabled_ && last_pos_[op.var] == index)
+                    {
+                        take_ownership(op.slot, op.var, false);
+                    }
                 }
                 break;
 
             case CgOpKind::kStoreF64:
+                if (cache_enabled_)
+                {
+                    discard_payload(op.slot);
+                }
                 ensure_base();
                 if (!failed_)
                 {
                     e_.movsd(slot_payload(op.slot), xmm(op.var));
+                    if (cache_enabled_ && last_pos_[op.var] == index)
+                    {
+                        take_ownership(op.slot, op.var, true);
+                    }
                 }
                 break;
 
@@ -622,6 +1042,11 @@ namespace behl
                 break;
 
             case CgOpKind::kModI64:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
                 if (!failed_)
                 {
                     if constexpr (kMode64)
@@ -665,7 +1090,43 @@ namespace behl
                 }
                 break;
 
+            case CgOpKind::kDivU64:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                if (!failed_)
+                {
+                    if constexpr (kMode64)
+                    {
+                        e_.mov(mem(kStackPtr, 0), gp(op.var));
+                        e_.mov(mem(kStackPtr, 8), gp(op.var2));
+                        e_.mov(kScratchA, mem(kStackPtr, 0));
+                        e_.xor_(kScratchC, kScratchC);
+                        e_.div(mem(kStackPtr, 8));
+                        e_.mov(gp(op.var), kScratchA);
+                    }
+                    else
+                    {
+                        e_.push(gp_hi(op.var2));
+                        e_.push(gp(op.var2));
+                        e_.push(gp_hi(op.var));
+                        e_.push(gp(op.var));
+                        e_.call(reinterpret_cast<uintptr_t>(&jit_u64_div));
+                        e_.add(kStackPtr, 16);
+                        e_.mov(mem(kStackPtr, 0), kScratchA);
+                        e_.mov(gp_hi(op.var), kScratchC);
+                        e_.mov(gp(op.var), mem(kStackPtr, 0));
+                    }
+                }
+                break;
+
             case CgOpKind::kBranchI64:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                }
                 if (!failed_)
                 {
                     if constexpr (kMode64)
@@ -750,6 +1211,10 @@ namespace behl
 
             case CgOpKind::kBranchTruthy:
             {
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                }
                 ensure_base();
                 const Label truthy = label(op.label);
                 const Label falsy = label(op.label2);
@@ -804,6 +1269,10 @@ namespace behl
                 break;
 
             case CgOpKind::kCvtSlotToF64:
+                if (cache_enabled_)
+                {
+                    flush_slot(op.slot);
+                }
                 ensure_base();
                 alloc_f64(op.var);
                 if (!failed_)
@@ -822,6 +1291,11 @@ namespace behl
                 break;
 
             case CgOpKind::kMulI64:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
                 if (!failed_)
                 {
                     if constexpr (kMode64)
@@ -850,6 +1324,11 @@ namespace behl
 
             case CgOpKind::kShlI64:
             case CgOpKind::kShrI64:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
                 if (!failed_)
                 {
                     const bool is_shl = op.kind == CgOpKind::kShlI64;
@@ -934,6 +1413,10 @@ namespace behl
                 break;
 
             case CgOpKind::kBranchI64Imm:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                }
                 if (!failed_)
                 {
                     emit_branch_i64_imm(op);
@@ -942,6 +1425,10 @@ namespace behl
 
             case CgOpKind::kBranchF64:
             {
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                }
                 if (failed_)
                 {
                     break;
@@ -990,6 +1477,10 @@ namespace behl
             }
 
             case CgOpKind::kBranchVarEqU32:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                }
                 if (!failed_)
                 {
                     e_.cmp32(gp(op.var), static_cast<uint32_t>(op.imm));
@@ -998,16 +1489,30 @@ namespace behl
                 break;
 
             case CgOpKind::kHelperCall:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
                 emit_helper_call(op);
                 break;
 
             case CgOpKind::kSyncFrame:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
                 assert(gp_used_ == 0 && xmm_used_ == 0 && "frame sync with live variables");
                 emit_base_refresh();
                 base_valid_ = true;
                 break;
 
             case CgOpKind::kReturnResult:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
                 emit_epilogue(static_cast<uint32_t>(op.imm));
                 break;
         }
@@ -1018,6 +1523,42 @@ namespace behl
     JitEntry CodegenX86::generate(State* S, const CgProgram& program)
     {
         compute_liveness(program);
+
+        program_ = &program;
+        cache_enabled_ = kMode64 && program.allow_slot_cache;
+
+        {
+            int32_t max_slot = -1;
+            for (const CgOp& op : program.ops)
+            {
+                switch (op.kind)
+                {
+                    case CgOpKind::kGuardTag:
+                    case CgOpKind::kStoreTag:
+                    case CgOpKind::kLoadI64:
+                    case CgOpKind::kLoadF64:
+                    case CgOpKind::kStoreI64:
+                    case CgOpKind::kStoreF64:
+                    case CgOpKind::kCvtSlotToF64:
+                    case CgOpKind::kBranchTruthy:
+                    case CgOpKind::kBind:
+                        max_slot = (op.slot > max_slot) ? op.slot : max_slot;
+                        break;
+                    case CgOpKind::kCopySlot:
+                        max_slot = (op.slot > max_slot) ? op.slot : max_slot;
+                        max_slot = (static_cast<int32_t>(op.imm) > max_slot) ? static_cast<int32_t>(op.imm) : max_slot;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            slots_.assign(static_cast<size_t>(max_slot + 1), SlotState{});
+            cache_reset();
+        }
+
+        label_states_.assign(program.num_labels, LabelState{});
+        guard_slots_.assign(program.num_labels, std::vector<int32_t>{});
 
         loop_header_.assign(program.num_labels, false);
         {
@@ -1071,6 +1612,7 @@ namespace behl
 
         for (uint32_t i = 0; i < program.ops.size(); ++i)
         {
+            cur_index_ = i;
             lower(program.ops[i], i);
             if (failed_)
             {

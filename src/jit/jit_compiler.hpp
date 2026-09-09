@@ -38,6 +38,7 @@ namespace behl
         kAddI64Imm,
         kMulI64,
         kModI64,
+        kDivU64,
         kShlI64,
         kShrI64,
         kAndI64,
@@ -75,11 +76,15 @@ namespace behl
         uint32_t pcn;
     };
 
+    constexpr int32_t kClobberAll = -2;
+    constexpr int32_t kClobberNone = -1;
+
     struct CgProgram
     {
         std::vector<CgOp> ops;
         uint32_t num_labels{};
         uint32_t num_vars{};
+        bool allow_slot_cache{};
     };
 
     bool jit_compile_proto(const GCProto* proto, CgProgram& out);

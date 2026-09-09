@@ -92,6 +92,7 @@ namespace behl
         void movups(Mem dst, XmmReg src);
         void movsd(XmmReg dst, Mem src);
         void movsd(Mem dst, XmmReg src);
+        void movsd_reg(XmmReg dst, XmmReg src);
         void movq(XmmReg dst, GpReg src);
         void cvtsi2sd(XmmReg dst, Mem src);
         void fild_qword(Mem src);
@@ -129,6 +130,7 @@ namespace behl
         void imul(GpReg dst, GpReg src);
         void imul(GpReg dst, Mem src);
         void mul(Mem src);
+        void div(Mem src);
         void cqo();
         void idiv(GpReg divisor);
         void cmp(GpReg lhs, GpReg rhs);

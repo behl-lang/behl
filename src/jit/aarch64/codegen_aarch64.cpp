@@ -99,6 +99,20 @@ namespace behl
                 return;
             }
         }
+
+        if (cache_enabled_ && evict_one(false))
+        {
+            for (size_t i = 0; i < kGpPoolSize; ++i)
+            {
+                if ((gp_used_ & (1u << i)) == 0)
+                {
+                    gp_used_ |= (1u << i);
+                    var_reg_[var] = static_cast<uint8_t>(i);
+                    return;
+                }
+            }
+        }
+
         failed_ = true;
         var_reg_[var] = 0;
     }
@@ -115,6 +129,20 @@ namespace behl
                 return;
             }
         }
+
+        if (cache_enabled_ && evict_one(true))
+        {
+            for (size_t i = 0; i < kFpPoolSize; ++i)
+            {
+                if ((fp_used_ & (1u << i)) == 0)
+                {
+                    fp_used_ |= (1u << i);
+                    var_reg_[var] = static_cast<uint8_t>(i);
+                    return;
+                }
+            }
+        }
+
         failed_ = true;
         var_reg_[var] = 0;
     }
@@ -252,6 +280,7 @@ namespace behl
                 case CgOpKind::kSubI64:
                 case CgOpKind::kMulI64:
                 case CgOpKind::kModI64:
+                case CgOpKind::kDivU64:
                 case CgOpKind::kShlI64:
                 case CgOpKind::kShrI64:
                 case CgOpKind::kAndI64:
@@ -299,6 +328,7 @@ namespace behl
             case CgOpKind::kSubI64:
             case CgOpKind::kMulI64:
             case CgOpKind::kModI64:
+            case CgOpKind::kDivU64:
             case CgOpKind::kShlI64:
             case CgOpKind::kShrI64:
             case CgOpKind::kAndI64:
@@ -324,11 +354,236 @@ namespace behl
         }
     }
 
+
+    static constexpr uint8_t kTagUnknown = 0xFF;
+
+    bool CodegenAArch64::slot_in_reg(int32_t slot, bool want_f64) const
+    {
+        if (slot < 0 || static_cast<size_t>(slot) >= slots_.size())
+        {
+            return false;
+        }
+        const SlotState& st = slots_[static_cast<size_t>(slot)];
+        return st.reg != kNoReg && st.is_f64 == want_f64;
+    }
+
+    void CodegenAArch64::cache_reset()
+    {
+        for (SlotState& st : slots_)
+        {
+            st.reg = kNoReg;
+            st.is_f64 = false;
+            st.tag = kTagUnknown;
+        }
+    }
+
+    // Cached values always match memory, so dropping one never needs a
+    // write-back: the store that produced it was already emitted.
+    void CodegenAArch64::discard_payload(int32_t slot)
+    {
+        if (slot < 0 || static_cast<size_t>(slot) >= slots_.size())
+        {
+            return;
+        }
+
+        SlotState& st = slots_[static_cast<size_t>(slot)];
+        if (st.reg != kNoReg)
+        {
+            if (st.is_f64)
+            {
+                fp_used_ &= ~(1u << st.reg);
+            }
+            else
+            {
+                gp_used_ &= ~(1u << st.reg);
+            }
+            st.reg = kNoReg;
+        }
+    }
+
+    void CodegenAArch64::cache_drop_slot(int32_t slot)
+    {
+        if (slot < 0 || static_cast<size_t>(slot) >= slots_.size())
+        {
+            return;
+        }
+        discard_payload(slot);
+        slots_[static_cast<size_t>(slot)].tag = kTagUnknown;
+    }
+
+    void CodegenAArch64::cache_drop_all()
+    {
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            cache_drop_slot(static_cast<int32_t>(i));
+        }
+    }
+
+    uint32_t CodegenAArch64::next_slot_use(int32_t slot, uint32_t from) const
+    {
+        const size_t count = program_->ops.size();
+        const size_t limit = (count - from > 256) ? from + 256 : count;
+
+        for (size_t i = from; i < limit; ++i)
+        {
+            const CgOp& op = program_->ops[i];
+            switch (op.kind)
+            {
+                case CgOpKind::kGuardTag:
+                case CgOpKind::kStoreTag:
+                case CgOpKind::kLoadI64:
+                case CgOpKind::kLoadF64:
+                case CgOpKind::kStoreI64:
+                case CgOpKind::kStoreF64:
+                case CgOpKind::kCvtSlotToF64:
+                case CgOpKind::kBranchTruthy:
+                    if (op.slot == slot)
+                    {
+                        return static_cast<uint32_t>(i);
+                    }
+                    break;
+                case CgOpKind::kCopySlot:
+                    if (op.slot == slot || op.imm == slot)
+                    {
+                        return static_cast<uint32_t>(i);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return UINT32_MAX;
+    }
+
+    int32_t CodegenAArch64::pick_victim(bool want_f64) const
+    {
+        int32_t best = -1;
+        uint32_t best_use = 0;
+
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            const SlotState& st = slots_[i];
+            if (st.reg == kNoReg || st.is_f64 != want_f64)
+            {
+                continue;
+            }
+
+            const uint32_t use = next_slot_use(static_cast<int32_t>(i), cur_index_ + 1);
+            if (best < 0 || use > best_use)
+            {
+                best = static_cast<int32_t>(i);
+                best_use = use;
+            }
+        }
+
+        return best;
+    }
+
+    bool CodegenAArch64::evict_one(bool want_f64)
+    {
+        const int32_t victim = pick_victim(want_f64);
+        if (victim < 0)
+        {
+            return false;
+        }
+
+        discard_payload(victim);
+        return true;
+    }
+
+    void CodegenAArch64::take_ownership(int32_t slot, uint32_t var, bool is_f64)
+    {
+        discard_payload(slot);
+
+        SlotState& st = slots_[static_cast<size_t>(slot)];
+        st.reg = var_reg_[var];
+        st.is_f64 = is_f64;
+
+        var_reg_[var] = kNoReg;
+    }
+
+    void CodegenAArch64::record_label_state(uint32_t label)
+    {
+        LabelState& ls = label_states_[label];
+        ls.recorded = true;
+        ls.entries.clear();
+
+        for (size_t i = 0; i < slots_.size(); ++i)
+        {
+            if (slots_[i].reg != kNoReg)
+            {
+                ls.entries.emplace_back(static_cast<int32_t>(i), slots_[i]);
+            }
+        }
+    }
+
+    // A cold block reaches its resume label with no cached registers, so it has
+    // to reload whatever the fast path was holding before merging back.
+    void CodegenAArch64::restore_label_state(uint32_t label)
+    {
+        const LabelState& ls = label_states_[label];
+
+        cache_drop_all();
+
+        if (gp_used_ != 0 || fp_used_ != 0)
+        {
+            failed_ = true;
+            return;
+        }
+
+        ensure_base();
+
+        for (const auto& entry : ls.entries)
+        {
+            const int32_t slot = entry.first;
+            const SlotState& want = entry.second;
+
+            if (want.is_f64)
+            {
+                e_.ldr_d(kFpPool[want.reg], slot_payload(slot));
+                fp_used_ |= (1u << want.reg);
+            }
+            else
+            {
+                e_.ldr(kGpPool[want.reg], slot_payload(slot));
+                gp_used_ |= (1u << want.reg);
+            }
+
+            SlotState& st = slots_[static_cast<size_t>(slot)];
+            st.reg = want.reg;
+            st.is_f64 = want.is_f64;
+            st.tag = kTagUnknown;
+        }
+    }
+
     void CodegenAArch64::lower(const CgOp& op, uint32_t index)
     {
         switch (op.kind)
         {
             case CgOpKind::kBind:
+                if (cache_enabled_)
+                {
+                    if (op.slot < 0)
+                    {
+                        cache_drop_all();
+                    }
+                    else
+                    {
+                        if (static_cast<size_t>(op.slot) < slots_.size())
+                        {
+                            slots_[static_cast<size_t>(op.slot)].tag = kTagUnknown;
+                        }
+                        for (const int32_t guarded : guard_slots_[op.label2])
+                        {
+                            if (static_cast<size_t>(guarded) < slots_.size())
+                            {
+                                slots_[static_cast<size_t>(guarded)].tag = kTagUnknown;
+                            }
+                        }
+                        record_label_state(op.label);
+                    }
+                }
                 e_.bind(label(op.label));
                 if (op.flag)
                 {
@@ -337,29 +592,85 @@ namespace behl
                 break;
 
             case CgOpKind::kJump:
+                if (cache_enabled_)
+                {
+                    if (label_states_[op.label].recorded)
+                    {
+                        restore_label_state(op.label);
+                        if (failed_)
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        cache_drop_all();
+                    }
+                }
                 e_.b(label(op.label));
                 break;
 
             case CgOpKind::kGuardTag:
+                if (cache_enabled_)
+                {
+                    if (slots_[static_cast<size_t>(op.slot)].tag == op.tag)
+                    {
+                        break;
+                    }
+                    guard_slots_[op.label].push_back(op.slot);
+                }
                 ensure_base();
                 e_.ldrb(kScratch, slot_tag(op.slot));
                 e_.cmpw(kScratch, op.tag);
                 e_.bcond(A64Cond::ne, label(op.label));
+                if (cache_enabled_)
+                {
+                    slots_[static_cast<size_t>(op.slot)].tag = op.tag;
+                }
                 break;
 
             case CgOpKind::kCopySlot:
+            {
+                const int32_t src_slot = static_cast<int32_t>(op.imm);
+                if (cache_enabled_)
+                {
+                    cache_drop_slot(op.slot);
+                }
                 ensure_base();
-                e_.ldr_q(kCopyVec, slot_tag(static_cast<int32_t>(op.imm)));
+                e_.ldr_q(kCopyVec, slot_tag(src_slot));
                 e_.str_q(kCopyVec, slot_tag(op.slot));
+                if (cache_enabled_)
+                {
+                    slots_[static_cast<size_t>(op.slot)].tag = slots_[static_cast<size_t>(src_slot)].tag;
+                }
                 break;
+            }
 
             case CgOpKind::kStoreTag:
+                if (cache_enabled_ && slots_[static_cast<size_t>(op.slot)].tag == op.tag)
+                {
+                    break;
+                }
                 ensure_base();
                 e_.mov32(kScratch, op.tag);
                 e_.strw(kScratch, slot_tag(op.slot));
+                if (cache_enabled_)
+                {
+                    slots_[static_cast<size_t>(op.slot)].tag = op.tag;
+                }
                 break;
 
             case CgOpKind::kLoadI64:
+                if (cache_enabled_ && slot_in_reg(op.slot, false))
+                {
+                    const A64Reg src = kGpPool[slots_[static_cast<size_t>(op.slot)].reg];
+                    alloc_i64(op.var);
+                    if (!failed_)
+                    {
+                        e_.mov(gp(op.var), src);
+                    }
+                    break;
+                }
                 ensure_base();
                 alloc_i64(op.var);
                 if (!failed_)
@@ -369,6 +680,16 @@ namespace behl
                 break;
 
             case CgOpKind::kLoadF64:
+                if (cache_enabled_ && slot_in_reg(op.slot, true))
+                {
+                    const A64Vec src = kFpPool[slots_[static_cast<size_t>(op.slot)].reg];
+                    alloc_f64(op.var);
+                    if (!failed_)
+                    {
+                        e_.fmov_d(fp(op.var), src);
+                    }
+                    break;
+                }
                 ensure_base();
                 alloc_f64(op.var);
                 if (!failed_)
@@ -395,18 +716,34 @@ namespace behl
                 break;
 
             case CgOpKind::kStoreI64:
+                if (cache_enabled_)
+                {
+                    discard_payload(op.slot);
+                }
                 ensure_base();
                 if (!failed_)
                 {
                     e_.str(gp(op.var), slot_payload(op.slot));
+                    if (cache_enabled_ && last_pos_[op.var] == index)
+                    {
+                        take_ownership(op.slot, op.var, false);
+                    }
                 }
                 break;
 
             case CgOpKind::kStoreF64:
+                if (cache_enabled_)
+                {
+                    discard_payload(op.slot);
+                }
                 ensure_base();
                 if (!failed_)
                 {
                     e_.str_d(fp(op.var), slot_payload(op.slot));
+                    if (cache_enabled_ && last_pos_[op.var] == index)
+                    {
+                        take_ownership(op.slot, op.var, true);
+                    }
                 }
                 break;
 
@@ -459,6 +796,13 @@ namespace behl
                     e_.bcond(A64Cond::eq, label(op.label));
                     e_.sdiv(kScratch, gp(op.var), gp(op.var2));
                     e_.msub(gp(op.var), kScratch, gp(op.var2), gp(op.var));
+                }
+                break;
+
+            case CgOpKind::kDivU64:
+                if (!failed_)
+                {
+                    e_.udiv(gp(op.var), gp(op.var), gp(op.var2));
                 }
                 break;
 
@@ -581,10 +925,18 @@ namespace behl
                 break;
 
             case CgOpKind::kHelperCall:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
                 emit_helper_call(op);
                 break;
 
             case CgOpKind::kSyncFrame:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
                 assert(gp_used_ == 0 && fp_used_ == 0 && "frame sync with live variables");
                 emit_base_refresh();
                 base_valid_ = true;
@@ -602,6 +954,42 @@ namespace behl
     {
         compute_liveness(program);
 
+        program_ = &program;
+        cache_enabled_ = program.allow_slot_cache;
+
+        {
+            int32_t max_slot = -1;
+            for (const CgOp& op : program.ops)
+            {
+                switch (op.kind)
+                {
+                    case CgOpKind::kGuardTag:
+                    case CgOpKind::kStoreTag:
+                    case CgOpKind::kLoadI64:
+                    case CgOpKind::kLoadF64:
+                    case CgOpKind::kStoreI64:
+                    case CgOpKind::kStoreF64:
+                    case CgOpKind::kCvtSlotToF64:
+                    case CgOpKind::kBranchTruthy:
+                    case CgOpKind::kBind:
+                        max_slot = (op.slot > max_slot) ? op.slot : max_slot;
+                        break;
+                    case CgOpKind::kCopySlot:
+                        max_slot = (op.slot > max_slot) ? op.slot : max_slot;
+                        max_slot = (static_cast<int32_t>(op.imm) > max_slot) ? static_cast<int32_t>(op.imm) : max_slot;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            slots_.assign(static_cast<size_t>(max_slot + 1), SlotState{});
+            cache_reset();
+        }
+
+        label_states_.assign(program.num_labels, LabelState{});
+        guard_slots_.assign(program.num_labels, std::vector<int32_t>{});
+
         for (uint32_t i = 0; i < program.num_labels; ++i)
         {
             e_.new_label();
@@ -611,6 +999,7 @@ namespace behl
 
         for (uint32_t i = 0; i < program.ops.size(); ++i)
         {
+            cur_index_ = i;
             lower(program.ops[i], i);
             if (failed_)
             {

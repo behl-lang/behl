@@ -102,6 +102,9 @@ namespace behl
             case OpCode::kOpAddKF:
                 opcode_str = behl::format("{:<9} R{} R{} K{}", meta.name, instr.a(), instr.b(), instr.c());
                 break;
+            case OpCode::kOpAddKS:
+                opcode_str = behl::format("{:<9} R{} R{} K{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
             case OpCode::kOpSubKI:
                 opcode_str = behl::format("{:<9} R{} R{} K{}", meta.name, instr.a(), instr.b(), instr.c());
                 break;
@@ -121,6 +124,39 @@ namespace behl
                 opcode_str = behl::format("{:<9} U{}", meta.name, instr.a());
                 break;
             case OpCode::kOpAdd:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMAdd:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMSub:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMMul:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMDiv:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMMod:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMPow:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMBand:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMBor:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMBxor:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMShl:
+                opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
+                break;
+            case OpCode::kOpMMShr:
                 opcode_str = behl::format("{:<9} R{} R{} R{}", meta.name, instr.a(), instr.b(), instr.c());
                 break;
             case OpCode::kOpSub:

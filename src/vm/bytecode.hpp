@@ -99,10 +99,22 @@ namespace behl
         kOpVarargExpand,
         kOpReturn0,
         kOpReturn1,
+        kOpAddKS,
+        kOpMMAdd,
+        kOpMMSub,
+        kOpMMMul,
+        kOpMMDiv,
+        kOpMMMod,
+        kOpMMPow,
+        kOpMMBand,
+        kOpMMBor,
+        kOpMMBxor,
+        kOpMMShl,
+        kOpMMShr,
     };
 
     // Total number of opcodes - computed from last enum value
-    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpReturn1) + 1;
+    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpMMShr) + 1;
 
     struct Instruction
     {
@@ -668,6 +680,102 @@ namespace behl
     {
         Instruction i{};
         i.raw = (static_cast<uint32_t>(OpCode::kOpAddKI) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (k << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmsub(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMSub) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmmul(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMMul) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmdiv(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMDiv) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmmod(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMMod) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmpow(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMPow) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmband(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMBand) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmbor(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMBor) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmbxor(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMBxor) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmshl(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMShl) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmshr(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMShr) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_mmadd(Reg a, Reg b, Reg c) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpMMAdd) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
+            | (static_cast<uint32_t>(c) << 16);
+        return i;
+    }
+
+    constexpr Instruction make_op_addks(Reg a, Reg b, ConstIndex k) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpAddKS) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8)
             | (k << 16);
         return i;
     }

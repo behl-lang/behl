@@ -263,6 +263,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/callstack_tests.cpp
         src/tests/cfunction_tests.cpp
         src/tests/compare_tests.cpp
+        src/tests/concat_tests.cpp
         src/tests/const_tests.cpp
         src/tests/controflow_tests.cpp
         src/tests/debug_tests.cpp

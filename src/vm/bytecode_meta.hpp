@@ -197,6 +197,20 @@ namespace behl
         { OpCode::kOpReturn0, OpMode::kNone, OpMode::kNone, OpMode::kNone, true, true, false, "RETURN0" },
         // kOpReturn1 - Return R(A)
         { OpCode::kOpReturn1, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, true, false, "RETURN1" },
+        // kOpAddKS - R(A) = R(B) .. KS(C), string concatenation with a constant
+        { OpCode::kOpAddKS, OpMode::kWrite, OpMode::kRead, OpMode::kNone, true, false, false, "ADDKS" },
+        // kOpMMAdd - slow path for kOpAdd: string concat, metamethod or error
+        { OpCode::kOpMMAdd, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMADD" },
+        { OpCode::kOpMMSub, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSUB" },
+        { OpCode::kOpMMMul, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMMUL" },
+        { OpCode::kOpMMDiv, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMDIV" },
+        { OpCode::kOpMMMod, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMMOD" },
+        { OpCode::kOpMMPow, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMPOW" },
+        { OpCode::kOpMMBand, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMBAND" },
+        { OpCode::kOpMMBor, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMBOR" },
+        { OpCode::kOpMMBxor, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMBXOR" },
+        { OpCode::kOpMMShl, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHL" },
+        { OpCode::kOpMMShr, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHR" },
     } };
 
     // Helper function to get metadata for an opcode

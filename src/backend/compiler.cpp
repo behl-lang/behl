@@ -881,6 +881,22 @@ namespace behl
             }
             return;
         }
+        if (node.op == TokenType::kPlus && node.right->try_as<AstString>())
+        {
+            auto* rhs_str = node.right->try_as<AstString>();
+            auto saved_target = target_reg;
+            target_reg = std::nullopt;
+            auto [left_reg, left_free] = try_get_rk(node.left);
+            target_reg = saved_target;
+            Reg result_reg = get_target_reg();
+            const auto k = add_string_constant(C, rhs_str->view());
+            emit(C, make_op_addks(result_reg, left_reg, k), C.lastline);
+            if (left_free)
+            {
+                free_reg(C, left_reg);
+            }
+            return;
+        }
         if (node.op == TokenType::kPlus && node.right->try_as<AstFP>())
         {
             auto* rhs_fp = node.right->try_as<AstFP>();
@@ -1197,7 +1213,52 @@ namespace behl
         }
         if (!emitted_sequence)
         {
+            Instruction mm{};
+            bool needs_mm = true;
+            switch (node.op)
+            {
+                case TokenType::kPlus:
+                    mm = make_op_mmadd(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kMinus:
+                    mm = make_op_mmsub(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kStar:
+                    mm = make_op_mmmul(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kSlash:
+                    mm = make_op_mmdiv(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kPercent:
+                    mm = make_op_mmmod(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kPower:
+                    mm = make_op_mmpow(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kBAnd:
+                    mm = make_op_mmband(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kBOr:
+                    mm = make_op_mmbor(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kBXor:
+                    mm = make_op_mmbxor(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kBShl:
+                    mm = make_op_mmshl(result_reg, left_reg, right_reg);
+                    break;
+                case TokenType::kBShr:
+                    mm = make_op_mmshr(result_reg, left_reg, right_reg);
+                    break;
+                default:
+                    needs_mm = false;
+                    break;
+            }
             emit(C, std::move(instr), binop_line, binop_column);
+            if (needs_mm)
+            {
+                emit(C, std::move(mm), binop_line, binop_column);
+            }
         }
         free_reg(C, right_reg);
         if (left_free && result_reg != left_reg)
@@ -2314,22 +2375,27 @@ namespace behl
         if (node.op == TokenType::kPlus)
         {
             emit(C, make_op_add(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_mmadd(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
         }
         else if (node.op == TokenType::kMinus)
         {
             emit(C, make_op_sub(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_mmsub(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
         }
         else if (node.op == TokenType::kStar)
         {
             emit(C, make_op_mul(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_mmmul(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
         }
         else if (node.op == TokenType::kSlash)
         {
             emit(C, make_op_div(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_mmdiv(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
         }
         else if (node.op == TokenType::kPercent)
         {
             emit(C, make_op_mod(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_mmmod(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
         }
 
         free_reg(C, rhs_reg);
@@ -2348,22 +2414,27 @@ namespace behl
         if (node.op == TokenType::kPlus)
         {
             emit(C, make_op_add(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmadd(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kMinus)
         {
             emit(C, make_op_sub(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmsub(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kStar)
         {
             emit(C, make_op_mul(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmmul(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kSlash)
         {
             emit(C, make_op_div(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmdiv(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kPercent)
         {
             emit(C, make_op_mod(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmmod(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
 
         emit(C, make_op_setglobal(lhs_reg, k), C.lastline);
@@ -2394,22 +2465,27 @@ namespace behl
         if (node.op == TokenType::kPlus)
         {
             emit(C, make_op_add(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmadd(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kMinus)
         {
             emit(C, make_op_sub(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmsub(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kStar)
         {
             emit(C, make_op_mul(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmmul(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kSlash)
         {
             emit(C, make_op_div(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmdiv(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
         else if (node.op == TokenType::kPercent)
         {
             emit(C, make_op_mod(lhs_reg, lhs_reg, rhs_reg), C.lastline);
+            emit(C, make_op_mmmod(lhs_reg, lhs_reg, rhs_reg), C.lastline);
         }
 
         emit(C, make_op_setupval(lhs_reg, static_cast<uint8_t>(up)), C.lastline);

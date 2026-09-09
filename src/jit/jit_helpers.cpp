@@ -66,6 +66,35 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_setlist, handler_setlist(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_self, handler_self(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_add, handler_add(S, frame, instr.a(), instr.b(), instr.c()))
+    BEHL_JIT_WRAP(jit_op_mmadd, handler_add(S, frame, instr.a(), instr.b(), instr.c()))
+    BEHL_JIT_WRAP(jit_op_mmsub,
+        (handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmmul,
+        (handler_numeric<MetaMethodType::kMul, false, NumericMulOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmdiv,
+        (handler_numeric<MetaMethodType::kDiv, true, NumericDivOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmmod, handler_mod(S, frame, instr.a(), instr.b(), instr.c()))
+    BEHL_JIT_WRAP(jit_op_mmpow,
+        (handler_numeric<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmband,
+        (handler_bitwise<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmbor,
+        (handler_bitwise<MetaMethodType::kBOr, BitwiseOrOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmbxor,
+        (handler_bitwise<MetaMethodType::kBXor, BitwiseXorOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmshl,
+        (handler_bitwise<MetaMethodType::kBShl, BitwiseShlOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
+    BEHL_JIT_WRAP(jit_op_mmshr,
+        (handler_bitwise<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
+            S, frame, instr.a(), instr.b(), instr.c())))
     BEHL_JIT_WRAP(jit_op_sub,
         (handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(
             S, frame, instr.a(), instr.b(), instr.c())))
@@ -77,7 +106,7 @@ namespace behl
             S, frame, instr.a(), instr.b(), instr.c())))
     BEHL_JIT_WRAP(jit_op_mod, handler_mod(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_pow,
-        (handler_numeric<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
+        (handler_numeric_fast<MetaMethodType::kPow, false, NumericPowOp, operand_reg, operand_reg>(
             S, frame, instr.a(), instr.b(), instr.c())))
     BEHL_JIT_WRAP(jit_op_band,
         (handler_bitwise<MetaMethodType::kBAnd, BitwiseAndOp, operand_reg, operand_reg>(
@@ -115,15 +144,14 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_subkf,
         (handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_const_fp>(
             S, frame, instr.a(), instr.b(), instr.small_const_index())))
+    BEHL_JIT_WRAP(jit_op_addks, handler_add_ks(S, frame, instr.a(), instr.b(), instr.small_const_index()))
     BEHL_JIT_WRAP(jit_op_inclocal, handler_inc_local(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_declocal, handler_dec_local(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_incglobal, handler_inc_global(S, frame, instr.large_const_index()))
     BEHL_JIT_WRAP(jit_op_decglobal, handler_dec_global(S, frame, instr.large_const_index()))
     BEHL_JIT_WRAP(jit_op_incupvalue, handler_inc_upvalue(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_decupvalue, handler_dec_upvalue(S, frame, instr.a()))
-    BEHL_JIT_WRAP(jit_op_addlocal,
-        (handler_numeric<MetaMethodType::kAdd, false, NumericAddOp, operand_reg, operand_reg>(
-            S, frame, instr.a(), instr.a(), instr.b())))
+    BEHL_JIT_WRAP(jit_op_addlocal, handler_add(S, frame, instr.a(), instr.a(), instr.b()))
     BEHL_JIT_WRAP(
         jit_op_eq, (handler_cmp<MetaMethodType::kEq, CmpEqOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
@@ -187,6 +215,15 @@ namespace behl
             return 0;
         }
         return a % b;
+    }
+
+    uint64_t BEHL_CALLCONV jit_u64_div(uint64_t a, uint64_t b) noexcept
+    {
+        if (b == 0)
+        {
+            return 0;
+        }
+        return a / b;
     }
 
     uint32_t jit_return_entry_depth(State* S, const CallFrame& frame) noexcept
