@@ -254,6 +254,9 @@ target_compile_definitions(libbehl PRIVATE BEHL_BUILDING_LIBRARY)
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(libbehl PUBLIC BEHL_SHARED_LIBRARY)
 endif()
+if(BEHL_BUILD_TESTS OR BEHL_BUILD_BENCHMARKS)
+    target_compile_definitions(libbehl PUBLIC BEHL_EXPORT_INTERNAL)
+endif()
 
 # Tests
 if(BEHL_BUILD_TESTS)

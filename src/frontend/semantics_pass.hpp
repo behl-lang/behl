@@ -11,7 +11,7 @@ namespace behl
     {
         static constexpr std::string_view kName = "Semantics";
 
-        BEHL_API static AstProgram* apply(State* state, AstHolder& holder, AstProgram* program);
+        BEHL_API_INTERNAL static AstProgram* apply(State* state, AstHolder& holder, AstProgram* program);
     };
 
 } // namespace behl

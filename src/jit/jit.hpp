@@ -1,5 +1,6 @@
 #pragma once
 
+#include "behl/export.hpp"
 #include "gc/gco_proto.hpp"
 #include "platform.hpp"
 #include "state.hpp"
@@ -51,11 +52,11 @@ namespace behl
     constexpr size_t kJitNestLimit = 150;
     constexpr size_t kJitMaxCallDepth = 1000000;
 
-    bool jit_supported() noexcept;
+    BEHL_API_INTERNAL bool jit_supported() noexcept;
 
-    JitEntry jit_compile(State* S, const GCProto* proto);
+    BEHL_API_INTERNAL JitEntry jit_compile(State* S, const GCProto* proto);
 
-    void jit_release(State* S, JitEntry entry) noexcept;
+    BEHL_API_INTERNAL void jit_release(State* S, JitEntry entry) noexcept;
 
     bool jit_run_or_compile(State* S, const GCProto* proto);
 

@@ -14,7 +14,7 @@ namespace behl
     struct AstString;
     struct State;
 
-    class BEHL_API AstHolder
+    class BEHL_API_INTERNAL AstHolder
     {
     public:
         explicit AstHolder(State* state);
