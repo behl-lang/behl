@@ -1,6 +1,7 @@
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include <string>
 
 class RegressionTest : public ::testing::Test
 {
@@ -530,4 +531,19 @@ TEST_F(RegressionTest, ErrorColumnNumberForCallToNilValue)
 
     ASSERT_NO_THROW(behl::load_string(S, code)) << "Code should compile successfully";
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError) << "Call should fail because undefined_func is nil";
+}
+
+TEST_F(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
+{
+    std::string code = "function generated(seed, k) {\n    let acc = seed;\n";
+    for (int i = 0; i < 512; i++)
+    {
+        code += "    acc = acc + k * 3 - 1;\n";
+    }
+    code += "    return acc;\n}\nreturn generated(1, 2);\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code)) << "Repeating one statement shape must not exhaust the register file";
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::get_top(S), 1);
+    ASSERT_EQ(behl::to_integer(S, -1), 2561);
 }

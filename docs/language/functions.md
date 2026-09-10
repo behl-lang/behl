@@ -391,9 +391,9 @@ See [Optimizations](../optimizations.md#tail-call-optimization) for details.
 
 ### Self-Call Dispatch
 
-When a function calls itself by name, the call is dispatched directly to the enclosing function — the global lookup is skipped at compile time. This is what makes recursive benchmarks (fib, ackermann) competitive.
+When a function calls itself by name, the call is dispatched directly to the enclosing function - the global lookup is skipped at compile time. This is what makes recursive benchmarks (fib, ackermann) competitive.
 
-**Important semantic consequence:** the self-call is bound to the lexically-enclosing function at compile time, *not* re-resolved against the current value of the name at each call. Rebinding the function's name inside its own body — whether by reassigning the global, by introducing a local that shadows it, or by writing to `_G[name]` — will **not** redirect subsequent self-calls.
+**Important semantic consequence:** the self-call is bound to the lexically-enclosing function at compile time, *not* re-resolved against the current value of the name at each call. Rebinding the function's name inside its own body - whether by reassigning the global, by introducing a local that shadows it, or by writing to `_G[name]` - will **not** redirect subsequent self-calls.
 
 ```cpp
 function other(n) { return 999; }

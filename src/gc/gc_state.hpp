@@ -36,4 +36,6 @@ namespace behl
         int64_t gc_debt = 0;
     };
 
+    static_assert(std::is_standard_layout_v<GCState>);
+
 } // namespace behl

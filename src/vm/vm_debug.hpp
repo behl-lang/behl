@@ -43,9 +43,6 @@ namespace behl
             return false;
         }
 
-        const std::string& current_file = !frame.proto->source_name || frame.proto->source_name->size() == 0
-            ? std::string("<script>")
-            : std::string(frame.proto->source_name->view());
         const int current_depth = static_cast<int>(S->call_stack.size());
 
         // Check explicit breakpoints
@@ -54,7 +51,7 @@ namespace behl
             if (bp.line == current_line)
             {
                 // If breakpoint has no file specified, or file matches
-                if (bp.file.empty() || bp.file == current_file)
+                if (bp.file == nullptr || GCString::equals(bp.file, frame.proto->source_name))
                 {
                     out_event = DebugEvent::BreakpointHit;
                     return true;
@@ -65,7 +62,9 @@ namespace behl
         // Check step modes (only trigger on line changes)
         if (S->debug.step_mode != StepMode::None)
         {
-            const bool line_changed = (current_line != S->debug.last_line || current_file != S->debug.last_file);
+            const GCString* last = S->debug.last_file;
+            const bool file_changed = last == nullptr || !GCString::equals(frame.proto->source_name, last);
+            const bool line_changed = (current_line != S->debug.last_line || file_changed);
 
             if (line_changed)
             {
@@ -115,7 +114,7 @@ namespace behl
 
         // Update last location for next check
         S->debug.last_line = current_line;
-        S->debug.last_file = current_file;
+        S->debug.last_file = frame.proto->source_name;
 
         return false;
     }
@@ -260,18 +259,20 @@ namespace behl
             // Get function name
             const auto func_name = get_function_name(S, frame);
 
+            const std::string_view file = loc.filename != nullptr ? loc.filename->view() : std::string_view{};
+
             // Format: filename(line,col): at function
-            if (!loc.filename.empty() && loc.line > 0 && loc.column > 0)
+            if (!file.empty() && loc.line > 0 && loc.column > 0)
             {
-                result += behl::format("  {}({},{}): at {}", loc.filename, loc.line, loc.column, func_name);
+                result += behl::format("  {}({},{}): at {}", file, loc.line, loc.column, func_name);
             }
-            else if (!loc.filename.empty() && loc.line > 0)
+            else if (!file.empty() && loc.line > 0)
             {
-                result += behl::format("  {}({}): at {}", loc.filename, loc.line, func_name);
+                result += behl::format("  {}({}): at {}", file, loc.line, func_name);
             }
-            else if (!loc.filename.empty())
+            else if (!file.empty())
             {
-                result += behl::format<"  {}: at {}">(loc.filename, func_name);
+                result += behl::format<"  {}: at {}">(file, func_name);
             }
             else
             {
@@ -294,7 +295,8 @@ namespace behl
         {
             const std::string instr_str = instruction_to_string(instr, frame.pc);
             const auto loc = get_current_location(frame);
-            println("[TRACE] {}:{}:{} - {}", loc.filename, loc.line, loc.column, instr_str);
+            const std::string_view file = loc.filename != nullptr ? loc.filename->view() : std::string_view{};
+            println("[TRACE] {}:{}:{} - {}", file, loc.line, loc.column, instr_str);
         }
     }
 

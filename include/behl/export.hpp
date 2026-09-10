@@ -20,3 +20,9 @@
 // Static library build - no export/import needed
 #    define BEHL_API
 #endif
+
+#ifdef BEHL_EXPORT_INTERNAL
+#    define BEHL_API_INTERNAL BEHL_API
+#else
+#    define BEHL_API_INTERNAL
+#endif

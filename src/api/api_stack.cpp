@@ -1,3 +1,4 @@
+#include "api/api_internal.hpp"
 #include "behl.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_string.hpp"

@@ -1,3 +1,4 @@
+#include "gc/gc.hpp"
 #include "gc/gco_proto.hpp"
 #include "state.hpp"
 #include "state_debug.hpp"
@@ -63,10 +64,10 @@ namespace behl
         assert(line > 0 && "Line number must be positive");
 
         Breakpoint bp;
-        bp.file = file ? std::string(file) : std::string();
+        bp.file = (file != nullptr && *file != '\0') ? gc_new_string(S, file) : nullptr;
         bp.line = line;
 
-        S->debug.breakpoints.insert(bp);
+        S->debug.breakpoints.insert(S, bp);
     }
 
     void debug_remove_breakpoint(State* S, const char* file, int32_t line)
@@ -74,7 +75,7 @@ namespace behl
         assert(S && "State cannot be null");
 
         Breakpoint bp;
-        bp.file = file ? std::string(file) : std::string();
+        bp.file = (file != nullptr && *file != '\0') ? gc_new_string(S, file) : nullptr;
         bp.line = line;
 
         S->debug.breakpoints.erase(bp);
@@ -120,8 +121,7 @@ namespace behl
 
         if (file)
         {
-            *file = !frame.proto->source_name || frame.proto->source_name->size() == 0 ? "<script>"
-                                                                                       : frame.proto->source_name->data();
+            *file = frame.proto->source_name->data();
         }
 
         return true;

@@ -4,6 +4,7 @@
 #include "ast/ast_holder.hpp"
 #include "common/charconv_compat.hpp"
 #include "frontend/lexer.hpp"
+#include "gc/gc.hpp"
 
 #include <behl/exceptions.hpp>
 #include <charconv>
@@ -101,7 +102,7 @@ namespace behl
         AstHolder& holder;
         std::span<const Token> tokens;
         size_t pos = 0;
-        std::string_view chunkname;
+        GCString* chunkname;
         int max_line = -1;   // -1 means parse entire file
         int max_column = -1; // -1 means parse entire line, otherwise stop at this column
     };
@@ -349,7 +350,8 @@ namespace behl
     AstProgram* parse(
         AstHolder& holder, std::span<const Token> tokens, std::string_view chunkname, int max_line, int max_column)
     {
-        ParserState P{ holder, tokens, 0, chunkname, max_line, max_column };
+        GCString* chunk = gc_new_string(holder.state(), chunkname.empty() ? std::string_view("<script>") : chunkname);
+        ParserState P{ holder, tokens, 0, chunk, max_line, max_column };
         auto* prog = holder.make<AstProgram>();
 
         // Check for module declaration (must be first statement)

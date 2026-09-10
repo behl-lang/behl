@@ -74,6 +74,7 @@ namespace behl
             }
             case OpCode::kOpGetFieldS:
             case OpCode::kOpSetFieldS:
+            case OpCode::kOpAddKS:
             {
                 const auto k = instr.small_const_index();
                 if (k < proto.str_constants.size() && proto.str_constants[k].is_string())
