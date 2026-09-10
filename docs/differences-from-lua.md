@@ -497,10 +497,9 @@ Behl supports both `key = value` shorthand (for identifiers) and `["key"] = valu
 ### Missing Features
 
 Behl currently does **not** support:
-- `...` (varargs)
 - `select()`
 - `ipairs()` (use `pairs()` instead, remember 0-indexing)
-- Lua 5.4+ attributes like `<const>` and `<close>`
+- Lua 5.4+ attributes like `<const>` and `<close>` (Behl has a `const` keyword, but not Lua's attribute syntax)
 - Coroutines (`coroutine` library)
 - Weak tables
 
