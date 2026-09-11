@@ -85,7 +85,7 @@ try {
 **Stack behavior:**
 - Before: `[function, arg1, arg2, ...]`
 - After (success): `[result1, result2, ...]`
-- After (error): Exception thrown, stack unchanged
+- After (error): Exception thrown, the function and its arguments are removed from the stack
 
 ---
 

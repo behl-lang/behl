@@ -8,7 +8,7 @@ nav_order: 2
 # Stack Operations
 {: .no_toc }
 
-Manipulate values on the behl stack.
+Manipulate values on the Behl stack.
 {: .fs-6 .fw-300 }
 
 ## Table of contents
@@ -21,17 +21,17 @@ Manipulate values on the behl stack.
 
 ## Overview
 
-The behl API uses a stack-based model similar to Lua. Values are manipulated on the stack using integer indices:
-- **Positive indices** (0, 1, 2, ...) count from bottom
+The Behl API uses a stack-based model similar to Lua. Values are manipulated on the stack using integer indices:
+- **Non-negative indices** (0, 1, 2, ...) count up from the current frame base, so inside a C function index `0` is the first argument
 - **Negative indices** (-1, -2, -3, ...) count from top
 - `-1` is the top of the stack
 
-**Stack diagram:**
+**Stack diagram, inside a C function called with two arguments that has pushed two more values:**
 ```
  4  |  value  |  <- top (index -1 or 3)
  3  |  value  |  <- index -2 or 2
- 2  |  value  |  <- index -3 or 1
- 1  |  value  |  <- bottom (index -4 or 0)
+ 2  |  arg2   |  <- index -3 or 1
+ 1  |  arg1   |  <- frame base (index -4 or 0)
 ```
 
 ---

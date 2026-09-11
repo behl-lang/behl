@@ -33,7 +33,7 @@ x = {1, 2, 3};     // now x holds a table
 | `nil` | Absence of value | `nil` |
 | `boolean` | True or false | `true`, `false` |
 | `integer` | 64-bit signed integer | `42`, `0xFF`, `-10` |
-| `number` | 64-bit floating point | `3.14`, `1.5e-10` |
+| `number` | 64-bit floating point | `3.14`, `.5`, `5.` |
 | `string` | Immutable text | `"hello"`, `'world'` |
 | `function` | Callable function | Functions and closures |
 | `table` | Associative array | `{1, 2, 3}` |
@@ -53,6 +53,30 @@ print(typeof(y)); // "number"
 let s = "hello";
 print(typeof(s)); // "string"
 ```
+
+`typeid()` returns the numeric type tag of a value. The values are bit-encoded (category bits plus a small index), not a dense `0..n` range, so treat them as opaque and only compare them against each other:
+
+```cpp
+print(typeid(nil));    // 0
+print(typeid(42));     // 35
+print(typeid(3.14));   // 36
+print(typeid("hi"));   // 69
+print(typeid({}));     // 86
+```
+
+| Type | `typeid()` | `typeof()` |
+|------|-----------|-----------|
+| `nil` | 0 | `"nil"` |
+| `boolean` | 2 | `"boolean"` |
+| `integer` | 35 | `"integer"` |
+| `number` | 36 | `"number"` |
+| `string` | 69 | `"string"` |
+| `table` | 86 | `"table"` |
+| `userdata` | 89 | `"userdata"` |
+| closure | 199 | `"function"` |
+| C function | 136 | `"function"` |
+
+Note that `typeid()` distinguishes a Behl closure from a C function, while `typeof()` reports `"function"` for both.
 
 ## Nil
 
@@ -124,9 +148,14 @@ let f = 0123;      // 123 (decimal, not octal)
 
 ```cpp
 let f1 = 3.14;
-let f2 = 1.5e-10;  // Scientific notation
-let f3 = .5;       // 0.5
-let f4 = 5.;       // 5.0
+let f2 = .5;       // 0.5
+let f3 = 5.;       // 5.0
+```
+
+**Note**: Scientific notation is **not** supported by the lexer. `1.5e-10` is not a single literal, it lexes as `1.5`, the identifier `e`, `-` and `10`. Scientific notation is accepted at runtime by `tonumber()`:
+
+```cpp
+let small = tonumber("1.5e-10");  // 1.5e-10
 ```
 
 ### Type Promotion
@@ -135,9 +164,11 @@ Arithmetic operations promote to floating-point when needed:
 
 ```cpp
 let x = 10 / 3;    // 3.333... (number)
-let y = 10 / 2;    // 5 (integer - exact division)
+let y = 10 / 2;    // 5.0 (number - / is always float division)
 let z = 5 + 3.14;  // 8.14 (promoted to number)
 ```
+
+**Note**: `/` always produces a `number`, even when both operands are integers and the division is exact.
 
 ### Number Precision
 
@@ -152,8 +183,8 @@ Integer arithmetic uses **wrapping** (two's complement) on overflow:
 let max = 9223372036854775807  // INT64_MAX
 let overflowed = max + 1        // Wraps to INT64_MIN (-9223372036854775808)
 
-let min = -9223372036854775808  // INT64_MIN  
-let underflowed = min - 1       // Wraps to INT64_MAX (9223372036854775807)
+let min = -9223372036854775807 - 1  // INT64_MIN, computed at runtime
+let underflowed = min - 1           // Wraps to INT64_MAX (9223372036854775807)
 
 // Multiplication overflow
 let large = 9223372036854775807
@@ -161,6 +192,8 @@ let result = large * 2          // Wraps to -2
 ```
 
 **Note**: Overflow does not cause errors or convert to floats - values wrap around silently.
+
+**Note**: The literal `-9223372036854775808` is lexed as a negation applied to `9223372036854775808`, which does not fit in a 64-bit integer, so it becomes a `number` (double) instead. Write `-9223372036854775807 - 1` to get INT64_MIN as an integer.
 
 ## Strings
 
@@ -226,15 +259,17 @@ let x = "Value: " + tostring(42); // OK
 
 ### String Length
 
-Use the `#` operator (via rawlen) or `string.len()`:
+Use the `#` operator or `string.len()`:
 
 ```cpp
 const string = import("string");
 
 let s = "hello";
-print(rawlen(s));        // 5
+print(#s);               // 5
 print(string.len(s));    // 5
 ```
+
+**Note**: `rawlen()` only works on tables. It returns `0` for a string or any other non-table value.
 
 ### String Operations
 
@@ -293,8 +328,9 @@ Userdata represents opaque C++ objects exposed to Behl scripts through the C++ A
 ### Usage from Scripts
 
 ```js
-// Created from C++ API
-let file = os.open("data.txt", "r");
+// Created from C++ API, or from an opt-in module such as fs
+const fs = import("fs");
+let file = fs.open("data.txt", "r");
 print(typeof(file));  // "userdata"
 
 // Access through C++ functions
@@ -373,7 +409,7 @@ let bad = tonumber("xyz");  // nil
 Behl has **minimal** implicit conversion:
 
 - **Arithmetic**: Integer + Float → Float
-- **Comparison**: Same-type comparison only
+- **Comparison**: Integers and floats compare against each other (the integer is promoted to float)
 - **Strings**: No automatic number coercion
 
 ```cpp

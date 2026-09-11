@@ -309,7 +309,7 @@ print("Found at index: " + tostring(index));  // 4
 const math = import("math");
 
 // Constants
-print("PI = " + tostring(math.PI));
+print("PI = " + tostring(math.pi));
 
 // Basic operations
 print(math.sqrt(16));      // 4
@@ -317,7 +317,7 @@ print(math.pow(2, 10));    // 1024
 print(math.abs(-42));      // 42
 
 // Trigonometry
-let angle = math.PI / 4;
+let angle = math.pi / 4;
 print(math.sin(angle));    // 0.707...
 print(math.cos(angle));    // 0.707...
 
@@ -350,13 +350,13 @@ const table = import("table");
 
 let arr = {10, 20, 30};
 
-table.insert(arr, 40);        // Append
-table.insert(arr, 0, 5);      // Insert at beginning
+table.insert(arr, 40);        // Append; insert always appends
+print(table.rawlen(arr));     // 4
+
+table.rawset(arr, 0, 5);      // Overwrite index 0
+print(table.rawget(arr, 0));  // 5
 
 table.print(arr);              // Debug print
-
-let removed = table.remove(arr, 1);
-print("Removed: " + tostring(removed));
 ```
 
 ---
@@ -545,28 +545,6 @@ for (let i = 0; i < rawlen(data); i++) {
 
 ## Practical Examples
 
-### Simple Calculator REPL (Concept)
-
-```cpp
-function evaluate(expr) {
-    // Simple expression evaluator
-    let success, result = pcall(function() {
-        return eval_code(expr);
-    });
-    
-    if (success) {
-        return result;
-    } else {
-        return "Error: " + result;
-    }
-}
-
-// Example usage
-print(evaluate("2 + 3 * 4"));     // 14
-print(evaluate("sqrt(16)"));      // 4
-print(evaluate("sin(PI / 2)"));   // 1
-```
-
 ### Data Processing
 
 ```cpp
@@ -631,6 +609,8 @@ struct FileHandle {
 
 constexpr uint32_t FileHandle_UID = behl::make_uid("FileHandle");
 
+static int file_finalizer(behl::State* S);
+
 // Open a file
 static int file_open(behl::State* S) {
     auto filename = behl::check_string(S, 0);
@@ -649,8 +629,8 @@ static int file_open(behl::State* S) {
     // Add finalizer for automatic cleanup
     behl::table_new(S);
     behl::push_cfunction(S, file_finalizer);
-    behl::table_rawset_field(S, -2, "__gc");
-    behl::set_metatable(S, -2);
+    behl::table_rawsetfield(S, -2, "__gc");
+    behl::metatable_set(S, -2);
     
     return 1;
 }
@@ -754,6 +734,8 @@ print("Lines: " + tostring(count_lines("data.txt")));
 ```cpp
 #include <behl/behl.hpp>
 #include <cmath>
+#include <format>
+#include <string>
 
 struct Vector2D {
     double x, y;
@@ -772,8 +754,8 @@ static int vec2_new(behl::State* S) {
     v->y = y;
     
     // Attach metatable
-    behl::table_rawget_field(S, behl::REGISTRY_INDEX, "Vector2D_mt");
-    behl::set_metatable(S, -2);
+    behl::metatable_find(S, "Vector2D");
+    behl::metatable_set(S, -2);
     
     return 1;
 }
@@ -801,8 +783,8 @@ static int vec2_add(behl::State* S) {
     result->x = a->x + b->x;
     result->y = a->y + b->y;
     
-    behl::get_metatable(S, 0);
-    behl::set_metatable(S, -2);
+    behl::metatable_get(S, 0);
+    behl::metatable_set(S, -2);
     
     return 1;
 }
@@ -818,22 +800,21 @@ static int vec2_length(behl::State* S) {
 // __tostring
 static int vec2_tostring(behl::State* S) {
     Vector2D* v = static_cast<Vector2D*>(behl::check_userdata(S, 0, Vector2D_UID));
-    std::string str = behl::format("Vector2D({}, {})", v->x, v->y);
+    std::string str = std::format("Vector2D({}, {})", v->x, v->y);
     behl::push_string(S, str);
     return 1;
 }
 
 void create_vector2d_metatable(behl::State* S) {
-    behl::table_new(S);
+    behl::metatable_new(S, "Vector2D");
     
     behl::push_cfunction(S, vec2_add);
-    behl::table_rawset_field(S, -2, "__add");
+    behl::table_rawsetfield(S, -2, "__add");
     
     behl::push_cfunction(S, vec2_tostring);
-    behl::table_rawset_field(S, -2, "__tostring");
+    behl::table_rawsetfield(S, -2, "__tostring");
     
-    // Store in registry
-    behl::table_rawset_field(S, behl::REGISTRY_INDEX, "Vector2D_mt");
+    behl::pop(S, 1);
 }
 
 void setup_vector_api(behl::State* S) {
@@ -889,5 +870,5 @@ for (let i = 0; i < 10; i++) {
 ## More Examples
 
 Check the repository for additional examples:
-- `*.behl` files in the root directory
-- Unit tests in `tests/` for advanced usage patterns
+- `*.behl` scripts in `test-scripts/`
+- Unit tests in `src/tests/` for advanced usage patterns

@@ -40,7 +40,7 @@ int main() {
 
 ## Philosophy
 
-The behl C++ API is designed to be:
+The Behl C++ API is designed to be:
 - **Familiar** - Similar to Lua's C API
 - **Modern** - Leverages C++20 features
 - **Type-safe** - Strong type checking with UIDs

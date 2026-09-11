@@ -25,7 +25,7 @@ The math module provides mathematical functions and constants. It must be explic
 
 ```cpp
 const math = import("math");
-print(math.PI);
+print(math.pi);
 ```
 
 ---
@@ -34,8 +34,9 @@ print(math.PI);
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `math.PI` | 3.14159... | π (pi) |
-| `math.E` | 2.71828... | e (Euler's number) |
+| `math.pi` | 3.14159... | π (pi) |
+| `math.e` | 2.71828... | e (Euler's number) |
+| `math.huge` | inf | Positive infinity |
 
 ---
 
@@ -58,12 +59,30 @@ print(math.ceil(3.2));   // 4
 print(math.round(3.5));  // 4
 ```
 
-### math.min(x, y) / math.max(x, y)
-Return minimum or maximum of two numbers.
+### math.min(...) / math.max(...)
+Return minimum or maximum of one or more numbers. Requires at least one argument; calling with zero arguments is an error.
 
 ```cpp
-print(math.min(5, 10));  // 5
-print(math.max(5, 10));  // 10
+print(math.min(5, 10));       // 5
+print(math.max(5, 10, 2));    // 10
+```
+
+### math.sign(x)
+Returns -1, 0, or 1 indicating the sign of `x`.
+
+```cpp
+print(math.sign(-5));   // -1
+print(math.sign(0));    // 0
+print(math.sign(3.2));  // 1
+```
+
+### math.clamp(x, min, max)
+Clamps `x` to the range `[min, max]`.
+
+```cpp
+print(math.clamp(15, 0, 10));  // 10
+print(math.clamp(-5, 0, 10));  // 0
+print(math.clamp(5, 0, 10));   // 5
 ```
 
 ### math.sqrt(x)
@@ -74,6 +93,14 @@ print(math.sqrt(16));  // 4
 print(math.sqrt(2));   // 1.41421...
 ```
 
+### math.cbrt(x)
+Cube root.
+
+```cpp
+print(math.cbrt(27));  // 3
+print(math.cbrt(-8));  // -2
+```
+
 ### math.pow(x, y) / math.exp(x)
 Power and exponential.
 
@@ -82,13 +109,40 @@ print(math.pow(2, 8));   // 256
 print(math.exp(1));      // 2.71828... (e^1)
 ```
 
-### math.log(x) / math.log10(x) / math.log2(x)
-Logarithms.
+### math.expm1(x)
+Computes `exp(x) - 1` with better precision for small `x`.
 
 ```cpp
-print(math.log(math.E));  // 1 (natural log)
-print(math.log10(100));      // 2
-print(math.log2(8));         // 3
+print(math.expm1(0));  // 0
+```
+
+### math.log(x, base) / math.log10(x) / math.log2(x)
+Logarithms. `base` is optional; if omitted, computes the natural logarithm.
+
+```cpp
+print(math.log(math.e));   // 1 (natural log)
+print(math.log(8, 2));     // 3 (log base 2)
+print(math.log10(100));    // 2
+print(math.log2(8));       // 3
+```
+
+### math.log1p(x)
+Computes `log(1 + x)` with better precision for small `x`.
+
+```cpp
+print(math.log1p(0));  // 0
+```
+
+---
+
+## Angle Conversion
+
+### math.deg(x) / math.rad(x)
+Convert between radians and degrees.
+
+```cpp
+print(math.deg(math.pi));  // 180
+print(math.rad(180));      // 3.14159... (π)
 ```
 
 ---
@@ -98,9 +152,9 @@ print(math.log2(8));         // 3
 ### Basic Trigonometry
 
 ```cpp
-print(math.sin(math.PI / 2));   // 1
+print(math.sin(math.pi / 2));   // 1
 print(math.cos(0));                 // 1
-print(math.tan(math.PI / 4));   // 1
+print(math.tan(math.pi / 4));   // 1
 ```
 
 ### Inverse Trigonometry
@@ -206,7 +260,7 @@ const math = import("math");
 
 // Calculate circle area
 let radius = 5;
-let area = math.PI * math.pow(radius, 2);
+let area = math.pi * math.pow(radius, 2);
 print("Area: " + tostring(area));
 
 // Distance between two points

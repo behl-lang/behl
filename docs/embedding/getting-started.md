@@ -27,7 +27,7 @@ Basic setup for embedding Behl in your C++ application.
 #include <behl/behl.hpp>
 ```
 
-All behl functions are in the `behl` namespace.
+All Behl functions are in the `behl` namespace.
 
 ### Linking
 
@@ -43,7 +43,7 @@ target_link_libraries(your_target PRIVATE behl)
 
 ### Creating a State
 
-The behl `State` is the core runtime object. Create one with `new_state()`:
+The Behl `State` is the core runtime object. Create one with `new_state()`:
 
 ```cpp
 behl::State* S = behl::new_state();
@@ -53,13 +53,16 @@ behl::State* S = behl::new_state();
 
 ### Loading the Standard Library
 
-Load all standard library modules (core, table, gc, debug, math, os, string, fs):
+Load the standard libraries (core, table, gc, jit, debug, math, os, string):
 
 ```cpp
 behl::load_stdlib(S);
 ```
 
-All modules must be explicitly imported using `import()`.
+The core library installs its functions directly as globals (`print`, `pcall`, `error`, `pairs`,
+`import`, ...); the others are modules and must be explicitly imported using `import()`. The
+security-sensitive `fs` and `process` libraries are not loaded by `load_stdlib`, load them opt-in
+with `load_lib_fs()` and `load_lib_process()`.
 
 ### Cleaning Up
 
@@ -91,12 +94,14 @@ int main() {
         return x + y;
     )";
     
-    if (behl::load_string(S, script)) {
-        if (behl::call(S, 0, 1)) {
-            int result = behl::to_integer(S, -1);
-            std::cout << "Result from C++: " << result << "\n";
-            behl::pop(S, 1);
-        }
+    try {
+        behl::load_string(S, script);
+        behl::call(S, 0, 1);
+        int result = behl::to_integer(S, -1);
+        std::cout << "Result from C++: " << result << "\n";
+        behl::pop(S, 1);
+    } catch (const behl::BehlException& e) {
+        std::cerr << "Error: " << e.what() << "\n";
     }
     
     // Cleanup

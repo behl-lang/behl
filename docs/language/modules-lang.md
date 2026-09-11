@@ -18,7 +18,7 @@ nav_order: 9
 
 ## Overview
 
-Modules provide a way to organize and reuse code. Behl's module system allows you to import built-in modules and custom modules created from C++.
+Modules provide a way to organize and reuse code. Behl's module system allows you to import built-in modules, script modules written in Behl, and custom modules created from C++.
 
 ## Importing Modules
 
@@ -26,7 +26,7 @@ Use the `import()` function to load modules:
 
 ```cpp
 const math = import("math");
-print(math.PI);        // 3.14159...
+print(math.pi);        // 3.14159...
 print(math.sqrt(16));  // 4
 ```
 
@@ -65,7 +65,7 @@ All modules require explicit import:
 const math = import("math");
 const string = import("string");
 
-print(math.PI);
+print(math.pi);
 print(string.upper("hello"));
 ```
 
@@ -73,15 +73,20 @@ See [Standard Library](../standard-library) for complete module documentation.
 
 ### Module Loading
 
+The registered modules are `math`, `string`, `table`, `os`, `gc`, `jit` and `debug`, plus the security-sensitive `fs` and `process` modules, which the host has to opt into. There is no `io` module.
+
 ```cpp
 // Core modules
 const math = import("math");
 const string = import("string");
 const table = import("table");
 
-// System modules (if available)
+// System modules
 const os = import("os");
-const io = import("io");
+
+// Opt-in modules (only if the host enabled them)
+const fs = import("fs");
+const process = import("process");
 ```
 
 ## Module Usage Patterns
@@ -118,7 +123,81 @@ Import modules only when needed:
 ```cpp
 function useAdvancedMath() {
     const math = import("math");
-    return math.sin(math.PI / 2);
+    return math.sin(math.pi / 2);
+}
+```
+
+## Creating Script Modules
+
+A `.behl` file becomes a module by starting with the `module;` declaration and marking its public names with `export`. `module;` must be the very first statement in the file.
+
+```cpp
+// mathutils.behl
+module;
+
+const PI2 = 6.28318;
+
+let counter = 0;              // Private, not exported
+
+let function helper(x) {      // Private, not exported
+    return x * 2;
+}
+
+export const VERSION = "1.0";
+
+export function double(x) {
+    return helper(x);
+}
+```
+
+Importing the file returns a table of exactly the exported names:
+
+```cpp
+const mathutils = import("./mathutils");
+
+print(mathutils.VERSION);    // "1.0"
+print(mathutils.double(21)); // 42
+print(mathutils.counter);    // nil (private)
+print(mathutils.helper);     // nil (private)
+```
+
+### Export Forms
+
+| Form | Notes |
+|------|-------|
+| `export function name() {}` | Exports a function |
+| `export const NAME = value` | Exports a constant |
+| `export { a, b, c }` | Exports names declared earlier in the file |
+
+`export let` is rejected at parse time. Mutable exports are not allowed, use `const` or getter/setter functions.
+
+```cpp
+module;
+
+const A = 1;
+const B = 2;
+
+export { A, B };
+```
+
+### Module Files Cannot Use Globals
+
+Inside a `module;` file, the global namespace is off limits and this is enforced at compile time:
+
+- Reading an undeclared name is a compile error, even if a global with that name exists.
+- A bare assignment to an undeclared name is a compile error, use `let` or `const`.
+- Only locals, upvalues and the builtin whitelist (`print`, `typeof`, `typeid`, `getmetatable`, `setmetatable`, `rawlen`, `pairs`, `import`, `error`, `pcall`, `tostring`, `tonumber`) are visible.
+- A top-level `function name() {}` in a module file is therefore compiled as a local, not a global.
+
+Everything else has to come in through `import()`:
+
+```cpp
+module;
+
+const math = import("math");   // Correct
+
+export function hyp(a, b) {
+    return math.sqrt(a ** 2 + b ** 2);
 }
 ```
 
@@ -130,20 +209,26 @@ Custom modules are created from C++ and exposed to Behl scripts. See [Creating M
 
 ```cpp
 // C++ module registration
+static constexpr behl::ModuleReg mymodule_funcs[] = {
+    { "myFunction", my_function },
+};
+
+static constexpr behl::ModuleConst mymodule_consts[] = {
+    { "ANSWER", static_cast<behl::Integer>(42) },
+};
+
 void register_mymodule(behl::State* S) {
-    behl::new_table(S);  // Create module table
-    
-    // Add functions
-    behl::push_cfunction(S, my_function);
-    behl::set_field(S, -2, "myFunction");
-    
-    // Add constants
-    behl::push_integer(S, 42);
-    behl::set_field(S, -2, "ANSWER");
-    
-    // Register module
-    behl::register_module(S, "mymodule");
+    behl::ModuleDef def = { .funcs = mymodule_funcs, .consts = mymodule_consts };
+    behl::create_module(S, "mymodule", def);
 }
+```
+
+The table can also be built by hand with `behl::table_new`, `behl::push_cfunction` and `behl::table_setfield`:
+
+```cpp
+behl::table_new(S);
+behl::push_cfunction(S, my_function);
+behl::table_setfield(S, -2, "myFunction");
 ```
 
 ### Using Custom Modules (Behl side)
@@ -233,8 +318,42 @@ const utils = import("./utils");      // Relative path
 const db = import("database/postgres"); // Nested path
 ```
 
-Modules are resolved from configured module paths and cached on first import.
+Names are resolved in this order, and the result is cached on first import:
+
+1. The directory of the importing file.
+2. A `modules/` subdirectory of the importing file's directory.
+3. The module search paths configured by the host, relative to the working directory.
+
+A name starting with `./` or `../` is resolved **only** against the importing file's directory, the search steps above are skipped entirely. The `.behl` extension is appended when the name does not already end with it.
+
 See [Module System](../modules) for details on module paths and resolution.
+
+### Importing Plain Scripts
+
+`import()` runs the file and hands back whatever the chunk returns:
+
+- A file with `module;` and `export` returns its exports table.
+- A file without `module;` returns whatever its top-level `return` produces.
+- A file that is neither a module nor returns a value imports as `nil`.
+
+```cpp
+// plain.behl - no module declaration, no return
+print("side effect");
+```
+
+```cpp
+const plain = import("./plain");  // Prints "side effect"
+print(plain);                     // nil
+```
+
+A plain script that wants to be importable can just return a table:
+
+```cpp
+// legacy.behl
+let exports = {};
+exports.greet = function(name) { return "Hi " + name; };
+return exports;
+```
 
 ### Module Table Structure
 
@@ -303,7 +422,7 @@ Add version information to modules (C++ side):
 ```cpp
 // C++ module registration
 behl::push_string(S, "1.2.3");
-behl::set_field(S, -2, "version");
+behl::table_setfield(S, -2, "version");
 ```
 
 ```cpp

@@ -25,14 +25,14 @@ The os module provides access to operating system functions. It must be explicit
 
 ```cpp
 const os = import("os");
-let t = os.time();
+let t = os.hrtime();
 ```
 
 ---
 
 ## os.clock()
 
-Returns CPU time used by the program in seconds.
+Returns monotonic wall-clock time in seconds, measured from a steady clock. Not affected by system clock changes, and not CPU time used by the program.
 
 ```cpp
 let start = os.clock();
@@ -46,52 +46,42 @@ let elapsed = os.clock() - start;
 print("Elapsed: " + tostring(elapsed) + " seconds");
 ```
 
-**Returns:** CPU time as a floating-point number
+**Returns:** Monotonic time as a floating-point number of seconds
 
 **Use Case:** Measuring performance and execution time
 
 ---
 
-## os.time()
+## os.hrtime()
 
-Returns current time as a Unix timestamp (seconds since epoch).
+Returns the current time as seconds since the epoch, using a high resolution clock.
 
 ```cpp
-let timestamp = os.time();
-print(timestamp);  // e.g., 1672531200
+let timestamp = os.hrtime();
+print(timestamp);
 
-// Calculate time difference
-let start = os.time();
+let start = os.hrtime();
 // ... wait or do work ...
-let elapsed = os.time() - start;
-print("Real time elapsed: " + tostring(elapsed) + " seconds");
+let elapsed = os.hrtime() - start;
+print("Elapsed: " + tostring(elapsed) + " seconds");
 ```
 
-**Returns:** Integer timestamp
+**Returns:** Floating-point number of seconds since the epoch
 
-**Use Case:** Getting current time, calculating real-time durations
+**Use Case:** Getting current time, calculating elapsed durations
 
 ---
 
-## os.exit(code)
+## os.dummy()
 
-Exits the program with the given status code.
+Always returns `1.0`.
 
 ```cpp
-// Success
-os.exit(0);
-
-// Error
-os.exit(1);
-
-// Custom error code
-os.exit(42);
+let x = os.dummy();
+print(x);  // 1.0
 ```
 
-**Parameters:**
-- `code` - Exit status code (0 = success, non-zero = error)
-
-**Note:** This function does not return - the program terminates immediately
+**Returns:** The floating-point number `1.0`
 
 ---
 
@@ -118,29 +108,12 @@ function slowOperation() {
 
 let time = benchmark(slowOperation);
 print("Operation took: " + tostring(time) + " seconds");
-
-// Log with timestamp
-let timestamp = os.time();
-print("[" + tostring(timestamp) + "] Application started");
-
-// Conditional exit
-function validateConfig(config) {
-    if (config == nil) {
-        print("Error: Config file not found");
-        os.exit(1);
-    }
-}
-
-let config = loadConfig();
-validateConfig(config);
-// ... continue if validation passed
 ```
 
 ---
 
 ## Notes
 
-- `os.clock()` measures CPU time (time spent executing)
-- `os.time()` measures real wall-clock time
-- For accurate benchmarking, use `os.clock()`
-- For timestamps and real-time measurements, use `os.time()`
+- `os.clock()` and `os.hrtime()` are both monotonic wall-clock times, not CPU time
+- `os.clock()` is measured from an arbitrary starting point; use it for elapsed-time measurements like benchmarking
+- `os.hrtime()` is measured from the epoch; use it when you need a timestamp as well as elapsed time

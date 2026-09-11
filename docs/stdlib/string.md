@@ -59,26 +59,26 @@ print(string.sub(s, 2, 4));  // "llo"
 
 ---
 
-## string.find(s, pattern, start)
+## string.find(s, substr, start)
 
-Finds pattern in string, returns start and end indices (or `nil` if not found).
+Finds a substring in a string (plain substring search, no patterns), returns the start index, or `-1` if not found.
 
 ```cpp
-let idx_start, idx_end = string.find("hello world", "world");
-// idx_start = 6, idx_end = 10
+let idx = string.find("hello world", "world");
+// idx = 6
 
 let result = string.find("hello", "xyz");
-// result = nil (not found)
+// result = -1 (not found)
 ```
 
 **Parameters:**
 - `s` - String to search in
-- `pattern` - Substring to find
+- `substr` - Substring to find
 - `start` - Optional starting position (default: 0)
 
 **Returns:**
-- Start and end indices if found
-- `nil` if not found
+- The start index if found
+- `-1` if not found
 
 ---
 
@@ -101,6 +101,55 @@ Reverse a string.
 ```cpp
 print(string.reverse("hello"));  // "olleh"
 print(string.reverse("12345"));  // "54321"
+```
+
+---
+
+## string.char(...)
+
+Converts one or more character codes (0-255) into a string.
+
+```cpp
+print(string.char(104, 105));  // "hi"
+```
+
+---
+
+## string.byte(s, index)
+
+Returns the byte value at `index` (0-based, default 0). Returns `nil` if the string is empty or the index is out of range.
+
+```cpp
+print(string.byte("A"));        // 65
+print(string.byte("hello", 1)); // 101 ('e')
+```
+
+**Parameters:**
+- `s` - The string
+- `index` - Optional byte index (0-based, default: 0)
+
+---
+
+## string.rep(s, n)
+
+Repeats a string `n` times. Returns an empty string if `n <= 0`.
+
+```cpp
+print(string.rep("ab", 3));  // "ababab"
+print(string.rep("x", 0));   // ""
+```
+
+---
+
+## string.split(s, sep)
+
+Splits a string by a separator (plain substring, no patterns) into a 0-indexed table.
+
+```cpp
+let parts = string.split("a,b,c", ",");
+print(parts[0]);  // "a"
+print(parts[1]);  // "b"
+print(parts[2]);  // "c"
 ```
 
 ---
@@ -149,40 +198,14 @@ let combo = string.format("{:>8.2}", 3.14159);       // "    3.14"
 - `{n}` - Indexed argument (0-based)
 - `{:x}` / `{:X}` - Hexadecimal (lowercase/uppercase)
 - `{:d}` - Decimal (explicit)
-- `{:f}` - Float fixed-point
-- `{:fill<width}` - Left align with fill character
-- `{:fill>width}` - Right align with fill character
-- `{:fill^width}` - Center align with fill character
+- `{:f}` - Accepted but has no effect beyond `{:.precision}`; float formatting is controlled by precision only
 - `{:<width}` - Left align (space fill)
 - `{:>width}` - Right align (space fill)
 - `{:^width}` - Center align (space fill)
 - `{:width}` - Minimum width (right-aligned by default for numbers)
 - `{:.precision}` - Float precision
 - `{:width.precision}` - Combined width and precision
-- `{:{}}` - Dynamic width from next argument (sequential)
-- `{:.{}}` - Dynamic precision from next argument (sequential)
-- `{:{}.{}}` - Dynamic width and precision (sequential)
-- `{0:{1}}` - Indexed dynamic width (arg 1 is width for arg 0)
-- `{0:.{1}}` - Indexed dynamic precision
-- `{0:{1}.{2}}` - Indexed dynamic width and precision
 - `{{` / `}}` - Escaped braces
-
-**Example with dynamic parameters:**
-```cpp
-// Sequential consumption
-let value = 42;
-let w = 8;
-let s = string.format("{:{}}", value, w);  // "      42" (width 8)
-
-// Indexed parameters
-let pi = 3.14159;
-let width = 10;
-let prec = 2;
-let formatted = string.format("{0:{1}.{2}}", pi, width, prec);  // "      3.14"
-
-// Out of order
-let greeting = string.format("{1:{0}}", 10, "Hello");  // "     Hello"
-```
 
 **UTF-8 Support:** Format strings and arguments handle UTF-8 transparently. Multi-byte UTF-8 sequences are preserved in literal text and string arguments
 
@@ -203,8 +226,8 @@ print(reversed);  // "!dlroW ,olleH"
 
 // String search
 let message = "The quick brown fox";
-let start, end = string.find(message, "quick");
-if (start != nil) {
+let start = string.find(message, "quick");
+if (start != -1) {
     print("Found at position: " + tostring(start));
 }
 

@@ -62,7 +62,18 @@ print(logger2.getLogCount()); // Includes the "Hello" log
 
 The `import()` function resolves module paths using a specific search strategy:
 
-### 1. Relative Imports
+### 1. Built-in Modules
+
+A registered module name is returned before any file is looked at. Built-in names such as `math`, `string`, `table`, `os`, `fs`, `process`, `gc`, `jit` and `debug` therefore cannot be overridden by a file of the same name, and a local `math.behl` sitting next to the importer is ignored:
+
+```cpp
+const math = import("math");            // always the standard library module
+const math = import("./math");          // the local file, the built-in check is skipped
+```
+
+Give your own modules names that do not collide, or import them with an explicit relative path.
+
+### 2. Relative Imports
 
 Paths starting with `./` or `../` are resolved relative to the importing file:
 
@@ -72,7 +83,7 @@ const helper = import("./helper");      // → /project/src/helper.behl
 const shared = import("../shared");     // → /project/shared.behl
 ```
 
-### 2. Same Directory
+### 3. Same Directory
 
 Non-relative imports first search in the importing file's directory:
 
@@ -81,7 +92,7 @@ Non-relative imports first search in the importing file's directory:
 const config = import("config");        // → /project/src/config.behl
 ```
 
-### 3. Modules Subdirectory
+### 4. Modules Subdirectory
 
 Next, searches in a `modules/` subdirectory relative to the importing file:
 
@@ -90,14 +101,14 @@ Next, searches in a `modules/` subdirectory relative to the importing file:
 const utils = import("utils/logger");   // → /project/src/modules/utils/logger.behl
 ```
 
-### 4. Current Working Directory
+### 5. Current Working Directory
 
 Finally, searches relative to the current working directory where the script was executed:
 
 ```cpp
 // If running from /project/
-const math = import("math");            // → /project/modules/math.behl
-                                        //    or /project/math.behl
+const widgets = import("widgets");      // → /project/modules/widgets.behl
+                                        //    or /project/widgets.behl
 ```
 
 **Note for Embedders:** Additional search paths can be configured via the C++ API by modifying `State.module_paths`.
@@ -107,7 +118,7 @@ const math = import("math");            // → /project/modules/math.behl
 The `.behl` extension is automatically added if not present:
 
 ```cpp
-const math = import("math");            // → math.behl
+const widgets = import("widgets");      // → widgets.behl
 const config = import("config.behl");   // → config.behl (no change)
 ```
 
@@ -127,7 +138,7 @@ module;
 - **No global scope access** - Cannot read/write global variables
 - **Local by default** - Functions and variables are private unless exported
 - **Must export explicitly** - Use `export` keyword (returns are automatically added)
-- **Must import all modules** - Standard library modules (math, string, table, os, gc, debug) must be imported with `import("math")`
+- **Must import all modules** - Standard library modules (math, string, table, os, gc, jit, debug) must be imported with `import("math")`
 - **Only builtins accessible** - Core functions like `print`, `typeof`, `tostring`, `tonumber`, `import`, `error`, `pcall`, etc. are available without import
 
 ### Script Mode vs Module Mode
@@ -473,7 +484,21 @@ Remember that module state persists:
 ```cpp
 module;
 
-letError Messages
+let connectionPool = nil;
+
+function getConnection() {
+    if (connectionPool == nil) {
+        connectionPool = createPool();
+    }
+    return connectionPool;
+}
+
+return { getConnection = getConnection };
+```
+
+All importers share the same `connectionPool`.
+
+## Error Messages
 
 Module mode provides clear compile-time errors when accessing undeclared variables:
 
@@ -495,20 +520,6 @@ These are **compile-time errors** (thrown as `SemanticError` during parsing), no
 - No circular imports protection (may cause infinite loops)
 - No dynamic module reloading (cache cannot be invalidated)
 - Module mode validates identifiers at compile time, so any undefined variable access fails even if it would exist at runtime
-        connectionPool = createPool();
-    }
-    return connectionPool;
-}
-
-return { getConnection = getConnection };
-```
-
-All importers share the same `connectionPool`.
-
-## Limitations
-
-- No circular imports protection (may cause infinite loops)
-- No dynamic module reloading (cache cannot be invalidated)
 
 ## See Also
 

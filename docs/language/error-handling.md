@@ -33,11 +33,12 @@ divide(10, 0);  // Error: Division by zero!
 
 ### Error Messages
 
-Error messages can be any value (typically strings):
+`error()` accepts any value, but it converts the value to a string immediately and throws that string. The error a `pcall()` catches is therefore always a string:
 
 ```cpp
 error("Something went wrong");
 error("Error code: " + tostring(123));
+error(42);  // Accepted, becomes the string "42"
 ```
 
 ### Immediate Termination
@@ -74,8 +75,13 @@ if (success) {
 } else {
     print("Error: " + result);
 }
-// Output: "Error: Oops!"
+// Output:
+// Error: RuntimeError: Oops!
+// Stack trace:
+//   <one indented "file(line,col): at function" line per active frame>
 ```
+
+The caught value is not the bare message. `error()` prefixes it with the error class and appends a full stack trace, so the string always has the shape `RuntimeError: <message>` followed by a newline and a `Stack trace:` block.
 
 ### pcall Return Values
 
@@ -104,7 +110,7 @@ function fail() {
 
 let ok, err = pcall(fail);
 print(ok);   // false
-print(err);  // "Failed!"
+print(err);  // "RuntimeError: Failed!" plus a newline and the stack trace
 ```
 
 ### Catching Multiple Return Values
@@ -144,7 +150,7 @@ function level1() {
 
 // With pcall - error is caught
 let ok, err = pcall(level1);
-print("Caught: " + err);  // "Caught: Error at level 3"
+print("Caught: " + err);  // "Caught: RuntimeError: Error at level 3" plus the stack trace
 ```
 
 ## Nested Protected Calls
@@ -202,16 +208,18 @@ let result = tryCatch(
 Use `defer` to ensure cleanup happens even on error:
 
 ```cpp
+const fs = import("fs");
+
 function processFile(filename) {
-    let file = os.open(filename, "r");
-    defer os.close(file);  // Always executed, even on error
+    let file = fs.open(filename, "r");
+    defer file:close();  // Always executed, even on error
     
     // Risky operation
     if (someCondition) {
         error("Processing failed!");
     }
     
-    return file.read("*a");
+    return file:read(1024);
 }  // File closed here, even if error occurred
 
 let ok, result = pcall(processFile, "data.txt");
@@ -285,6 +293,8 @@ if (err != nil) {
 6. **Don't swallow errors silently** - Log or handle errors appropriately
 
 ```cpp
+const fs = import("fs");
+
 // Good: Descriptive error
 function withdraw(account, amount) {
     if (amount < 0) {
@@ -300,9 +310,9 @@ function withdraw(account, amount) {
 // Good: Using pcall for external operations
 function readConfig(filename) {
     let ok, content = pcall(function() {
-        let file = os.open(filename, "r");
-        defer os.close(file);
-        return file.read("*a");
+        let file = fs.open(filename, "r");
+        defer file:close();
+        return file:read(1024);
     });
     
     if (!ok) {
@@ -316,30 +326,25 @@ function readConfig(filename) {
 
 ## Limitations
 
-1. **No exception types** - Errors are just values (typically strings)
-2. **No stack traces by default** - Error messages don't include call stack
-3. **Single error handler** - No multiple catch blocks like try-catch-finally
-4. **Performance overhead** - `pcall` has some overhead; don't use in hot loops
+1. **No exception types** - Errors are always strings by the time they are caught
+2. **Single error handler** - No multiple catch blocks like try-catch-finally
+3. **Performance overhead** - `pcall` has some overhead; don't use in hot loops
+
+Structured error objects are not possible. `error()` converts its argument to a string before throwing, and `pcall()` always hands back a string, so `typeof(err)` is `"string"` no matter what you passed in. Encode the category in the message text and match on it instead:
 
 ```cpp
-// Workaround: Custom error types using tables
-function makeError(type, message) {
-    return {
-        ["type"] = type,
-        ["message"] = message
-    };
-}
+const string = import("string");
 
 function doSomething() {
-    error(makeError("ValidationError", "Invalid input"));
+    error("ValidationError: Invalid input");
 }
 
 let ok, err = pcall(doSomething);
 if (!ok) {
-    if (typeof(err) == "table" && err["type"] == "ValidationError") {
-        print("Validation failed: " + err["message"]);
+    if (string.find(err, "ValidationError") >= 0) {
+        print("Validation failed");
     } else {
-        print("Unknown error: " + tostring(err));
+        print("Unknown error: " + err);
     }
 }
 ```

@@ -56,25 +56,104 @@ gc.collect();  // Clean up unreachable objects
 
 ## gc.count()
 
-Returns the current memory usage in kilobytes.
+Returns the number of live GC-managed objects.
 
 ```cpp
-let mem_kb = gc.count();
-print("Memory: " + tostring(mem_kb) + " KB");
+let count = gc.count();
+print("Live objects: " + tostring(count));
 
-// Monitor memory growth
+// Monitor object count growth
 let before = gc.count();
 createLargeStructure();
 let after = gc.count();
-print("Allocated: " + tostring(after - before) + " KB");
+print("Objects allocated: " + tostring(after - before));
 ```
 
-**Returns:** Memory usage as a floating-point number in KB
+**Returns:** Live object count as an integer
 
 **Use Case:**
-- Memory profiling
-- Detecting memory leaks
-- Monitoring memory usage trends
+- Object count profiling
+- Detecting object leaks
+- Monitoring allocation trends
+
+---
+
+## gc.step()
+
+Runs a single incremental GC step.
+
+```cpp
+gc.step();
+```
+
+**Use Case:** Advancing the incremental collector manually instead of letting it run automatically
+
+---
+
+## gc.countall()
+
+Returns the total number of objects tracked by the GC, including those pending finalization or not yet swept.
+
+```cpp
+let count = gc.countall();
+print("Tracked objects: " + tostring(count));
+```
+
+**Returns:** Object count as an integer
+
+---
+
+## gc.countfree()
+
+Returns the number of free objects.
+
+```cpp
+let count = gc.countfree();
+print("Free objects: " + tostring(count));
+```
+
+**Returns:** Object count as an integer
+
+**Note:** Currently always returns `0`.
+
+---
+
+## gc.threshold()
+
+Returns the current GC threshold, the object count at which the next collection cycle is triggered.
+
+```cpp
+let threshold = gc.threshold();
+print("Threshold: " + tostring(threshold));
+```
+
+**Returns:** Threshold as an integer
+
+---
+
+## gc.setthreshold(n)
+
+Sets the GC threshold.
+
+**Parameters:**
+- `n` - New threshold value. Ignored if not greater than `0`.
+
+```cpp
+gc.setthreshold(50000);
+```
+
+---
+
+## gc.phase()
+
+Returns the current phase of the incremental garbage collector.
+
+```cpp
+let phase = gc.phase();
+print("GC phase: " + phase);
+```
+
+**Returns:** One of `"idle"`, `"mark"`, `"sweep"`, `"finalize"`
 
 ---
 
@@ -92,7 +171,7 @@ function profileMemory(operation, name) {
     let after = gc.count();
     
     let delta = after - before;
-    print(name + " used: " + tostring(delta) + " KB");
+    print(name + " used: " + tostring(delta) + " objects");
 }
 
 // Profile different operations
@@ -124,9 +203,9 @@ function checkForLeaks() {
     let final = gc.count();
     
     if (final > baseline + 1) {  // Allow small variation
-        print("Warning: Possible memory leak!");
-        print("Baseline: " + tostring(baseline) + " KB");
-        print("Final: " + tostring(final) + " KB");
+        print("Warning: Possible object leak!");
+        print("Baseline: " + tostring(baseline) + " objects");
+        print("Final: " + tostring(final) + " objects");
     }
 }
 
@@ -142,9 +221,9 @@ function monitorMemory() {
         // Check memory every N iterations
         if (iterations % 100 == 0) {
             let mem = gc.count();
-            print("Iteration " + tostring(iterations) + ": " + tostring(mem) + " KB");
+            print("Iteration " + tostring(iterations) + ": " + tostring(mem) + " objects");
             
-            if (mem > 10000) {  // 10 MB threshold
+            if (mem > 10000) {  // object count threshold
                 print("High memory usage, forcing GC");
                 gc.collect();
             }
@@ -162,6 +241,6 @@ function monitorMemory() {
 - Behl uses an **incremental garbage collector** that runs automatically
 - Manual collection with `gc.collect()` is usually unnecessary
 - Use `gc.count()` for profiling and monitoring
-- Memory is reported in kilobytes (KB), not bytes
+- `gc.count()` reports the number of live GC objects, not memory in bytes or kilobytes
 - The collector is generational and typically very efficient
 - In tight loops, excessive `gc.collect()` calls can hurt performance

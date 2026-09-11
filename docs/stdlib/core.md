@@ -148,7 +148,7 @@ Loads and returns a module.
 
 ```cpp
 const math = import("math");
-print(math.PI);  // 3.14159...
+print(math.pi);  // 3.14159...
 ```
 
 Modules are cached, so multiple imports return the same table. See [Module System](../modules) for details.
@@ -176,32 +176,36 @@ let retrieved = getmetatable(t);
 
 ---
 
-## `rawget(table, key)`
+## `table.rawget(table, key)`
 
-Get value from table without invoking `__index` metamethod.
+Get value from table without invoking `__index` metamethod. Not a global; available via `import("table")`.
 
 ```cpp
+const table = import("table");
+
 let t = {x = 10};
 setmetatable(t, {__index = function() { return "default"; }});
 
-print(t.missing);            // "default" (via __index)
-print(rawget(t, "missing")); // nil (bypasses __index)
+print(t.missing);                  // "default" (via __index)
+print(table.rawget(t, "missing")); // nil (bypasses __index)
 ```
 
 ---
 
-## `rawset(table, key, value)`
+## `table.rawset(table, key, value)`
 
-Set value in table without invoking `__newindex` metamethod.
+Set value in table without invoking `__newindex` metamethod. Not a global; available via `import("table")`.
 
 **Returns:** The table
 
 ```cpp
+const table = import("table");
+
 let t = {};
 setmetatable(t, {__newindex = function() { error("Read-only"); }});
 
-t.key = 1;            // Error: "Read-only"
-rawset(t, "key", 1);  // Sets directly, no error
+t.key = 1;                  // Error: "Read-only"
+table.rawset(t, "key", 1);  // Sets directly, no error
 ```
 
 ---

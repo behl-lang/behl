@@ -35,13 +35,16 @@ local x = 10
 print(x)
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let x = 10
 print(x)
 ```
 
-Semicolons `;` are **optional** in Behl (automatic semicolon insertion like JavaScript).
+Semicolons `;` are **optional** in Behl. There is no automatic semicolon
+insertion: the parser simply accepts a `;` at the end of a statement without
+requiring one, and nothing is ever inserted. The one place a semicolon is
+mandatory is the `module;` declaration.
 
 ### Blocks and Scope
 
@@ -60,7 +63,7 @@ for i = 1, 10 do
 end
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 if (condition) {
     // code
@@ -86,7 +89,7 @@ Behl uses `{}` braces for blocks instead of `do...end` or `then...end`.
      comment ]]
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 // Single line comment
 /* Multi-line
@@ -100,7 +103,7 @@ Behl uses `{}` braces for blocks instead of `do...end` or `then...end`.
 local x = 10
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let x = 10;
 const PI = 3.14;  // Immutable
@@ -121,7 +124,7 @@ local multiply = function(a, b)
 end
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 function add(a, b) {
     return a + b;
@@ -140,7 +143,7 @@ local s = "Hello" .. " " .. "World"
 local msg = "Count: " .. tostring(42)
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let s = "Hello" + " " + "World";
 let msg = "Count: " + tostring(42);
@@ -157,7 +160,7 @@ if a or b then end
 if not a then end
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 if (a && b) {}
 if (a || b) {}
@@ -173,7 +176,7 @@ Behl uses C-style logical operators.
 if a ~= b then end  -- Not equal
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 if (a != b) {}  // Not equal
 ```
@@ -191,7 +194,7 @@ else
 end
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 if (condition1) {
     // code
@@ -210,7 +213,7 @@ Behl uses `elseif` (one word, like Lua), but with C-like syntax.
 
 ### 0-Indexed vs 1-Indexed
 
-**CRITICAL DIFFERENCE:** behl tables are **0-indexed**, Lua tables are **1-indexed**.
+**CRITICAL DIFFERENCE:** Behl tables are **0-indexed**, Lua tables are **1-indexed**.
 
 **Lua:**
 ```lua
@@ -219,7 +222,7 @@ print(t[1])  -- 10
 print(t[3])  -- 30
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let t = {10, 20, 30};
 print(t[0]);  // 10
@@ -235,7 +238,7 @@ for i = 1, 10 do
 end
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 for (let i = 0; i < 10; i++) {
     print(i);  // 0, 1, 2, ..., 9
@@ -271,7 +274,7 @@ Note the parentheses around the iterator expression and variables in Behl.
 local x = 2 ^ 8  -- 256
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let x = 2 ** 8;  // 256
 ```
@@ -310,7 +313,7 @@ let f = x >> 2;   // Right shift
 
 Both languages have similar types, but with minor name differences:
 
-| Lua | behl |
+| Lua | Behl |
 |-----|------|
 | `nil` | `nil` |
 | `boolean` | `boolean` |
@@ -332,7 +335,7 @@ if t == "number" then
 end
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let t = typeof(x);
 if (t == "integer" || t == "number") {
@@ -355,10 +358,10 @@ print(math.pi)
 print(math.sqrt(16))
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 const math = import("math");
-print(math.PI);
+print(math.pi);
 print(math.sqrt(16));
 ```
 
@@ -382,7 +385,7 @@ end
 local q, r = divmod(10, 3)
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 function divmod(a, b) {
     return a / b, a % b;
@@ -457,12 +460,15 @@ This is a deliberate trade for recursion performance. To opt out, indirect throu
 x = 10  -- Global (no 'local')
 ```
 
-**behl:**
+**Behl:**
 ```cpp
-let x = 10;  // Must use 'let' or 'const'
+let x = 10;  // Declared local
+x = 10;      // Implicit global, script mode only
 ```
 
-Behl requires explicit variable declarations. There is no implicit global assignment.
+In script mode Behl behaves like Lua here: assigning to a name that was never
+declared creates a global. In module mode that same assignment is a compile
+error, and every variable must be introduced with `let` or `const`.
 
 ### Table Construction
 
@@ -472,7 +478,7 @@ local t = {name = "Alice", age = 30}
 print(t.name)
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let t = { name = "Alice", age = 30 };
 print(t.name);  // Or t["name"]
@@ -491,7 +497,6 @@ Behl supports both `key = value` shorthand (for identifiers) and `["key"] = valu
 | `type()` | `typeof()` | Type introspection |
 | `#t` | `rawlen(t)` | Table length |
 | `t[#t+1]` | `t[rawlen(t)]` | Append (0-indexed) |
-| `math.pi` | `math.PI` | Constants in uppercase |
 | `string.len(s)` | `string.len(s)` | Dot notation supported |
 
 ### Missing Features
@@ -502,6 +507,36 @@ Behl currently does **not** support:
 - Lua 5.4+ attributes like `<const>` and `<close>` (Behl has a `const` keyword, but not Lua's attribute syntax)
 - Coroutines (`coroutine` library)
 - Weak tables
+
+### Behl Additions
+
+Behl has three constructs with no Lua equivalent:
+
+**`defer`** - runs a statement when the enclosing scope is left, in LIFO order,
+including when the scope is left by an error. See [Defer](language/defer).
+
+```cpp
+function example() {
+    defer print("cleanup");
+    print("body");
+}
+```
+
+**`foreach`** - iterates a table directly, without spelling out `pairs()`. See
+[Control Flow](language/control-flow).
+
+```cpp
+foreach (key, value in t) {
+    print(key);
+}
+```
+
+**Ternary operator** - `condition ? a : b` as an expression. See
+[Ternary Operator](language/ternary).
+
+```cpp
+let label = count > 0 ? "some" : "none";
+```
 
 ---
 
@@ -524,7 +559,7 @@ local mt = {
 setmetatable(t, mt)
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let mt = {
     ["__tostring"] = function(t) {
@@ -555,7 +590,7 @@ setmetatable(t, mt);
 error("Something went wrong")
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 error("Something went wrong");
 ```
@@ -572,7 +607,7 @@ if not success then
 end
 ```
 
-**behl:**
+**Behl:**
 ```cpp
 let success, result = pcall(risky_function);
 if (!success) {
@@ -598,7 +633,7 @@ lua_setglobal(L, "answer");
 lua_close(L);
 ```
 
-**behl C++ API:**
+**Behl C++ API:**
 ```cpp
 behl::State* S = behl::new_state();
 behl::push_integer(S, 42);
@@ -606,22 +641,25 @@ behl::set_global(S, "answer");
 behl::close(S);
 ```
 
-The behl API is designed to be familiar to Lua developers while leveraging C++20 features internally.
+The Behl API is designed to be familiar to Lua developers while leveraging C++20 features internally.
 
 ---
 
 ## Performance
 
-Behl aims to be competitive with Lua:
+Behl shares several implementation choices with Lua:
 - Similar register-based VM architecture
 - Incremental garbage collection
-- Competitive performance in many benchmarks
+
+Beyond the interpreter, Behl ships a native JIT compiler with backends for
+x86-64, x86-32 and aarch64. Lua has no JIT in the reference implementation
+(LuaJIT is a separate project). No benchmark comparison is published here.
 
 ---
 
 ## Migration Checklist
 
-When porting Lua code to behl:
+When porting Lua code to Behl:
 
 - [ ] Change `--` comments to `//` or `/* */`
 - [ ] Replace `then...end` / `do...end` with `{...}`

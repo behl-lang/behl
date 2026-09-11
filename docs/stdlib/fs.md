@@ -26,11 +26,6 @@ behl::load_lib_fs(S);       // Load filesystem module
 ```javascript
 // Import the fs module
 const fs = import("fs");
-// After load_lib_fs(S, true) is called in C++
-let content = fs.read("file.txt");
-
-// Or with load_lib_fs(S, false):
-let fs = import("fs");
 let content = fs.read("file.txt");
 ```
 
@@ -61,7 +56,7 @@ if (!file) {
     return;
 }
 
-let content = file:read();
+let content = file:read(1024);
 file:close();
 ```
 
@@ -248,11 +243,11 @@ if (!removed && err) {
 
 List directory contents (returns 0-indexed table of filenames).
 
-**Returns:** `table` on success, `null, error` on failure
+**Returns:** `table` on success, `false, error` on failure
 
 ```javascript
 let entries, err = fs.list(".");
-if (entries == null) {
+if (entries == false) {
     print("Error: " + err);
 } else {
     for (let i = 0; i < #entries; i++) {
@@ -265,7 +260,7 @@ if (entries == null) {
 
 Get current working directory.
 
-**Returns:** `string` path, or `null, error` on failure
+**Returns:** `string` path, or `false, error` on failure
 
 ```javascript
 let dir = fs.cwd();
@@ -317,11 +312,11 @@ if (fs.is_dir("output")) {
 
 Get file size in bytes.
 
-**Returns:** `number` on success, `null, error` on failure
+**Returns:** `number` on success, `false, error` on failure
 
 ```javascript
 let size, err = fs.size("data.bin");
-if (size != null) {
+if (size != false) {
     print("File is " + tostring(size) + " bytes");
 }
 ```
@@ -346,7 +341,7 @@ let path = fs.join("home", "user", "documents", "file.txt");
 
 Convert relative path to absolute.
 
-**Returns:** `string` absolute path, or `null, error` on failure
+**Returns:** `string` absolute path, or `false, error` on failure
 
 ```javascript
 let abs, err = fs.absolute("../data/file.txt");
@@ -410,7 +405,7 @@ function loadConfig(path) {
     }
     
     let content, err = fs.read(path);
-    if (content == null) {
+    if (content == false) {
         print("Warning: " + err);
         return {port = 8080, host = "localhost"};
     }
@@ -427,7 +422,7 @@ let config = loadConfig("config.txt");
 ```javascript
 function processDirectory(dir) {
     let entries, err = fs.list(dir);
-    if (entries == null) {
+    if (entries == false) {
         print("Error listing directory: " + err);
         return;
     }
@@ -438,7 +433,7 @@ function processDirectory(dir) {
         if (fs.is_file(path)) {
             print("Processing: " + path);
             let content, err = fs.read(path);
-            if (content != null) {
+            if (content != false) {
                 // Process file content
                 processFile(content);
             }
@@ -527,12 +522,12 @@ backupFile("important.txt");
 
 ## Error Handling
 
-All operations that can fail return `null` or `false` plus an error message as a second return value:
+All operations that can fail return `false` plus an error message as a second return value:
 
 ```javascript
-// Pattern 1: Check for null
+// Pattern 1: Check for false
 let content, err = fs.read("file.txt");
-if (content == null) {
+if (content == false) {
     print("Error: " + err);
     return;
 }
@@ -551,7 +546,7 @@ let ok, result, err = pcall(function() {
 
 if (!ok) {
     print("Fatal error: " + result);
-} elseif (result == null) {
+} elseif (result == false) {
     print("Read error: " + err);
 }
 ```

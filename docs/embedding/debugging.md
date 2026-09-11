@@ -48,9 +48,12 @@ The debugger triggers events when execution pauses:
 
 ```cpp
 enum class DebugEvent {
-    Breakpoint,  // Hit a breakpoint
-    Step,        // Completed a step
-    Pause        // Paused via debug_pause()
+    BreakpointHit,  // Stopped at a breakpoint
+    Paused,         // Paused via debug_pause()
+    SteppedIn,      // Completed step into
+    SteppedOver,    // Completed step over
+    SteppedOut,     // Completed step out
+    ScriptFinished  // Script execution completed
 };
 ```
 
@@ -216,9 +219,13 @@ private:
     }
     
     void show_backtrace(behl::State* S) {
+        // "debug" is a module, not a global, so import it first
+        behl::get_global(S, "import");
+        behl::push_string(S, "debug");
+        behl::call(S, 1, 1);
+        
         // Call debug.stacktrace()
-        behl::get_global(S, "debug");
-        behl::table_rawget_field(S, -1, "stacktrace");
+        behl::table_rawgetfield(S, -1, "stacktrace");
         behl::call(S, 0, 1);
         std::cout << behl::to_string(S, -1) << "\n";
         behl::pop(S, 2);
