@@ -259,6 +259,11 @@ namespace behl
             return 1;
         }
 
+        if (resolved_path.empty())
+        {
+            error(S, behl::format("Module not found: {}", module_name));
+        }
+
         // Load module file
         std::ifstream file(resolved_path);
         if (!file.is_open())

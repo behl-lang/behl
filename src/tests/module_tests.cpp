@@ -1,5 +1,10 @@
 #include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+
+#include <filesystem>
+#include <fstream>
+#include <string>
 
 class ModuleTest : public ::testing::Test
 {
@@ -257,4 +262,123 @@ TEST_F(ModuleTest, Module_CannotAccessStdLibWithoutImport)
     )";
 
     EXPECT_THROW(behl::load_string(S, code), std::exception);
+}
+
+class ModuleFileTest : public ::testing::Test
+{
+protected:
+    behl::State* S = nullptr;
+    std::filesystem::path root;
+
+    void SetUp() override
+    {
+        S = behl::new_state();
+        ASSERT_NE(S, nullptr);
+        behl::load_stdlib(S);
+
+        const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        root = std::filesystem::temp_directory_path() / "behl_module_tests" / info->name();
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        std::filesystem::create_directories(root);
+    }
+
+    void TearDown() override
+    {
+        if (S)
+        {
+            behl::close(S);
+        }
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+
+    void write_file(const std::filesystem::path& relative, std::string_view content)
+    {
+        const auto full = root / relative;
+        std::filesystem::create_directories(full.parent_path());
+        std::ofstream out(full);
+        out << content;
+    }
+
+    std::string main_path() const
+    {
+        return (root / "main.behl").string();
+    }
+};
+
+TEST_F(ModuleFileTest, ImportResolvesSiblingOfImporter)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 99;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.VALUE;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 99);
+}
+
+TEST_F(ModuleFileTest, ImportResolvesModulesSubdirectoryOfImporter)
+{
+    write_file("modules/helper.behl", "module;\nexport const VALUE = 7;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.VALUE;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7);
+}
+
+TEST_F(ModuleFileTest, ImportResolvesExplicitRelativePath)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 11;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("./helper");
+        return h.VALUE;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 11);
+}
+
+TEST_F(ModuleFileTest, ImportResolvesFromNestedImporter)
+{
+    write_file("nested/helper.behl", "module;\nexport const VALUE = 5;\n");
+    write_file("nested/mid.behl", "module;\nconst h = import(\"helper\");\nexport const DOUBLED = h.VALUE * 2;\n");
+
+    constexpr std::string_view code = R"(
+        const m = import("./nested/mid");
+        return m.DOUBLED;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_F(ModuleFileTest, ImportFailureNamesTheModule)
+{
+    constexpr std::string_view code = R"(
+        const h = import("definitely_absent_module");
+        return 1;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+
+    std::string message;
+    try
+    {
+        behl::call(S, 0, 1);
+    }
+    catch (const behl::BehlException& e)
+    {
+        message = e.what();
+    }
+
+    ASSERT_FALSE(message.empty()) << "expected import of a missing module to throw";
+    EXPECT_NE(message.find("definitely_absent_module"), std::string::npos)
+        << "error message should name the module, got: " << message;
 }
