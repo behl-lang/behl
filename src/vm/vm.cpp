@@ -456,79 +456,79 @@ namespace behl
                     break;
 
                 case OpCode::kOpEq:
-                    handler_cmp<MetaMethodType::kEq, CmpEqOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpNe:
-                    handler_cmp<MetaMethodType::kEq, CmpNeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpLt:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpGe:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpLe:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpGt:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
 
                 case OpCode::kOpLTI:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGEI:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpLEI:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGTI:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpLTF:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGEF:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpLEF:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGTF:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
 
                 case OpCode::kOpLTImm:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpGeImm:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpLEImm:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpGtImm:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpEqImm:
-                    handler_cmp<MetaMethodType::kEq, CmpEqOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpNeImm:
-                    handler_cmp<MetaMethodType::kEq, CmpNeOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
 

@@ -1400,3 +1400,256 @@ TEST_F(MetatableTest, MetatableNewWithUserdataPattern)
 
     pop(S, 2); // metatable and userdata
 }
+
+TEST_F(MetatableTest, GtMetamethodValueContext)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let mt = {
+            __le = function(a, b) {
+                return a.value <= b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        return (t2 > t1) && !(t1 > t2) && !(t1 > t1)
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, GeMetamethodValueContext)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let t3 = {value = 5}
+        let mt = {
+            __lt = function(a, b) {
+                return a.value < b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        setmetatable(t3, mt)
+        return (t2 >= t1) && (t1 >= t3) && !(t1 >= t2)
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, LtMetamethodJumpContext)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let mt = {
+            __lt = function(a, b) {
+                return a.value < b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        let taken = false
+        let not_taken = false
+        if (t1 < t2) { taken = true }
+        if (t2 < t1) { not_taken = true }
+        return taken && !not_taken
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, LeMetamethodJumpContext)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let t3 = {value = 5}
+        let mt = {
+            __le = function(a, b) {
+                return a.value <= b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        setmetatable(t3, mt)
+        let taken = false
+        let equal_taken = false
+        let not_taken = false
+        if (t1 <= t2) { taken = true }
+        if (t1 <= t3) { equal_taken = true }
+        if (t2 <= t1) { not_taken = true }
+        return taken && equal_taken && !not_taken
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, GtMetamethodJumpContext)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let mt = {
+            __le = function(a, b) {
+                return a.value <= b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        let taken = false
+        let not_taken = false
+        let equal_not_taken = false
+        if (t2 > t1) { taken = true }
+        if (t1 > t2) { not_taken = true }
+        if (t1 > t1) { equal_not_taken = true }
+        return taken && !not_taken && !equal_not_taken
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, GeMetamethodJumpContext)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let t3 = {value = 5}
+        let mt = {
+            __lt = function(a, b) {
+                return a.value < b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        setmetatable(t3, mt)
+        let taken = false
+        let equal_taken = false
+        let not_taken = false
+        if (t2 >= t1) { taken = true }
+        if (t1 >= t3) { equal_taken = true }
+        if (t1 >= t2) { not_taken = true }
+        return taken && equal_taken && !not_taken
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, LtFamilyServesBothContextsWithoutLe)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let mt = {
+            __lt = function(a, b) {
+                return a.value < b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        let jump_lt = false
+        let jump_ge = false
+        if (t1 < t2) { jump_lt = true }
+        if (t2 >= t1) { jump_ge = true }
+        return (t1 < t2) && (t2 >= t1) && jump_lt && jump_ge
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, LeFamilyServesBothContextsWithoutLt)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let mt = {
+            __le = function(a, b) {
+                return a.value <= b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        let jump_le = false
+        let jump_gt = false
+        if (t1 <= t2) { jump_le = true }
+        if (t2 > t1) { jump_gt = true }
+        return (t1 <= t2) && (t2 > t1) && jump_le && jump_gt
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_TRUE(to_boolean(S, -1));
+}
+
+TEST_F(MetatableTest, ComparisonMetamethodReceivesOperandsInSourceOrder)
+{
+    constexpr std::string_view code = R"(
+        let t1 = {name = "a"}
+        let t2 = {name = "b"}
+        let seen = ""
+        let mt = {
+            __lt = function(a, b) {
+                seen = seen + a.name + b.name + ";"
+                return false
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+        let ignored = t1 < t2
+        let ignored2 = t1 >= t2
+        return seen
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_EQ(to_string(S, -1), "ab;ab;");
+}
+
+TEST_F(MetatableTest, ComparisonMetamethodsAgreeUnderJit)
+{
+    constexpr std::string_view code = R"(
+        const jit = import("jit")
+        let t1 = {value = 5}
+        let t2 = {value = 10}
+        let mt = {
+            __lt = function(a, b) {
+                return a.value < b.value
+            },
+            __le = function(a, b) {
+                return a.value <= b.value
+            }
+        }
+        setmetatable(t1, mt)
+        setmetatable(t2, mt)
+
+        function probe(a, b) {
+            let acc = ""
+            acc = acc + tostring(a < b) + tostring(a <= b)
+            acc = acc + tostring(a > b) + tostring(a >= b)
+            if (a < b) { acc = acc + "L" }
+            if (a <= b) { acc = acc + "M" }
+            if (a > b) { acc = acc + "G" }
+            if (a >= b) { acc = acc + "N" }
+            return acc
+        }
+
+        jit.off()
+        let interpreted = probe(t1, t2)
+        jit.on()
+        let jitted = ""
+        for (let i = 0; i < 200; i = i + 1) {
+            jitted = probe(t1, t2)
+        }
+        return tostring(interpreted == jitted) + "|" + interpreted
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_EQ(to_string(S, -1), "true|truetruefalsefalseLM");
+}

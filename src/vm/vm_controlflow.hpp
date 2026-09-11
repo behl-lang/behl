@@ -892,13 +892,17 @@ namespace behl
     }
 
     // General comparison operation
-    template<MetaMethodType MMIndex, typename CmpFunc>
+    template<MetaMethodType MMIndex, bool TNegateMeta, typename CmpFunc>
     BEHL_FORCEINLINE void comparison_op_general(State* S, CallFrame& frame, auto&& lhs, auto&& rhs, CmpFunc&& cmp)
     {
         // Try metamethod first
         bool result = false;
         if (try_comparison_metamethod<MMIndex>(S, lhs, rhs, result))
         {
+            if constexpr (TNegateMeta)
+            {
+                result = !result;
+            }
             frame.pc += static_cast<uint32_t>(!result);
             return;
         }
@@ -937,12 +941,12 @@ namespace behl
     }
 
     // Generic comparison handler template
-    template<MetaMethodType MMIndex, typename CmpOp, auto TGetLhs, auto TGetRhs, typename... Args>
+    template<MetaMethodType MMIndex, bool TNegateMeta, typename CmpOp, auto TGetLhs, auto TGetRhs, typename... Args>
     BEHL_FORCEINLINE void handler_cmp(State* S, CallFrame& frame, Args&&... args)
     {
         const auto& lhs = TGetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = TGetRhs(S, frame, operand_arg<1>(args...));
-        comparison_op_general<MMIndex>(S, frame, lhs, rhs, CmpOp{});
+        comparison_op_general<MMIndex, TNegateMeta>(S, frame, lhs, rhs, CmpOp{});
     }
 
     // Test instruction handler
