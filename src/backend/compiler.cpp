@@ -179,6 +179,14 @@ namespace behl
         return SourceLocation(C.current_proto->source_name, C.lastline, C.lastcolumn);
     }
 
+    static void check_vararg_allowed(const CompilerState& C)
+    {
+        if (!C.current_proto->is_vararg)
+        {
+            throw SyntaxError("cannot use '...' outside a vararg function", get_location(C));
+        }
+    }
+
     static Reg alloc_reg(CompilerState& C)
     {
         if (C.freereg >= kMaxRegisters)
@@ -672,6 +680,11 @@ namespace behl
 
     void VisitorAdapter::visit(const AstVararg&)
     {
+        if (!C.current_proto->is_vararg)
+        {
+            throw SyntaxError("cannot use '...' outside a vararg function", get_location(C));
+        }
+
         const auto reg = get_target_reg();
         emit(C, make_op_vararg(reg, 0), C.lastline);
     }
@@ -1695,6 +1708,7 @@ namespace behl
         {
             // Use VARARG to push varargs onto stack starting after regular args
             Reg vararg_dest = arg_base + static_cast<Reg>(regular_args);
+            check_vararg_allowed(C);
             emit(C, make_op_vararg(vararg_dest, 0), C.lastline); // 0 means "all remaining varargs"
 
             // Call with kMultArgs (variable number of args from stack)
@@ -1823,6 +1837,7 @@ namespace behl
                     }
 
                     // Use VARARGEXPAND to copy varargs directly into table
+                    check_vararg_allowed(C);
                     emit(C, make_op_varargexpand(reg, static_cast<uint8_t>(array_idx)), C.lastline);
                     break;
                 }
@@ -2190,6 +2205,7 @@ namespace behl
                     {
                         alloc_reg(C);
                     }
+                    check_vararg_allowed(C);
                     emit(C, make_op_vararg(result_base, static_cast<uint8_t>(var_count)), C.lastline);
                 }
 
@@ -2796,6 +2812,7 @@ namespace behl
             {
                 // Locals are consecutive registers, so VARARG fills them directly,
                 // copying the available varargs and nil-padding the rest.
+                check_vararg_allowed(C);
                 emit(C, make_op_vararg(new_locals[0].reg, static_cast<uint8_t>(new_locals.size())), C.lastline);
 
                 C.freereg = locals_end;
@@ -3551,6 +3568,7 @@ namespace behl
                 {
                     // Emit VARARG to push varargs onto stack
                     Reg vararg_dest = static_cast<Reg>(func_reg + 1 + arg_regs.size());
+                    check_vararg_allowed(C);
                     emit(C, make_op_vararg(vararg_dest, 0), C.lastline);
 
                     // Tailcall with kMultArgs (variable args from stack)
@@ -3670,6 +3688,7 @@ namespace behl
                 }
 
                 Reg vararg_pos = first_return_reg + static_cast<Reg>(result_regs.size());
+                check_vararg_allowed(C);
                 emit(C, make_op_vararg(vararg_pos, 0), C.lastline);
                 emit_return_with_defers(C, first_return_reg, static_cast<uint8_t>(kMultRet));
             }
@@ -3919,6 +3938,9 @@ namespace behl
         C.parent = nullptr;
         C.freereg = 1;
         C.min_freereg = 1;
+
+        C.current_proto->is_vararg = true;
+        emit(C, make_op_varargprep(0), C.lastline);
 
         enter_scope(C);
         VisitorAdapter V(C);

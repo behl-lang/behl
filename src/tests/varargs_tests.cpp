@@ -1,4 +1,5 @@
 #include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 
 class VarargsTest : public ::testing::Test
@@ -440,4 +441,130 @@ TEST_F(VarargsTest, ReturnVarargsTruncatedWhenNotLast)
     ASSERT_NO_THROW(behl::load_string(S, code));
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 109); // 10 (... truncated to first) + 99
+}
+
+TEST_F(VarargsTest, VarargInNonVarargFunctionIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function plain() {
+            let args = {...};
+            return #args;
+        }
+        return plain();
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_F(VarargsTest, VarargInNonVarargFunctionWithParamsIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function plain(a, b) {
+            return (...);
+        }
+        return plain(1, 2);
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_F(VarargsTest, VarargInNestedNonVarargFunctionIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function outer(...) {
+            function inner() {
+                let args = {...};
+                return #args;
+            }
+            return inner();
+        }
+        return outer(1, 2, 3);
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_F(VarargsTest, VarargAtTopLevelIsEmptyWithoutArguments)
+{
+    constexpr std::string_view code = R"(
+        let args = {...};
+        return #args;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_F(VarargsTest, MainChunkReceivesArgumentsAsVarargs)
+{
+    constexpr std::string_view code = R"(
+        let args = {...};
+        return #args;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    behl::push_string(S, "alpha");
+    behl::push_string(S, "beta");
+    behl::push_string(S, "gamma");
+    ASSERT_NO_THROW(behl::call(S, 3, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_F(VarargsTest, MainChunkArgumentValuesAreReadable)
+{
+    constexpr std::string_view code = R"(
+        let a, b = ...;
+        return a + "/" + b;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    behl::push_string(S, "first");
+    behl::push_string(S, "second");
+    ASSERT_NO_THROW(behl::call(S, 2, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "first/second");
+}
+
+TEST_F(VarargsTest, VarargAsCallArgumentInNonVarargFunctionIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function sink(a) {
+            return a;
+        }
+        function plain() {
+            return sink(...);
+        }
+        return plain();
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_F(VarargsTest, VarargInNestedVarargFunctionIsAccepted)
+{
+    constexpr std::string_view code = R"(
+        function outer(...) {
+            function inner(...) {
+                let args = {...};
+                return #args;
+            }
+            return inner(7, 8);
+        }
+        return outer(1, 2, 3);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_F(VarargsTest, NonVarargCallAfterVarargCallIsNotCorrupted)
+{
+    constexpr std::string_view code = R"(
+        function eats(a, ...) {
+            let args = {...};
+            return #args;
+        }
+        function plain() {
+            return 0;
+        }
+        let first = eats(1, 2, 3, 4, 5, 6);
+        let second = plain();
+        return first + second;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 5);
 }

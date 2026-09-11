@@ -99,6 +99,8 @@ namespace behl
         header.call_pos = call_pos;
         header.nresults = nresults;
         header.defer_mask = 0;
+        header.num_varargs = 0;
+        header.ret_base = 0;
 
         if (proto && proto->is_vararg) [[unlikely]]
         {
