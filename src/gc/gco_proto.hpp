@@ -49,6 +49,28 @@ namespace behl
         uint32_t num_jump_targets{};
         bool is_vararg{};
         bool has_upvalues{}; // True if function or any nested function uses upvalues
+
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+        static constexpr int32_t jit_code_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCProto, jit_code));
+        }
+
+        static constexpr int32_t max_stack_size_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCProto, max_stack_size));
+        }
+
+        static constexpr int32_t is_vararg_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCProto, is_vararg));
+        }
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
     };
 
 } // namespace behl

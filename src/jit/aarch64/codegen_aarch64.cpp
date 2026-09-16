@@ -940,6 +940,23 @@ namespace behl
                 }
                 break;
 
+            case CgOpKind::kTailJumpNative:
+            case CgOpKind::kCallFast:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
+                e_.b(label(op.label));
+                break;
+
+            case CgOpKind::kReturnDispatch:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
+                e_.b(label(op.label2));
+                break;
+
             case CgOpKind::kHelperCall:
                 if (cache_enabled_)
                 {

@@ -546,6 +546,32 @@ namespace behl
                 op.label = on_eq;
             }
 
+            void tail_jump_native(uint32_t on_fail)
+            {
+                CgOp& op = push(CgOpKind::kTailJumpNative);
+                op.label = on_fail;
+            }
+
+            void call_fast(uint32_t raw, uint32_t pcn, uint32_t on_fail, uint32_t on_done, bool is_self_call)
+            {
+                CgOp& op = push(CgOpKind::kCallFast);
+                op.raw = raw;
+                op.pcn = pcn;
+                op.label = on_fail;
+                op.label2 = on_done;
+                op.var = err_;
+                op.var2 = call_stub_;
+                op.slot = static_cast<int32_t>(entry_label_);
+                op.flag = is_self_call;
+            }
+
+            void return_dispatch()
+            {
+                CgOp& op = push(CgOpKind::kReturnDispatch);
+                op.label = entry_label_;
+                op.label2 = ret_stub_;
+            }
+
             uint32_t helper_call(JitOpFn fn, uint32_t raw, uint32_t pcn)
             {
                 CgOp& op = push(CgOpKind::kHelperCall);
@@ -574,6 +600,7 @@ namespace behl
             uint32_t ret_stub_{};
             uint32_t tail_stub_{};
             uint32_t call_stub_{};
+            uint32_t entry_label_{};
             AutoVector<uint32_t> resume_pcs_;
             State* state_{};
             size_t entry_dispatch_at_{};
@@ -1217,9 +1244,24 @@ namespace behl
 
                 case OpCode::kOpCall:
                 {
+                    const bool fixed_args = ins.b() != static_cast<uint8_t>(kMultArgs);
+                    uint32_t done = 0;
+                    if (fixed_args)
+                    {
+                        const uint32_t slow = new_label();
+                        done = new_label();
+                        call_fast(ins.raw, pcn, slow, done, ins.flag_bit());
+                        bind(slow, true);
+                    }
+
                     const uint32_t r = helper_call(jit_op_call, ins.raw, pcn);
                     branch_var_eq_u32(r, kJitCallPushed, call_stub_);
                     resume_pcs_.push_back(pcn);
+
+                    if (fixed_args)
+                    {
+                        bind(done, true);
+                    }
                     break;
                 }
 
@@ -1251,14 +1293,19 @@ namespace behl
                 {
                     const uint32_t r = helper_call(jit_op_tailcall, ins.raw, pcn);
                     branch_var_eq_u32(r, kJitTailReturned, ret_stub_);
-                    branch_var_eq_u32(r, kJitTailReplaced, tail_stub_);
+
+                    const uint32_t replaced = new_label();
+                    branch_var_eq_u32(r, kJitTailReplaced, replaced);
                     jump(pc_labels_[0]);
+
+                    bind(replaced, true);
+                    tail_jump_native(tail_stub_);
                     break;
                 }
 
                 case OpCode::kOpReturn:
                     helper_call(jit_op_return, ins.raw, pcn);
-                    jump(ret_stub_);
+                    return_dispatch();
                     break;
 
                 case OpCode::kOpRetSaved:
@@ -1293,12 +1340,12 @@ namespace behl
 
                 case OpCode::kOpReturn0:
                     helper_call(jit_op_return0, ins.raw, pcn);
-                    jump(ret_stub_);
+                    return_dispatch();
                     break;
 
                 case OpCode::kOpReturn1:
                     helper_call(jit_op_return1, ins.raw, pcn);
-                    jump(ret_stub_);
+                    return_dispatch();
                     break;
 
                 case OpCode::kOpLoadBool:
@@ -1717,6 +1764,7 @@ namespace behl
             ret_stub_ = new_label();
             tail_stub_ = new_label();
             call_stub_ = new_label();
+            entry_label_ = new_label();
 
             entry_dispatch_at_ = out_.ops.size();
 
@@ -1736,27 +1784,36 @@ namespace behl
                 return false;
             }
 
-            if (!resume_pcs_.empty())
             {
                 AutoVector<CgOp> dispatch(state_);
 
-                CgOp load{};
-                load.kind = CgOpKind::kLoadFramePc;
-                load.var = new_var();
-                dispatch.push_back(load);
+                CgOp entry_bind{};
+                entry_bind.kind = CgOpKind::kBind;
+                entry_bind.label = entry_label_;
+                entry_bind.flag = true;
+                entry_bind.slot = kClobberAll;
+                dispatch.push_back(entry_bind);
 
-                for (const uint32_t r : resume_pcs_)
+                if (!resume_pcs_.empty())
                 {
-                    if (!valid_pc(static_cast<int64_t>(r)))
+                    CgOp load{};
+                    load.kind = CgOpKind::kLoadFramePc;
+                    load.var = new_var();
+                    dispatch.push_back(load);
+
+                    for (const uint32_t r : resume_pcs_)
                     {
-                        return false;
+                        if (!valid_pc(static_cast<int64_t>(r)))
+                        {
+                            return false;
+                        }
+                        CgOp br{};
+                        br.kind = CgOpKind::kBranchVarEqU32;
+                        br.var = load.var;
+                        br.imm = static_cast<int64_t>(r);
+                        br.label = pc_labels_[r];
+                        dispatch.push_back(br);
                     }
-                    CgOp br{};
-                    br.kind = CgOpKind::kBranchVarEqU32;
-                    br.var = load.var;
-                    br.imm = static_cast<int64_t>(r);
-                    br.label = pc_labels_[r];
-                    dispatch.push_back(br);
                 }
 
                 out_.ops.insert(

@@ -79,6 +79,41 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(State, call_stack) + decltype(call_stack)::size_offset());
         }
+
+        static constexpr int32_t stack_size_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, stack) + decltype(stack)::size_offset());
+        }
+
+        static constexpr int32_t call_headers_data_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_headers) + decltype(call_headers)::data_offset());
+        }
+
+        static constexpr int32_t call_headers_size_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_headers) + decltype(call_headers)::size_offset());
+        }
+
+        static constexpr int32_t call_stack_capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_stack) + decltype(call_stack)::capacity_offset());
+        }
+
+        static constexpr int32_t call_headers_capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_headers) + decltype(call_headers)::capacity_offset());
+        }
+
+        static constexpr int32_t stack_capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, stack) + decltype(stack)::capacity_offset());
+        }
+
+        static constexpr int32_t gc_debt_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, gc) + offsetof(GCState, gc_debt));
+        }
 #if defined(__GNUC__)
 #    pragma GCC diagnostic pop
 #endif

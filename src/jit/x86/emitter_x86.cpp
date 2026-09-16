@@ -700,6 +700,17 @@ namespace behl
         emit_modrm(0b11, 2, reg_low(reg));
     }
 
+    void X86Emitter::jmp(GpReg reg)
+    {
+        if (reg_ext(reg))
+        {
+            assert(mode64_ && "extended registers unavailable in 32 bit mode");
+            emit8(0x41);
+        }
+        emit8(0xFF);
+        emit_modrm(0b11, 4, reg_low(reg));
+    }
+
     void X86Emitter::ret()
     {
         emit8(0xC3);

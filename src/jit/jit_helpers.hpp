@@ -96,6 +96,8 @@ namespace behl
     uint32_t BEHL_CALLCONV jit_op_forloop(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_tailcall(State* S, uint32_t raw, uint32_t pc_next) noexcept;
+
+    uintptr_t BEHL_CALLCONV jit_call_setup(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_closure(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_return(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_return0(State* S, uint32_t raw, uint32_t pc_next) noexcept;

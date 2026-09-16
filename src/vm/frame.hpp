@@ -36,6 +36,11 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(CallFrame, pc));
         }
+
+        static constexpr int32_t proto_offset()
+        {
+            return static_cast<int32_t>(offsetof(CallFrame, proto));
+        }
 #if defined(__GNUC__)
 #    pragma GCC diagnostic pop
 #endif
@@ -52,6 +57,18 @@ namespace behl
         uint32_t defer_mask;
         uint32_t ret_base;
         uint8_t nresults;
+
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+        static constexpr int32_t top_offset()
+        {
+            return static_cast<int32_t>(offsetof(CallFrameHeader, top));
+        }
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
     };
 
     static_assert(std::is_standard_layout_v<CallFrame>);

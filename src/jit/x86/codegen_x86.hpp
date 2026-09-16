@@ -80,6 +80,9 @@ namespace behl
         void emit_prologue();
         void emit_epilogue(uint32_t result_code);
         void emit_helper_call(const CgOp& op);
+        void emit_tail_jump_native(const CgOp& op);
+        void emit_call_fast(const CgOp& op);
+        void emit_return_dispatch(const CgOp& op);
         void emit_branch_i64_imm(const CgOp& op);
         void emit_const_f64(const CgOp& op);
         void alloc_i64(uint32_t var);

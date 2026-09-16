@@ -175,6 +175,7 @@ namespace behl
         void align(uint8_t boundary);
 
         void jmp(Label label);
+        void jmp(GpReg reg);
         void jcc(Cond cond, Label label);
 
         size_t size();

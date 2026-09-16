@@ -49,6 +49,10 @@ namespace behl
     constexpr uint32_t kJitTailReturned = 0xFFFFFFFDu;
     constexpr uint32_t kJitCallPushed = 0xFFFFFFFCu;
 
+    constexpr uintptr_t kJitSetupDecline = 0;
+    constexpr uintptr_t kJitSetupError = 1;
+    constexpr uintptr_t kJitSetupPushedOther = 2;
+
     constexpr size_t kJitNestLimit = 150;
     constexpr size_t kJitMaxCallDepth = 1000000;
 

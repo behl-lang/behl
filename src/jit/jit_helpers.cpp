@@ -316,6 +316,63 @@ namespace behl
         return kJitError;
     }
 
+    uintptr_t BEHL_CALLCONV jit_call_setup(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    {
+        const Instruction instr{ raw };
+
+        if (!S->jit_enabled || S->debug.enabled)
+        {
+            return kJitSetupDecline;
+        }
+
+        auto& callstack = S->call_stack;
+        CallFrame& frame = callstack.back();
+        const bool is_self_call = instr.flag_bit();
+
+        if (!is_self_call && callstack.size() >= kJitNestLimit)
+        {
+            return kJitSetupDecline;
+        }
+
+        const GCProto* callee = nullptr;
+        if (is_self_call)
+        {
+            callee = frame.proto;
+        }
+        else
+        {
+            const Value& func = get_register(S, frame, instr.a());
+            if (!func.is_closure())
+            {
+                return kJitSetupDecline;
+            }
+            callee = func.get_closure()->proto;
+        }
+
+        if (callee == nullptr || callee->jit_code == nullptr)
+        {
+            return kJitSetupDecline;
+        }
+
+        try
+        {
+            frame.pc = pc_next;
+            handler_call<false>(S, frame, instr.a(), instr.b(), instr.c(), is_self_call);
+
+            if (callstack.size() <= 1 || callstack.back().proto != callee)
+            {
+                return kJitSetupPushedOther;
+            }
+
+            return reinterpret_cast<uintptr_t>(callee->jit_code);
+        }
+        catch (...)
+        {
+            S->jit_exception = std::current_exception();
+            return kJitSetupError;
+        }
+    }
+
     uint32_t BEHL_CALLCONV jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
         const Instruction instr{ raw };

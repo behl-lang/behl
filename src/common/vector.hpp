@@ -499,6 +499,11 @@ namespace behl
             return static_cast<int32_t>(offsetof(Vector, size_));
         }
 
+        static constexpr int32_t capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(Vector, capacity_));
+        }
+
 #if defined(__GNUC__)
 #    pragma GCC diagnostic pop
 #endif
