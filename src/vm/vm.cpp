@@ -9,7 +9,7 @@
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
 #include "gc/gco_userdata.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "state_debug.hpp"
 #include "value.hpp"

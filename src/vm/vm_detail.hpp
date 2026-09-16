@@ -4,7 +4,7 @@
 #include "common/format.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_proto.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_metatable.hpp"
@@ -15,7 +15,8 @@
 namespace behl
 {
 
-    inline SourceLocation get_current_location(const CallFrame& frame)
+    BEHL_INLINE
+    SourceLocation get_current_location(const CallFrame& frame)
     {
         if (!frame.proto)
         {
@@ -97,7 +98,7 @@ namespace behl
         return Value(obj);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     Value vm_tostring(State* S, const Value& val, const CallFrame& frame)
     {
         const auto type = val.get_type();
@@ -170,7 +171,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     Value vm_tonumber([[maybe_unused]] State* S, const Value& val)
     {
         const auto type = val.get_type();

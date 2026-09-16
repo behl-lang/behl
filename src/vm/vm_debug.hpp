@@ -4,7 +4,7 @@
 #include "common/format.hpp"
 #include "common/print.hpp"
 #include "frame.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "state_debug.hpp"
 #include "value.hpp"
@@ -21,7 +21,7 @@ namespace behl
     // Debug Helpers
 
     // Check if execution should pause for debugging
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     bool should_break_for_debug(State* S, const CallFrame& frame, DebugEvent& out_event)
     {
         if (!S->debug.enabled)
@@ -131,7 +131,7 @@ namespace behl
     }
 
     // Process pending debug commands
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void process_debug_commands(State* S)
     {
         if (S->debug.pending_command == DebugCommand::None)
@@ -172,7 +172,8 @@ namespace behl
         S->debug.step_completed = false;
     }
 
-    inline std::string get_function_name(State* S, const CallFrame& frame)
+    BEHL_INLINE
+    std::string get_function_name(State* S, const CallFrame& frame)
     {
         // Get function name
         if (frame.proto && frame.proto->name && frame.proto->name->size() > 0)
@@ -237,7 +238,8 @@ namespace behl
         return "<unknown>";
     }
 
-    inline std::string build_stacktrace_internal(State* S)
+    BEHL_INLINE
+    std::string build_stacktrace_internal(State* S)
     {
         std::string result;
         result.reserve(512);

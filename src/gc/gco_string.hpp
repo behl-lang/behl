@@ -2,7 +2,7 @@
 
 #include "common/string.hpp"
 #include "gc_object.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <array>
 #include <behl/config.hpp>

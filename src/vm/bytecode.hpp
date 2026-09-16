@@ -2,7 +2,7 @@
 
 #include "common/string.hpp"
 #include "config_internal.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <cassert>
 #include <cstdint>

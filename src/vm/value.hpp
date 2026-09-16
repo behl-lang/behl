@@ -2,7 +2,7 @@
 
 #include "config_internal.hpp"
 #include "gc/gco_string.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <behl/config.hpp>
 #include <behl/types.hpp>

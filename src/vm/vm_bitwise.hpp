@@ -4,7 +4,7 @@
 #include "common/format.hpp"
 #include "exceptions.hpp"
 #include "frame.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "types.hpp"
 #include "value.hpp"
@@ -17,7 +17,7 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
     // Error Throwing Functions
 
-    [[noreturn]] BEHL_NOINLINE static void throw_bad_bitwise(const Value& a, const Value& b, const CallFrame& frame)
+    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_bitwise(const Value& a, const Value& b, const CallFrame& frame)
     {
         const auto loc = get_current_location(frame);
         const auto msg = behl::format(
@@ -26,7 +26,7 @@ namespace behl
         throw TypeError(msg, loc);
     }
 
-    [[noreturn]] BEHL_NOINLINE static void throw_bad_bitwise(const Value& a, const CallFrame& frame)
+    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_bitwise(const Value& a, const CallFrame& frame)
     {
         const auto loc = get_current_location(frame);
         const auto msg = behl::format<"attempt to perform bitwise operation on a {} value">(a.get_type_string());
@@ -39,7 +39,7 @@ namespace behl
 
     // Try bitwise metamethod
     template<MetaMethodType MMIndex>
-    static Value try_bitwise_metamethod(State* S, const Value& a, const Value& b)
+    BEHL_INLINE Value try_bitwise_metamethod(State* S, const Value& a, const Value& b)
     {
         // Check left operand first
         Value mm = metatable_get_method<MMIndex>(a);
@@ -102,7 +102,7 @@ namespace behl
     // Core Bitwise Operations
 
     template<MetaMethodType MMIndex, typename Op>
-    BEHL_FORCEINLINE static void bitwise_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_FORCEINLINE void bitwise_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         const uint16_t type_pair = make_type_pair(a, b);
 
@@ -168,7 +168,7 @@ namespace behl
     // Bitwise Handlers
 
     template<typename Op>
-    BEHL_FORCEINLINE static bool try_bitwise_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_FORCEINLINE bool try_bitwise_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         switch (make_type_pair(a, b))
         {
@@ -202,7 +202,7 @@ namespace behl
     }
 
     template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
-    BEHL_FORCEINLINE static void handler_bitwise_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    BEHL_FORCEINLINE void handler_bitwise_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
     {
         const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
@@ -214,14 +214,15 @@ namespace behl
 
     // Generic bitwise handler template
     template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
-    BEHL_FORCEINLINE static void handler_bitwise(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    BEHL_FORCEINLINE void handler_bitwise(State* S, CallFrame& frame, Reg dst, Args&&... args)
     {
         const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
         bitwise_binop<MMIndex>(S, dst, lhs, rhs, frame, BitwiseOp{});
     }
 
-    BEHL_FORCEINLINE static void handler_bnot(State* S, CallFrame& frame, Reg a, Reg b)
+    BEHL_FORCEINLINE
+    void handler_bnot(State* S, CallFrame& frame, Reg a, Reg b)
     {
         const Value& val = get_register(S, frame, b);
 

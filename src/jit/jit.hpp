@@ -2,7 +2,7 @@
 
 #include "behl/export.hpp"
 #include "gc/gco_proto.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 
 #include <cstddef>

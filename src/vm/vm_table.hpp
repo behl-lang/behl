@@ -5,7 +5,7 @@
 #include "gc/gc.hpp"
 #include "gc/gco_table.hpp"
 #include "gc/gco_userdata.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
@@ -19,7 +19,7 @@
 
 namespace behl
 {
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     std::optional<size_t> key_as_positive_index(const Value& key)
     {
         if (key.is_integer())
@@ -45,7 +45,7 @@ namespace behl
         return std::nullopt;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     Value* table_raw_get_slot(auto* t, const Value& key)
     {
         // Try to interpret key as a non-negative array index
@@ -67,7 +67,7 @@ namespace behl
         return (it != t->hash.end()) ? &it->second : nullptr;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     const Value table_raw_getfield(GCTable* t, const Value& key)
     {
         auto* slot = table_raw_get_slot(t, key);
@@ -76,7 +76,8 @@ namespace behl
     }
 
     // Metatable-aware table get for VM
-    inline Value table_getfield_vm(State* state, GCTable* t, const Value key)
+    BEHL_INLINE
+    Value table_getfield_vm(State* state, GCTable* t, const Value key)
     {
         // First try raw get
         const Value& out = table_raw_getfield(t, key);
@@ -107,7 +108,7 @@ namespace behl
         return out;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void table_raw_setfield(State* S, struct GCTable* t, const Value& key, const Value& v)
     {
         // Try to interpret key as a non-negative array index
@@ -143,7 +144,8 @@ namespace behl
     }
 
     // Metatable-aware table set for VM
-    inline void table_setfield_vm(State* S, GCTable* t, const Value key, const Value v)
+    BEHL_INLINE
+    void table_setfield_vm(State* S, GCTable* t, const Value key, const Value v)
     {
         // Try to find existing slot
         Value* slot = table_raw_get_slot(t, key);
@@ -184,7 +186,7 @@ namespace behl
         table_raw_setfield(S, t, key, v);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_getglobal(State* S, CallFrame& frame, Reg a, uint32_t k)
     {
         const Value& key = get_string_constant(frame.proto, k);
@@ -204,7 +206,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setglobal(State* S, CallFrame& frame, Reg a, uint32_t k)
     {
         const Value& key = get_string_constant(frame.proto, k);
@@ -219,7 +221,7 @@ namespace behl
     }
 
     // Common implementation for all getfield operations
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void getfield_impl(State* S, CallFrame& frame, Reg a, const Value table, const Value key)
     {
         if (table.is_table())
@@ -331,7 +333,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setfield(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
     {
         Value& table = get_register(S, frame, a);
@@ -340,7 +342,7 @@ namespace behl
         setfield_impl(S, frame, table, key, val);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setfieldi(State* S, CallFrame& frame, Reg a, Reg b, int32_t imm)
     {
         Value& table = get_register(S, frame, a);
@@ -349,7 +351,7 @@ namespace behl
         setfield_impl(S, frame, table, key, val);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setfields(State* S, CallFrame& frame, Reg a, Reg b, ConstIndex k)
     {
         Value& table = get_register(S, frame, a);
@@ -386,7 +388,7 @@ namespace behl
         dst = table_raw_getfield(table_data, key);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setlist(State* S, CallFrame& frame, Reg a, uint8_t num_fields, uint8_t extra)
     {
         Value table = get_register(S, frame, a);

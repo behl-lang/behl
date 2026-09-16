@@ -9,7 +9,7 @@
 #include "gc/gc_state.hpp"
 #include "gc/gc_types.hpp"
 #include "gc/gco_string.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state_debug.hpp"
 #include "vm/frame.hpp"
 #include "vm/upvalue.hpp"

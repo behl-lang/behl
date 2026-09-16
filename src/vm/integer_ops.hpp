@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <behl/types.hpp>
 #include <cstdint>

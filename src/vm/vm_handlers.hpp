@@ -6,7 +6,7 @@
 #include "gc/gco_closure.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm/integer_ops.hpp"
@@ -21,8 +21,8 @@
 
 namespace behl
 {
-    BEHL_FORCEINLINE
-    static void handler_closure(State* S, CallFrame& frame, Reg a, uint32_t proto_idx)
+    BEHL_INLINE
+    void handler_closure(State* S, CallFrame& frame, Reg a, uint32_t proto_idx)
     {
         assert(proto_idx < frame.proto->protos.size() && "handler_closure: proto index out of bounds");
         GCProto* nested_proto = frame.proto->protos[proto_idx];
@@ -65,8 +65,9 @@ namespace behl
         gc_validate_on_stack(S, obj);
         gc_step(S);
     }
-    BEHL_FORCEINLINE
-    static void handler_len(State* S, CallFrame& frame, Reg a, Reg b)
+
+    BEHL_INLINE
+    void handler_len(State* S, CallFrame& frame, Reg a, Reg b)
     {
         const Value& val = get_register(S, frame, b);
 
@@ -107,8 +108,8 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
-    static void handler_tostring(State* S, CallFrame& frame, Reg a, Reg b)
+    BEHL_INLINE
+    void handler_tostring(State* S, CallFrame& frame, Reg a, Reg b)
     {
         const Value& val = get_register(S, frame, b);
 
@@ -121,8 +122,8 @@ namespace behl
         gc_step(S);
     }
 
-    BEHL_FORCEINLINE
-    static void handler_tonumber(State* S, CallFrame& frame, Reg a, Reg b)
+    BEHL_INLINE
+    void handler_tonumber(State* S, CallFrame& frame, Reg a, Reg b)
     {
         const Value& val = get_register(S, frame, b);
 
@@ -133,8 +134,8 @@ namespace behl
         frame_header(S, frame).top = frame.base + a + 1;
     }
 
-    BEHL_FORCEINLINE
-    static void handler_forprep(State* S, CallFrame& frame, Reg a, int32_t offset)
+    BEHL_INLINE
+    void handler_forprep(State* S, CallFrame& frame, Reg a, int32_t offset)
     {
         Value& init = get_register(S, frame, a);
         Value& limit = get_register(S, frame, a + 1);
@@ -199,8 +200,8 @@ namespace behl
         throw TypeError("numeric for-loop requires number initial and step values", get_current_location(frame));
     }
 
-    BEHL_FORCEINLINE
-    static void handler_forloop(State* S, CallFrame& frame, Reg a, int32_t offset)
+    BEHL_INLINE
+    void handler_forloop(State* S, CallFrame& frame, Reg a, int32_t offset)
     {
         Value& idx = get_register(S, frame, a);
         const Value& limit = get_register(S, frame, a + 1);

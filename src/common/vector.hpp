@@ -1,7 +1,7 @@
 #pragma once
 
 #include "memory.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <algorithm>
 #include <bit>

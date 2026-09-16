@@ -162,7 +162,9 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/ast/loop_optimization.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/optimization.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/optimization_pass.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/platform.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/platform.posix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/platform.win32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/state.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/state_debug.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode.cpp

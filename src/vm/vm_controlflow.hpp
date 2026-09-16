@@ -4,7 +4,7 @@
 #include "common/format.hpp"
 #include "frame.hpp"
 #include "jit/jit.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
@@ -62,7 +62,7 @@ namespace behl
         frame_header(S, frame).defer_mask |= (1u << block);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     static void handler_defercall(State* S, CallFrame& frame, Reg block)
     {
         const uint32_t bit = 1u << block;
@@ -152,7 +152,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void move_results(Vector<Value>& stack, State* S, uint32_t src_base, uint32_t dest, uint32_t count, uint32_t available,
         uint32_t min_final_size = 0)
     {
@@ -207,7 +207,7 @@ namespace behl
 
     // Count the actual number of arguments passed to a function.
     BEHL_FORCEINLINE
-    static uint32_t count_actual_args(State* S, const CallFrame& frame, uint32_t func_pos, uint8_t num_args) noexcept
+    uint32_t count_actual_args(State* S, const CallFrame& frame, uint32_t func_pos, uint8_t num_args) noexcept
     {
         if (num_args == static_cast<uint8_t>(kMultArgs))
         {
@@ -220,8 +220,7 @@ namespace behl
 
     // Core return implementation
     BEHL_FORCEINLINE
-    static bool return_from_function(
-        State* S, const CallFrame& frame, uint8_t a, uint8_t num_results, uint32_t entry_call_depth)
+    bool return_from_function(State* S, const CallFrame& frame, uint8_t a, uint8_t num_results, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -298,7 +297,7 @@ namespace behl
     }
 
     BEHL_FORCEINLINE
-    static void handler_saveret(State* S, CallFrame& frame, Reg a, uint8_t num_results)
+    void handler_saveret(State* S, CallFrame& frame, Reg a, uint8_t num_results)
     {
         auto& stack = S->stack;
         const uint32_t result_base = frame.base + a;
@@ -329,7 +328,7 @@ namespace behl
     }
 
     BEHL_FORCEINLINE
-    static bool handler_retsaved(State* S, const CallFrame& frame, uint32_t entry_call_depth)
+    bool handler_retsaved(State* S, const CallFrame& frame, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -393,7 +392,7 @@ namespace behl
 
     // Execute C function implementation
     BEHL_FORCEINLINE
-    static uint32_t execute_native_impl(State* S, CFunction cfunc, uint32_t func_pos, uint32_t num_args)
+    uint32_t execute_native_impl(State* S, CFunction cfunc, uint32_t func_pos, uint32_t num_args)
     {
         auto& stack = S->stack;
 
@@ -547,8 +546,10 @@ namespace behl
             {
                 S->stack[call_pos] = S->stack[frame.base];
             }
+
             CallFrame& new_frame = setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
             prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
+
 #if BEHL_JIT_SUPPORTED
             if constexpr (TExecuteCallee)
             {
@@ -571,7 +572,6 @@ namespace behl
             const auto frame_window = new_frame.base + new_frame.proto->max_stack_size;
             const auto stack_after_call = (frame_window > frame_header(S, new_frame).top) ? frame_window
                                                                                           : frame_header(S, new_frame).top;
-
             S->stack.resize(S, stack_after_call);
 #if BEHL_JIT_SUPPORTED
             if constexpr (TExecuteCallee)
@@ -588,8 +588,7 @@ namespace behl
 
     // Tail call instruction handler
     BEHL_FORCEINLINE
-    static bool handler_tailcall(
-        State* S, CallFrame& frame, Reg a, uint8_t num_args, bool is_self_call, uint32_t entry_call_depth)
+    bool handler_tailcall(State* S, CallFrame& frame, Reg a, uint8_t num_args, bool is_self_call, uint32_t entry_call_depth)
     {
         const auto func_abs_pos = frame.base + a;
         const uint32_t actual_num_args = count_actual_args(S, frame, static_cast<uint32_t>(func_abs_pos), num_args);
@@ -720,7 +719,7 @@ namespace behl
 
     // Return instruction handler
     BEHL_FORCEINLINE
-    static bool handler_return(State* S, const CallFrame& frame, Reg a, uint8_t num_results, uint32_t entry_call_depth)
+    bool handler_return(State* S, const CallFrame& frame, Reg a, uint8_t num_results, uint32_t entry_call_depth)
     {
         return return_from_function(S, frame, a, num_results, entry_call_depth);
     }
@@ -728,7 +727,7 @@ namespace behl
     // Return instruction handler for RETURN0: returning no values, skips the
     // kMultRet/available accounting of the general return path.
     BEHL_FORCEINLINE
-    static bool handler_return0(State* S, const CallFrame& frame, uint32_t entry_call_depth)
+    bool handler_return0(State* S, const CallFrame& frame, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -783,7 +782,7 @@ namespace behl
 
     // Return instruction handler for RETURN1: returning exactly one value.
     BEHL_FORCEINLINE
-    static bool handler_return1(State* S, const CallFrame& frame, Reg a, uint32_t entry_call_depth)
+    bool handler_return1(State* S, const CallFrame& frame, Reg a, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -848,7 +847,7 @@ namespace behl
 
     // Try comparison metamethod
     template<MetaMethodType MMIndex>
-    BEHL_FORCEINLINE static bool try_comparison_metamethod(State* S, const Value first, const Value second, bool& result)
+    BEHL_FORCEINLINE bool try_comparison_metamethod(State* S, const Value first, const Value second, bool& result)
     {
         if constexpr (MMIndex == MetaMethodType::kEq)
         {
