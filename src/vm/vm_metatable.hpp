@@ -76,7 +76,7 @@ namespace behl
 
     // Get metamethod from a value's metatable
     template<MetaMethodType MMIndex>
-    BEHL_FORCEINLINE Value metatable_get_method(const Value& v) noexcept
+    BEHL_INLINE Value metatable_get_method(const Value& v) noexcept
     {
         const GCTable* metatable = nullptr;
 
@@ -109,7 +109,7 @@ namespace behl
 
     // Call metamethod helper - pushes function+args, calls and returns first result
     template<typename... Args>
-    BEHL_FORCEINLINE Value metatable_call_method_result(State* S, const Value& mm, Args&&... args)
+    BEHL_INLINE Value metatable_call_method_result(State* S, const Value& mm, Args&&... args)
     {
         auto& stack = S->stack;
         const size_t call_base = stack.size();
@@ -131,7 +131,7 @@ namespace behl
     }
 
     template<typename... Args>
-    BEHL_FORCEINLINE void metatable_call_method(State* S, const Value& mm, Args&&... args)
+    BEHL_INLINE void metatable_call_method(State* S, const Value& mm, Args&&... args)
     {
         auto& stack = S->stack;
         const size_t call_base = stack.size();

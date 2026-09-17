@@ -292,7 +292,7 @@ namespace behl
     }
 
     // Common implementation for all setfield operations
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void setfield_impl(State* S, CallFrame& frame, Value& table, const Value& key, const Value& val)
     {
         if (table.is_table())
@@ -370,7 +370,7 @@ namespace behl
         gc_step(S);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_self(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
     {
         const Value& table = get_register(S, frame, b);

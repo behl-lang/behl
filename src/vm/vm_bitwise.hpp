@@ -102,7 +102,7 @@ namespace behl
     // Core Bitwise Operations
 
     template<MetaMethodType MMIndex, typename Op>
-    BEHL_FORCEINLINE void bitwise_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_INLINE void bitwise_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         const uint16_t type_pair = make_type_pair(a, b);
 
@@ -168,7 +168,7 @@ namespace behl
     // Bitwise Handlers
 
     template<typename Op>
-    BEHL_FORCEINLINE bool try_bitwise_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_INLINE bool try_bitwise_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         switch (make_type_pair(a, b))
         {
@@ -202,7 +202,7 @@ namespace behl
     }
 
     template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
-    BEHL_FORCEINLINE void handler_bitwise_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    BEHL_INLINE void handler_bitwise_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
     {
         const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
@@ -214,14 +214,14 @@ namespace behl
 
     // Generic bitwise handler template
     template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
-    BEHL_FORCEINLINE void handler_bitwise(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    BEHL_INLINE void handler_bitwise(State* S, CallFrame& frame, Reg dst, Args&&... args)
     {
         const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
         bitwise_binop<MMIndex>(S, dst, lhs, rhs, frame, BitwiseOp{});
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_bnot(State* S, CallFrame& frame, Reg a, Reg b)
     {
         const Value& val = get_register(S, frame, b);
