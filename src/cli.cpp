@@ -36,6 +36,7 @@ struct Options
     std::string execute_code;
     std::string script;
     std::vector<std::string> script_args;
+    bool disable_jit = false;
 };
 
 template<typename... TArgs>
@@ -101,6 +102,10 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
             opts.mode = Mode::Execute;
             opts.execute_code = argv[++i];
             mode_set = true;
+        }
+        else if (arg == "--nojit")
+        {
+            opts.disable_jit = true;
         }
         else if (arg.starts_with('-'))
         {
@@ -343,6 +348,10 @@ int main(int argc, char* argv[])
     const Options& opts = *opts_result;
 
     behl::State* S = behl::new_state();
+    if (opts.disable_jit)
+    {
+        S->jit_enabled = false;
+    }
     behl::load_stdlib(S);
     behl::load_lib_fs(S);
     behl::load_lib_process(S);
