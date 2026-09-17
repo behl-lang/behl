@@ -942,6 +942,8 @@ namespace behl
 
             case CgOpKind::kTailJumpNative:
             case CgOpKind::kCallFast:
+            case CgOpKind::kFramePushFast:
+            case CgOpKind::kTailFrameFast:
                 if (cache_enabled_)
                 {
                     cache_drop_all();

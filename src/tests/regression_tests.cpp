@@ -547,3 +547,141 @@ TEST_F(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 2561);
 }
+
+TEST_F(RegressionTest, SelfTailCallPreservesArgumentCount)
+{
+    constexpr std::string_view code = R"(
+        function countdown(n, acc) {
+            if (n <= 0) { return acc; }
+            return countdown(n - 1, acc + n);
+        }
+        return countdown(150, 0);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 11325);
+}
+
+TEST_F(RegressionTest, SelfTailCallArityOneTwoThree)
+{
+    constexpr std::string_view code = R"(
+        function one(n) {
+            if (n <= 0) { return 7; }
+            return one(n - 1);
+        }
+        function two(n, acc) {
+            if (n <= 0) { return acc; }
+            return two(n - 1, acc + 2);
+        }
+        function three(n, acc, step) {
+            if (n <= 0) { return acc; }
+            return three(n - 1, acc + step, step);
+        }
+        return one(60) + two(60, 0) + three(60, 0, 3);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7 + 120 + 180);
+}
+
+TEST_F(RegressionTest, TwoDistinctCallsInOneLoopBody)
+{
+    constexpr std::string_view code = R"(
+        let ping = nil;
+        let pong = nil;
+
+        ping = function(n, acc) {
+            if (n <= 0) { return acc; }
+            return pong(n - 1, acc + n);
+        };
+
+        pong = function(n, acc) {
+            if (n <= 0) { return acc; }
+            return ping(n - 1, acc + n);
+        };
+
+        function selfdown(n, acc) {
+            if (n <= 0) { return acc; }
+            return selfdown(n - 1, acc + n);
+        }
+
+        for (let i = 0; i < 200; i++) {
+            ping(150, 0);
+            selfdown(150, 0);
+        }
+        return ping(150, 0) + selfdown(150, 0);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 11325 + 11325);
+}
+
+TEST_F(RegressionTest, NonTailSelfCallPreservesArgumentCount)
+{
+    constexpr std::string_view code = R"(
+        function sum_to(n) {
+            if (n <= 0) { return 0; }
+            return n + sum_to(n - 1);
+        }
+        function weighted(n, w) {
+            if (n <= 0) { return 0; }
+            return n * w + weighted(n - 1, w);
+        }
+        return sum_to(100) + weighted(100, 2);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 5050 + 10100);
+}
+
+TEST_F(RegressionTest, TopLevelLoopMatchesFunctionLoop)
+{
+    constexpr std::string_view code = R"(
+        function loop_in_function(n) {
+            let sum = 0;
+            for (let i = 0; i < n; i++) {
+                sum = sum + i;
+            }
+            return sum;
+        }
+
+        let from_function = loop_in_function(50000);
+
+        let from_chunk = 0;
+        for (let i = 0; i < 50000; i++) {
+            from_chunk = from_chunk + i;
+        }
+
+        return (from_function == from_chunk) && (from_chunk == 1249975000);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
+TEST_F(RegressionTest, SelfCallLeavesUnpassedParamsNil)
+{
+    constexpr std::string_view code = R"(
+        function dirty(p, q, r, s) {
+            return p + q + r + s;
+        }
+
+        function probe(n, a, b) {
+            if (n <= 0) {
+                if ((b == nil) && (a == 7)) { return 1; }
+                return 0;
+            }
+            dirty(111, 222, 333, 444);
+            let inner = probe(n - 1, 7);
+            return inner;
+        }
+
+        for (let i = 0; i < 50; i++) {
+            probe(20, 7);
+        }
+        return probe(20, 7) == 1;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1)) << "unpassed parameters must read nil after a self call";
+}

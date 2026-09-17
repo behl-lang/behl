@@ -21,6 +21,12 @@ namespace behl
     {
         switch (op)
         {
+            case OpCode::kOpVararg:
+                return jit_op_vararg;
+            case OpCode::kOpVarargPrep:
+                return jit_op_varargprep;
+            case OpCode::kOpVarargExpand:
+                return jit_op_varargexpand;
             case OpCode::kOpDefer:
                 return jit_op_defer;
             case OpCode::kOpSaveRet:
@@ -351,6 +357,7 @@ namespace behl
                 , n_(proto->code.size())
                 , jump_targets_(state)
                 , pc_labels_(state)
+                , inline_labels_(state)
                 , cold_blocks_(state)
                 , resume_pcs_(state)
                 , state_(state)
@@ -424,7 +431,7 @@ namespace behl
                 {
                     return false;
                 }
-                cb.resume = pc_labels_[static_cast<size_t>(pcn) + 1];
+                cb.resume = (*labels_)[static_cast<size_t>(pcn) + 1];
                 return true;
             }
 
@@ -565,6 +572,96 @@ namespace behl
                 op.flag = is_self_call;
             }
 
+            bool can_inline_self_call(const Instruction& ins) const
+            {
+                if (!inline_allowed_ || inline_depth_ >= kInlineMaxDepth)
+                {
+                    return false;
+                }
+                if (!ins.flag_bit() || ins.b() == static_cast<uint8_t>(kMultArgs))
+                {
+                    return false;
+                }
+                return true;
+            }
+
+            void emit_inline_self_call(const Instruction& ins, uint32_t pcn)
+            {
+                const uint32_t cont = new_label();
+
+                const uint32_t slow = new_label();
+                const uint32_t ready = new_label();
+                frame_push_fast(ins, pcn, slow);
+                jump(ready);
+                bind(slow, true);
+                helper_call(jit_call_push, ins.raw, pcn);
+                bind(ready, true);
+
+                AutoVector<uint32_t> site_labels(state_);
+                site_labels.reserve(n_);
+                for (uint32_t pc = 0; pc < n_; ++pc)
+                {
+                    site_labels.push_back(new_label());
+                }
+
+                const uint32_t saved_return = inline_return_label_;
+                AutoVector<uint32_t>* saved_labels = labels_;
+
+                inline_return_label_ = cont;
+                labels_ = &site_labels;
+                ++inline_depth_;
+
+                for (uint32_t pc = 0; pc < n_; ++pc)
+                {
+                    bind(site_labels[pc], true);
+                    if (!compile_op(pc, proto_->code[pc]))
+                    {
+                        failed_ = true;
+                        break;
+                    }
+                }
+
+                --inline_depth_;
+                labels_ = saved_labels;
+                inline_return_label_ = saved_return;
+
+                bind(cont, true);
+                add_resume_pc(pcn);
+            }
+
+            void frame_push_fast(const Instruction& ins, uint32_t pcn, uint32_t on_slow)
+            {
+                CgOp& op = push(CgOpKind::kFramePushFast);
+                op.slot = ins.a();
+                op.var = static_cast<uint32_t>(ins.b() - 1);
+                op.var2 = ins.c();
+                op.imm = static_cast<int64_t>(reinterpret_cast<uintptr_t>(proto_));
+                op.label = on_slow;
+                op.pcn = pcn;
+            }
+
+            void tail_frame_fast(const Instruction& ins, uint32_t pcn, uint32_t on_slow)
+            {
+                CgOp& op = push(CgOpKind::kTailFrameFast);
+                op.slot = ins.a();
+                op.var = static_cast<uint32_t>(ins.b() - 1);
+                op.imm = static_cast<int64_t>(reinterpret_cast<uintptr_t>(proto_));
+                op.label = on_slow;
+                op.pcn = pcn;
+            }
+
+            void add_resume_pc(uint32_t pcn)
+            {
+                for (const uint32_t existing : resume_pcs_)
+                {
+                    if (existing == pcn)
+                    {
+                        return;
+                    }
+                }
+                resume_pcs_.push_back(pcn);
+            }
+
             void return_dispatch()
             {
                 CgOp& op = push(CgOpKind::kReturnDispatch);
@@ -595,6 +692,12 @@ namespace behl
             size_t n_;
             AutoVector<bool> jump_targets_;
             AutoVector<uint32_t> pc_labels_;
+            AutoVector<uint32_t>* labels_ = &pc_labels_;
+            static constexpr uint32_t kInlineMaxDepth = 4;
+            AutoVector<uint32_t> inline_labels_;
+            uint32_t inline_depth_{};
+            uint32_t inline_return_label_{};
+            bool inline_allowed_{};
             AutoVector<ColdBlock> cold_blocks_;
             uint32_t err_{};
             uint32_t ret_stub_{};
@@ -717,9 +820,9 @@ namespace behl
 
             for (size_t i = 0; i + 1 < count; ++i)
             {
-                branch_var_eq_u32(result, static_cast<uint32_t>(targets[i]), pc_labels_[static_cast<size_t>(targets[i])]);
+                branch_var_eq_u32(result, static_cast<uint32_t>(targets[i]), (*labels_)[static_cast<size_t>(targets[i])]);
             }
-            jump(pc_labels_[static_cast<size_t>(targets[count - 1])]);
+            jump((*labels_)[static_cast<size_t>(targets[count - 1])]);
         }
 
         bool AbstractCompiler::defer_return_dispatch(uint32_t block, uint32_t result)
@@ -747,9 +850,9 @@ namespace behl
 
             for (size_t i = 0; i + 1 < targets.size(); ++i)
             {
-                branch_var_eq_u32(result, targets[i], pc_labels_[targets[i]]);
+                branch_var_eq_u32(result, targets[i], (*labels_)[targets[i]]);
             }
-            jump(pc_labels_[targets.back()]);
+            jump((*labels_)[targets.back()]);
 
             return true;
         }
@@ -772,7 +875,7 @@ namespace behl
                     {
                         return false;
                     }
-                    jump(pc_labels_[static_cast<size_t>(target)]);
+                    jump((*labels_)[static_cast<size_t>(target)]);
                     break;
                 }
 
@@ -841,7 +944,7 @@ namespace behl
                     cb.resume = cb.entry;
                     guard_tag(ins.a(), Type::kInteger, cb.entry);
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.a());
-                    branch_i64_imm(v, ins.signed_immediate(), invert(cmp), pc_labels_[pcn + 1]);
+                    branch_i64_imm(v, ins.signed_immediate(), invert(cmp), (*labels_)[pcn + 1]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -1141,8 +1244,8 @@ namespace behl
                         return false;
                     }
                     const bool inv = ins.b() != 0;
-                    const uint32_t taken = pc_labels_[pcn];
-                    const uint32_t skip = pc_labels_[pcn + 1];
+                    const uint32_t taken = (*labels_)[pcn];
+                    const uint32_t skip = (*labels_)[pcn + 1];
                     branch_truthy(ins.a(), inv ? skip : taken, inv ? taken : skip);
                     break;
                 }
@@ -1155,13 +1258,13 @@ namespace behl
                     }
                     const bool inv = ins.c() != 0;
                     const uint32_t copy_label = new_label();
-                    const uint32_t skip = pc_labels_[pcn + 1];
+                    const uint32_t skip = (*labels_)[pcn + 1];
                     branch_truthy(ins.b(), inv ? skip : copy_label, inv ? copy_label : skip);
                     bind(copy_label, false);
                     CgOp& cp = push(CgOpKind::kCopySlot);
                     cp.slot = ins.a();
                     cp.imm = ins.b();
-                    jump(pc_labels_[pcn]);
+                    jump((*labels_)[pcn]);
                     break;
                 }
 
@@ -1183,7 +1286,7 @@ namespace behl
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v1 = load(CgOpKind::kLoadI64, ins.b());
                     const uint32_t v2 = load(CgOpKind::kLoadI64, ins.c());
-                    branch_i64(v1, v2, invert(cmp), pc_labels_[pcn + 1]);
+                    branch_i64(v1, v2, invert(cmp), (*labels_)[pcn + 1]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -1207,12 +1310,12 @@ namespace behl
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.b());
                     if (k >= INT32_MIN && k <= INT32_MAX)
                     {
-                        branch_i64_imm(v, k, invert(cmp), pc_labels_[pcn + 1]);
+                        branch_i64_imm(v, k, invert(cmp), (*labels_)[pcn + 1]);
                     }
                     else
                     {
                         const uint32_t c = const_i64(k);
-                        branch_i64(v, c, invert(cmp), pc_labels_[pcn + 1]);
+                        branch_i64(v, c, invert(cmp), (*labels_)[pcn + 1]);
                     }
                     cold_blocks_.push_back(cb);
                     break;
@@ -1237,13 +1340,19 @@ namespace behl
                     guard_tag(ins.b(), Type::kNumber, cb.entry);
                     const uint32_t f = load(CgOpKind::kLoadF64, ins.b());
                     const uint32_t c = const_f64(kd);
-                    branch_f64(f, c, cmp, pc_labels_[pcn], pc_labels_[pcn + 1]);
+                    branch_f64(f, c, cmp, (*labels_)[pcn], (*labels_)[pcn + 1]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
 
                 case OpCode::kOpCall:
                 {
+                    if (can_inline_self_call(ins))
+                    {
+                        emit_inline_self_call(ins, pcn);
+                        break;
+                    }
+
                     const bool fixed_args = ins.b() != static_cast<uint8_t>(kMultArgs);
                     uint32_t done = 0;
                     if (fixed_args)
@@ -1283,7 +1392,7 @@ namespace behl
 
                     for (uint32_t j = 1; j <= num_captures; ++j)
                     {
-                        bind(pc_labels_[pc + j], false);
+                        bind((*labels_)[pc + j], false);
                     }
                     pc += num_captures;
                     break;
@@ -1291,12 +1400,21 @@ namespace behl
 
                 case OpCode::kOpTailCall:
                 {
+                    if (ins.c() != 0 && ins.b() != static_cast<uint8_t>(kMultArgs) && !proto_->has_upvalues
+                        && !proto_->is_vararg && proto_->defer_blocks.empty())
+                    {
+                        const uint32_t slow = new_label();
+                        tail_frame_fast(ins, pcn, slow);
+                        jump((*labels_)[0]);
+                        bind(slow, true);
+                    }
+
                     const uint32_t r = helper_call(jit_op_tailcall, ins.raw, pcn);
                     branch_var_eq_u32(r, kJitTailReturned, ret_stub_);
 
                     const uint32_t replaced = new_label();
                     branch_var_eq_u32(r, kJitTailReplaced, replaced);
-                    jump(pc_labels_[0]);
+                    jump((*labels_)[0]);
 
                     bind(replaced, true);
                     tail_jump_native(tail_stub_);
@@ -1305,6 +1423,11 @@ namespace behl
 
                 case OpCode::kOpReturn:
                     helper_call(jit_op_return, ins.raw, pcn);
+                    if (inline_depth_ > 0)
+                    {
+                        jump(inline_return_label_);
+                        break;
+                    }
                     return_dispatch();
                     break;
 
@@ -1340,11 +1463,21 @@ namespace behl
 
                 case OpCode::kOpReturn0:
                     helper_call(jit_op_return0, ins.raw, pcn);
+                    if (inline_depth_ > 0)
+                    {
+                        jump(inline_return_label_);
+                        break;
+                    }
                     return_dispatch();
                     break;
 
                 case OpCode::kOpReturn1:
                     helper_call(jit_op_return1, ins.raw, pcn);
+                    if (inline_depth_ > 0)
+                    {
+                        jump(inline_return_label_);
+                        break;
+                    }
                     return_dispatch();
                     break;
 
@@ -1359,7 +1492,7 @@ namespace behl
                         {
                             return false;
                         }
-                        jump(pc_labels_[pc + 2]);
+                        jump((*labels_)[pc + 2]);
                     }
                     break;
                 }
@@ -1440,7 +1573,7 @@ namespace behl
                     }
 
                     bind(zero_trip, false);
-                    jump(pc_labels_[static_cast<size_t>(exit_pc)]);
+                    jump((*labels_)[static_cast<size_t>(exit_pc)]);
 
                     bind(prepared, false);
                     cold_blocks_.push_back(cb);
@@ -1464,10 +1597,10 @@ namespace behl
                     arith(CgOpKind::kAddI64, idx, step);
                     store(CgOpKind::kStoreI64, a, idx);
                     const uint32_t count = load(CgOpKind::kLoadI64, a + 3);
-                    branch_i64_imm(count, 0, CgCmp::kEq, pc_labels_[pcn]);
+                    branch_i64_imm(count, 0, CgCmp::kEq, (*labels_)[pcn]);
                     add_i64_imm(count, -1);
                     store(CgOpKind::kStoreI64, a + 3, count);
-                    jump(pc_labels_[static_cast<size_t>(loop_target)]);
+                    jump((*labels_)[static_cast<size_t>(loop_target)]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -1550,7 +1683,7 @@ namespace behl
                             guard_tag(cins.a(), Type::kNumber, help);
                             const uint32_t lhs = load(CgOpKind::kLoadF64, cins.a());
                             const uint32_t rhs = const_f64(static_cast<double>(cins.signed_immediate()));
-                            branch_f64(lhs, rhs, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                            branch_f64(lhs, rhs, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                         }
                         bind(help, true);
                         const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
@@ -1667,7 +1800,7 @@ namespace behl
                             guard_tag(cins.c(), Type::kNumber, help);
                             const uint32_t f1 = load(CgOpKind::kLoadF64, cins.b());
                             const uint32_t f2 = load(CgOpKind::kLoadF64, cins.c());
-                            branch_f64(f1, f2, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                            branch_f64(f1, f2, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                         }
                         bind(help, true);
                         const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
@@ -1686,14 +1819,14 @@ namespace behl
                                 guard_tag(cins.b(), Type::kNumber, help);
                                 const uint32_t f = load(CgOpKind::kLoadF64, cins.b());
                                 const uint32_t c = const_f64(static_cast<double>(cb.k));
-                                branch_f64(f, c, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                                branch_f64(f, c, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                             }
                             else if (const_fp_cmp_info(cins.op(), cmp))
                             {
                                 guard_tag(cins.b(), Type::kInteger, help);
                                 const uint32_t t = load(CgOpKind::kCvtSlotToF64, cins.b());
                                 const uint32_t c = const_f64(std::bit_cast<double>(static_cast<uint64_t>(cb.k)));
-                                branch_f64(t, c, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                                branch_f64(t, c, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                             }
                         }
                         bind(help, true);
@@ -1712,22 +1845,9 @@ namespace behl
 
         bool AbstractCompiler::compile()
         {
-            if (proto_->is_vararg || n_ == 0)
+            if (n_ == 0)
             {
                 return false;
-            }
-
-            for (size_t i = 0; i < n_; ++i)
-            {
-                switch (proto_->code[i].op())
-                {
-                    case OpCode::kOpVararg:
-                    case OpCode::kOpVarargPrep:
-                    case OpCode::kOpVarargExpand:
-                        return false;
-                    default:
-                        break;
-                }
             }
 
             {
@@ -1760,6 +1880,20 @@ namespace behl
             {
                 pc_labels_.push_back(new_label());
             }
+            inline_allowed_ = !proto_->is_vararg && proto_->defer_blocks.empty() && n_ <= 64;
+            if (inline_allowed_)
+            {
+                for (uint32_t pc = 0; pc < n_; ++pc)
+                {
+                    const OpCode op = proto_->code[pc].op();
+                    if (op == OpCode::kOpTailCall || op == OpCode::kOpVararg || op == OpCode::kOpVarargPrep
+                        || op == OpCode::kOpVarargExpand)
+                    {
+                        inline_allowed_ = false;
+                        break;
+                    }
+                }
+            }
             err_ = new_label();
             ret_stub_ = new_label();
             tail_stub_ = new_label();
@@ -1770,7 +1904,7 @@ namespace behl
 
             for (uint32_t pc = 0; pc < n_; ++pc)
             {
-                bind(pc_labels_[pc], jump_targets_[pc]);
+                bind((*labels_)[pc], jump_targets_[pc]);
                 const Instruction ins = proto_->code[pc];
                 if (!compile_op(pc, ins))
                 {
@@ -1811,7 +1945,7 @@ namespace behl
                         br.kind = CgOpKind::kBranchVarEqU32;
                         br.var = load.var;
                         br.imm = static_cast<int64_t>(r);
-                        br.label = pc_labels_[r];
+                        br.label = (*labels_)[r];
                         dispatch.push_back(br);
                     }
                 }

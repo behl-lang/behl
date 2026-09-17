@@ -358,6 +358,192 @@ namespace behl
         }
     }
 
+    void CodegenX86::emit_frame_push_fast(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            const auto* proto = reinterpret_cast<const GCProto*>(static_cast<uintptr_t>(op.imm));
+            const int32_t a = op.slot;
+            const int32_t num_args = static_cast<int32_t>(op.var);
+            const int32_t nresults = static_cast<int32_t>(op.var2);
+            const int32_t window = static_cast<int32_t>(proto->max_stack_size);
+            const int32_t items = num_args + 1;
+            const int32_t needed = (items > window) ? items : window;
+
+            const Label slow = label(op.label);
+            constexpr GpReg kPos = GpReg::r2;
+            constexpr GpReg kIdx = GpReg::r0;
+            constexpr GpReg kReq = GpReg::r1;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+
+            ensure_base();
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.mov(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
+            e_.mov32(kPos, mem(kTmpA, kTmpB, kCallFrameHalfScale, CallFrame::base_offset() - kCallFrameStride));
+            e_.add(kPos, a);
+
+            e_.cmp(mem(kStateReg, State::gc_debt_offset()), 0);
+            e_.jcc(Cond::g, slow);
+
+            e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kIdx, mem(kStateReg, State::call_stack_capacity_offset()));
+            e_.jcc(Cond::ae, slow);
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_size_offset()));
+            e_.cmp(kTmpA, mem(kStateReg, State::call_headers_capacity_offset()));
+            e_.jcc(Cond::ae, slow);
+
+            e_.lea(kReq, mem(kPos, needed));
+            e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
+            e_.jcc(Cond::a, slow);
+
+            if (proto->has_upvalues)
+            {
+                e_.mov(kTmpA, mem(kFrameBase, 0));
+                e_.mov(kTmpB, mem(kFrameBase, 8));
+                e_.mov(mem(kFrameBase, a * Value::size()), kTmpA);
+                e_.mov(mem(kFrameBase, a * Value::size() + 8), kTmpB);
+            }
+
+            for (int32_t i = num_args; i < static_cast<int32_t>(proto->num_params); ++i)
+            {
+                e_.mov32(mem(kFrameBase, (a + 1 + i) * Value::size() + Value::type_offset()), 0);
+            }
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, kCallFrameHalfScale));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, kCallFrameHalfScale));
+            e_.mov32(mem(kTmpA, CallFrame::pc_offset() - kCallFrameStride), static_cast<uint32_t>(op.pcn));
+
+            e_.mov(kTmpB, reinterpret_cast<uint64_t>(proto));
+            e_.mov(mem(kTmpA, CallFrame::proto_offset()), kTmpB);
+            e_.mov32(mem(kTmpA, CallFrame::pc_offset()), 0);
+            e_.mov32(mem(kTmpA, CallFrame::base_offset()), kPos);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kTmpB, mem(kIdx, kIdx, 2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpB, mem(kPos, items));
+            e_.mov32(mem(kTmpA, 0), kTmpB);
+            e_.mov32(mem(kTmpA, 4), kPos);
+            e_.mov32(mem(kTmpA, 8), 0);
+            e_.mov32(mem(kTmpA, 12), 0);
+            e_.mov32(mem(kTmpA, 16), 0);
+            e_.mov32(mem(kTmpA, 20), static_cast<uint32_t>(nresults));
+
+            e_.lea(kTmpB, mem(kIdx, 1));
+            e_.mov(mem(kStateReg, State::call_stack_size_offset()), kTmpB);
+            e_.mov(mem(kStateReg, State::call_headers_size_offset()), kTmpB);
+
+            Label done = e_.new_label();
+            e_.mov(kIdx, mem(kStateReg, State::stack_size_offset()));
+            e_.cmp(kIdx, kReq);
+            e_.jcc(Cond::ae, done);
+
+            Label fill = e_.new_label();
+            e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, 8));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, 8));
+            e_.bind(fill);
+            e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+            e_.add(kTmpA, Value::size());
+            e_.add(kIdx, 1);
+            e_.cmp(kIdx, kReq);
+            e_.jcc(Cond::b, fill);
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
+            e_.bind(done);
+
+            base_valid_ = false;
+        }
+    }
+
+    void CodegenX86::emit_tail_frame_fast(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            const auto* proto = reinterpret_cast<const GCProto*>(static_cast<uintptr_t>(op.imm));
+            const int32_t a = op.slot;
+            const int32_t num_args = static_cast<int32_t>(op.var);
+            const int32_t window = static_cast<int32_t>(proto->max_stack_size);
+            const int32_t items = num_args + 1;
+            const Label slow = label(op.label);
+
+            constexpr GpReg kBase = GpReg::r2;
+            constexpr GpReg kReq = GpReg::r1;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+            constexpr GpReg kCur = GpReg::r0;
+
+            ensure_base();
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.mov(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
+            e_.mov32(kBase, mem(kTmpA, CallFrame::base_offset() - kCallFrameStride));
+
+            e_.lea(kReq, mem(kBase, window));
+            e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
+            e_.jcc(Cond::a, slow);
+
+            for (int32_t i = 0; i < num_args; ++i)
+            {
+                const int32_t src = (a + 1 + i) * Value::size();
+                const int32_t dst = (1 + i) * Value::size();
+                e_.mov(kTmpB, mem(kFrameBase, src));
+                e_.mov(mem(kFrameBase, dst), kTmpB);
+                e_.mov(kTmpB, mem(kFrameBase, src + 8));
+                e_.mov(mem(kFrameBase, dst + 8), kTmpB);
+            }
+
+            for (int32_t i = items; i < window; ++i)
+            {
+                e_.mov32(mem(kFrameBase, i * Value::size() + Value::type_offset()), 0);
+            }
+
+            e_.mov32(mem(kTmpA, CallFrame::pc_offset() - kCallFrameStride), 0);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+            e_.mov(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+            e_.lea(kTmpB, mem(kTmpB, kTmpB, 2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpB, mem(kBase, items));
+            e_.mov32(mem(kTmpA, -24), kTmpB);
+
+            Label done = e_.new_label();
+            e_.mov(kCur, mem(kStateReg, State::stack_size_offset()));
+            e_.cmp(kCur, kReq);
+            e_.jcc(Cond::ae, done);
+
+            Label fill = e_.new_label();
+            e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+            e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+            e_.bind(fill);
+            e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+            e_.add(kTmpA, Value::size());
+            e_.add(kCur, 1);
+            e_.cmp(kCur, kReq);
+            e_.jcc(Cond::b, fill);
+            e_.bind(done);
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
+
+            base_valid_ = false;
+        }
+    }
+
     void CodegenX86::emit_call_fast(const CgOp& op)
     {
         if constexpr (!kMode64)
@@ -1722,6 +1908,24 @@ namespace behl
                     cache_drop_all();
                 }
                 emit_call_fast(op);
+                break;
+
+            case CgOpKind::kFramePushFast:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                emit_frame_push_fast(op);
+                break;
+
+            case CgOpKind::kTailFrameFast:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                emit_tail_frame_fast(op);
                 break;
 
             case CgOpKind::kReturnDispatch:

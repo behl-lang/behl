@@ -33,120 +33,6 @@
 
 namespace behl
 {
-    BEHL_FORCEINLINE
-    static void handler_varargprep(State* S, CallFrame& frame, uint8_t num_params)
-    {
-        // Calculate how many extra args were passed
-        const auto total_args = frame_header(S, frame).top - frame.base - 1;
-        const auto num_varargs = (total_args > num_params) ? (total_args - num_params) : 0;
-
-        frame_header(S, frame).num_varargs = num_varargs;
-
-        if (num_varargs == 0)
-        {
-            return;
-        }
-
-        // Before: [func, p0, p1, v0, v1, v2]
-        // After:  [func, p0, p1, v0, v1, v2, func_copy, p0_copy, p1_copy]
-        //                                    ^
-        //                                    new base
-        // Varargs are still at their original positions, accessible at base - num_varargs
-
-        const auto old_base = frame.base;
-        const auto new_base = old_base + total_args + 1; // Move base past all args
-
-        // Ensure stack has room for copies
-        const auto required_size = new_base + 1 + num_params + frame.proto->max_stack_size;
-        if (S->stack.size() < required_size)
-        {
-            S->stack.resize(S, required_size, Value{});
-        }
-
-        // Copy function to new position (at frame.top, which is after all args)
-        S->stack[new_base] = S->stack[old_base];
-
-        // Copy fixed params to new positions
-        for (uint32_t i = 0; i < num_params; ++i)
-        {
-            S->stack[new_base + 1 + i] = S->stack[old_base + 1 + i];
-        }
-
-        // Update frame pointers. call_pos is left untouched: it marks where the caller
-        // expects results, which stays at the original call site even though the locals
-        // base moves past the varargs.
-        frame.base = new_base;
-        frame_header(S, frame).top = new_base + 1 + num_params;
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_vararg(State* S, CallFrame& frame, Reg a, uint8_t num)
-    {
-        const auto num_varargs = frame_header(S, frame).num_varargs;
-
-        // Varargs are at: base - num_varargs ... base - 1
-        const auto vararg_start = frame.base - num_varargs;
-        const auto dest = frame.base + a;
-
-        // num == 0 requests all varargs (multret) and extends top so a following call
-        // or table constructor can consume them. num > 0 requests exactly that many
-        // values, nil-padding when fewer were passed and leaving top untouched.
-        if (num == 0)
-        {
-            const auto target_end = dest + num_varargs;
-            if (target_end > S->stack.size())
-            {
-                S->stack.resize(S, target_end);
-            }
-
-            for (uint32_t i = 0; i < num_varargs; ++i)
-            {
-                S->stack[dest + i] = S->stack[vararg_start + i];
-            }
-
-            frame_header(S, frame).top = target_end;
-            return;
-        }
-
-        const auto want = static_cast<uint32_t>(num);
-        const auto target_end = dest + want;
-        if (target_end > S->stack.size())
-        {
-            S->stack.resize(S, target_end);
-        }
-
-        const auto copy_count = (num_varargs < want) ? num_varargs : want;
-        for (uint32_t i = 0; i < copy_count; ++i)
-        {
-            S->stack[dest + i] = S->stack[vararg_start + i];
-        }
-        for (uint32_t i = copy_count; i < want; ++i)
-        {
-            S->stack[dest + i].set_nil();
-        }
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_varargexpand(State* S, CallFrame& frame, Reg table_reg, uint32_t start_idx)
-    {
-        const auto num_varargs = frame_header(S, frame).num_varargs;
-
-        // Get the table
-        Value& table = get_register(S, frame, table_reg);
-        assert(table.is_table() && "VARARGEXPAND: table_reg must contain a table");
-
-        // Varargs are at: base - num_varargs ... base - 1
-        const auto vararg_start = frame.base - num_varargs;
-
-        // Copy each vararg directly into the table array
-        for (uint32_t i = 0; i < num_varargs; ++i)
-        {
-            const Value key = Value(static_cast<int64_t>(start_idx + i));
-            const Value& val = S->stack[vararg_start + i];
-            setfield_impl(S, frame, table, key, val);
-        }
-    }
-
     inline static void execute_native(State* S, const Value& func_value, int num_args, int nresults)
     {
         auto& stack = S->stack;
@@ -654,7 +540,7 @@ namespace behl
         const auto* proto = closure_data->proto;
         const auto nres = (nresults == kMultRet) ? static_cast<uint8_t>(kMultRet) : static_cast<uint8_t>(nresults);
         setup_call_frame(S, proto, new_base, num_args, new_base, nres);
-        prepare_call(S, proto->max_stack_size, new_base, num_args);
+        prepare_call(S, proto->max_stack_size, new_base, num_args, proto->num_params);
 
 #if BEHL_JIT_SUPPORTED
         if constexpr (!TDebugMode)

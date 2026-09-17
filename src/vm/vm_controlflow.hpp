@@ -112,7 +112,7 @@ namespace behl
 
     // Prepare stack for a function call (ensure enough space)
     BEHL_FORCEINLINE
-    void prepare_call(State* S, uint32_t frame_size, uint32_t new_base, uint32_t actual_num_args)
+    void prepare_call(State* S, uint32_t frame_size, uint32_t new_base, uint32_t actual_num_args, uint32_t num_params = 0)
     {
         const auto items_to_move = actual_num_args + 1;
         const auto items_count = new_base + items_to_move;
@@ -120,6 +120,19 @@ namespace behl
         const auto required_size = (items_count > proto_size) ? items_count : proto_size;
 
         S->stack.resize(S, required_size);
+
+        // Parameters the caller did not pass must read nil. resize only constructs
+        // slots past the current stack size, so a slot reused from an earlier call
+        // would otherwise hand the callee a stale value.
+        if (actual_num_args < num_params)
+        {
+            const auto first = new_base + 1 + actual_num_args;
+            const auto last = new_base + 1 + num_params;
+            for (uint32_t i = first; i < last; ++i)
+            {
+                S->stack[i].set_nil();
+            }
+        }
     }
 
     // Move arguments for tail call (handles forward and backward moves)
@@ -439,7 +452,7 @@ namespace behl
                 const auto* closure_data = func.get_closure();
                 const auto* proto = closure_data->proto;
                 setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
-                prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
+                prepare_call(S, proto->max_stack_size, new_base, actual_num_args, proto->num_params);
 
                 return;
             }
@@ -548,7 +561,7 @@ namespace behl
             }
 
             CallFrame& new_frame = setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
-            prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
+            prepare_call(S, proto->max_stack_size, new_base, actual_num_args, proto->num_params);
 
 #if BEHL_JIT_SUPPORTED
             if constexpr (TExecuteCallee)

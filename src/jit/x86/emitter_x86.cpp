@@ -137,6 +137,13 @@ namespace behl
         emit32(imm);
     }
 
+    void X86Emitter::mov32(Mem dst, GpReg src)
+    {
+        emit_rex_opt(reg_ext(src), mem_index_ext(dst), reg_ext(dst.base));
+        emit8(0x89);
+        emit_modrm_mem(reg_low(src), dst);
+    }
+
     void X86Emitter::movups(XmmReg dst, Mem src)
     {
         emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));

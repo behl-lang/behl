@@ -61,6 +61,9 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_newtable, handler_newtable(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_setlist, handler_setlist(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_self, handler_self(S, frame, instr.a(), instr.b(), instr.c()))
+    BEHL_JIT_WRAP(jit_op_vararg, handler_vararg(S, frame, instr.a(), instr.b()))
+    BEHL_JIT_WRAP(jit_op_varargprep, handler_varargprep(S, frame, instr.a()))
+    BEHL_JIT_WRAP(jit_op_varargexpand, handler_varargexpand(S, frame, instr.a(), instr.b()))
     BEHL_JIT_WRAP(jit_op_defer, handler_defer(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_defercall, handler_defercall(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_enddefer, handler_enddefer(S, frame, instr.a()))
@@ -314,6 +317,23 @@ namespace behl
         (void)pc_next;
         S->jit_exception = std::make_exception_ptr(RuntimeError("defer unwind chain reached from compiled code"));
         return kJitError;
+    }
+
+    uint32_t BEHL_CALLCONV jit_call_push(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    {
+        const Instruction instr{ raw };
+        try
+        {
+            CallFrame& frame = S->call_stack.back();
+            frame.pc = pc_next;
+            handler_call<false>(S, frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
+            return 0;
+        }
+        catch (...)
+        {
+            S->jit_exception = std::current_exception();
+            return kJitError;
+        }
     }
 
     uintptr_t BEHL_CALLCONV jit_call_setup(State* S, uint32_t raw, uint32_t pc_next) noexcept

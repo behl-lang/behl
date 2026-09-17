@@ -58,6 +58,8 @@ namespace behl
         kLoadFramePc,
         kTailJumpNative,
         kCallFast,
+        kFramePushFast,
+        kTailFrameFast,
         kReturnDispatch,
         kHelperCall,
         kSyncFrame,
