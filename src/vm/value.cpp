@@ -115,8 +115,8 @@ namespace behl
             case Type::kString:
             {
                 auto* val = get_string();
-                assert(val->str_hash == string_hash32(val->view()) && "stale cached string hash");
-                return string_key_hash(val->str_hash);
+                assert(val->header.object_hash == string_hash32(val->view()) && "stale cached string hash");
+                return string_key_hash(val->header.object_hash);
             }
 
             case Type::kClosure:

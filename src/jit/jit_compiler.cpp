@@ -1146,7 +1146,10 @@ namespace behl
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.b());
                     const uint32_t cnt = load(CgOpKind::kLoadI64, ins.c());
-                    arith(is_shl ? CgOpKind::kShlI64 : CgOpKind::kShrI64, v, cnt);
+                    CgOp& shift_op = push(is_shl ? CgOpKind::kShlI64 : CgOpKind::kShrI64);
+                    shift_op.var = v;
+                    shift_op.var2 = cnt;
+                    shift_op.label = cb.entry;
                     store(CgOpKind::kStoreI64, ins.a(), v);
                     store_tag(ins.a(), Type::kInteger);
                     jump(cb.resume);

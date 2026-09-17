@@ -1726,6 +1726,8 @@ namespace behl
                         e_.mov(mem(kStackPtr, 8), gp(op.var2));
                         e_.mov(kScratchA, mem(kStackPtr, 0));
                         e_.mov(kScratchB, mem(kStackPtr, 8));
+                        e_.cmp(kScratchB, 63);
+                        e_.jcc(Cond::a, label(op.label));
                         if (is_shl)
                         {
                             e_.shl_cl(kScratchA);
@@ -1738,6 +1740,10 @@ namespace behl
                     }
                     else
                     {
+                        e_.cmp(gp_hi(op.var2), 0);
+                        e_.jcc(Cond::ne, label(op.label));
+                        e_.cmp(gp(op.var2), 63);
+                        e_.jcc(Cond::a, label(op.label));
                         e_.mov(mem(kStackPtr, 0), gp(op.var));
                         e_.mov(mem(kStackPtr, 4), gp_hi(op.var));
                         e_.mov(mem(kStackPtr, 8), gp(op.var2));

@@ -485,10 +485,6 @@ namespace behl
             return const_reverse_iterator(begin());
         }
 
-#if defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
-#endif
         static constexpr int32_t data_offset()
         {
             return static_cast<int32_t>(offsetof(Vector, data_));
@@ -503,10 +499,6 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(Vector, capacity_));
         }
-
-#if defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#endif
 
     private:
         BEHL_FORCEINLINE

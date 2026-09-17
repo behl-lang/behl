@@ -171,7 +171,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode_meta.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/frame.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/integer_ops.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/numeric_ops.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/upvalue.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.hpp

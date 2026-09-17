@@ -87,14 +87,14 @@ namespace behl
     {
         BEHL_FORCEINLINE Integer operator()(Integer a, Integer b) const
         {
-            return a << b;
+            return int_op::shl(a, b);
         }
     };
     struct BitwiseShrOp
     {
         BEHL_FORCEINLINE Integer operator()(Integer a, Integer b) const
         {
-            return a >> b;
+            return int_op::shr(a, b);
         }
     };
 

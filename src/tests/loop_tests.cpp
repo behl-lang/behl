@@ -48,6 +48,99 @@ TEST_F(LoopTest, ForLoopBasic)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
+TEST_F(LoopTest, ForLoopTwoCallsInBody_Discarded)
+{
+    constexpr std::string_view code = R"(
+        function f(a) { return a }
+        let n = 0
+        for (let i = 0; i < 3; i++) {
+            f(1)
+            f(2)
+            n = n + 1
+        }
+        return n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_F(LoopTest, ForLoopTwoCallsInBody_Assigned)
+{
+    constexpr std::string_view code = R"(
+        function f(a, b) { return a + b }
+        let x = 0
+        let y = 0
+        let n = 0
+        for (let i = 0; i < 3; i++) {
+            x = f(1, 2)
+            y = f(9, 4)
+            n = n + 1
+        }
+        return x, y, n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::to_integer(S, -3), 3);
+    ASSERT_EQ(behl::to_integer(S, -2), 13);
+    ASSERT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_F(LoopTest, ForLoopManyCallsInBody_IndexSurvives)
+{
+    constexpr std::string_view code = R"(
+        function f(a) { return a }
+        let seen = 0
+        for (let i = 0; i < 4; i++) {
+            f(1)
+            f(2)
+            f(3)
+            seen = seen + i
+        }
+        return seen
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 6);
+}
+
+TEST_F(LoopTest, NestedForLoopsWithCallsInBody)
+{
+    constexpr std::string_view code = R"(
+        function f(a) { return a }
+        let total = 0
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                f(1)
+                f(2)
+                total = total + 1
+            }
+        }
+        return total
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 9);
+}
+
+TEST_F(LoopTest, ForEachLoopTwoCallsInBody)
+{
+    constexpr std::string_view code = R"(
+        function f(a) { return a }
+        let t = {10, 20, 30}
+        let total = 0
+        foreach (let k, v in t) {
+            f(1)
+            f(2)
+            total = total + v
+        }
+        return total
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 60);
+}
+
 TEST_F(LoopTest, NestedLoops)
 {
     constexpr std::string_view code = R"(

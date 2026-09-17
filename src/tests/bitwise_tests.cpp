@@ -513,6 +513,94 @@ TEST_F(BitwiseTest, Shifts_ZeroShift)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
+TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Folded)
+{
+    constexpr std::string_view code = R"(
+        return 1 << 64,
+               1 << 100,
+               1 >> 64,
+               (0 - 8) >> 64,
+               (0 - 8) >> 1000,
+               1 << 63;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    EXPECT_EQ(behl::to_integer(S, -6), 0);
+    EXPECT_EQ(behl::to_integer(S, -5), 0);
+    EXPECT_EQ(behl::to_integer(S, -4), 0);
+    EXPECT_EQ(behl::to_integer(S, -3), -1);
+    EXPECT_EQ(behl::to_integer(S, -2), -1);
+    EXPECT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
+}
+
+TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Runtime)
+{
+    constexpr std::string_view code = R"(
+        function shl(a, b) { return a << b }
+        function shr(a, b) { return a >> b }
+        return shl(1, 64),
+               shl(1, 100),
+               shr(1, 64),
+               shr(0 - 8, 64),
+               shr(0 - 8, 1000),
+               shl(1, 63);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    EXPECT_EQ(behl::to_integer(S, -6), 0);
+    EXPECT_EQ(behl::to_integer(S, -5), 0);
+    EXPECT_EQ(behl::to_integer(S, -4), 0);
+    EXPECT_EQ(behl::to_integer(S, -3), -1);
+    EXPECT_EQ(behl::to_integer(S, -2), -1);
+    EXPECT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
+}
+
+TEST_F(BitwiseTest, Shifts_NegativeCountReverses)
+{
+    constexpr std::string_view code = R"(
+        function shl(a, b) { return a << b }
+        function shr(a, b) { return a >> b }
+        return shl(8, 0 - 1),
+               shr(8, 0 - 1),
+               shl(1, 0 - 64),
+               shr(0 - 8, 0 - 1),
+               shl(0 - 8, 0 - 64),
+               shr(1, 0 - 64);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    EXPECT_EQ(behl::to_integer(S, -6), 4);
+    EXPECT_EQ(behl::to_integer(S, -5), 16);
+    EXPECT_EQ(behl::to_integer(S, -4), 0);
+    EXPECT_EQ(behl::to_integer(S, -3), -16);
+    EXPECT_EQ(behl::to_integer(S, -2), -1);
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Compiled)
+{
+    constexpr std::string_view code = R"(
+        function shl(a, b) { return a << b }
+        function shr(a, b) { return a >> b }
+        let x = 0
+        let y = 0
+        let z = 0
+        let i = 0
+        while (i < 400) {
+            x = shl(1, 64)
+            y = shr(0 - 8, 1000)
+            z = shl(8, 0 - 1)
+            i = i + 1
+        }
+        return x, y, z;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 0);
+    EXPECT_EQ(behl::to_integer(S, -2), -1);
+    EXPECT_EQ(behl::to_integer(S, -1), 4);
+}
+
 TEST_F(BitwiseTest, BitwiseNot_DoubleInversion)
 {
     constexpr std::string_view code = R"(

@@ -173,7 +173,7 @@ namespace behl
     void jit_clear_cache(State* S) noexcept
     {
 #if BEHL_JIT_SUPPORTED
-        for (GCObject* obj = S->gc.gc_all_objects.head(); obj != nullptr; obj = obj->next)
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj != nullptr; obj = obj->get_header().next)
         {
             if (obj->is_proto())
             {

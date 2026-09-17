@@ -1,52 +1,75 @@
 #pragma once
 
 #include "gc_types.hpp"
+#include "platform/platform.hpp"
 
 #include <cstdint>
 
 namespace behl
 {
 
-    struct GCObject
+    struct GCObject;
+
+    struct GCOHeader
     {
         GCType type{};
         GCColor color{};
 
-        uint32_t str_hash{};
+        uint32_t object_hash{};
 
         GCObject* next{};
         GCObject* prev{};
         GCObject* gray_next{};
 
-        constexpr GCObject() = default;
-        constexpr explicit GCObject(GCType t)
+        constexpr GCOHeader() = default;
+        constexpr explicit GCOHeader(GCType t)
             : type(t)
         {
         }
+    };
 
-        constexpr bool is_string() const
+    struct GCObject
+    {
+        BEHL_FORCEINLINE
+        GCOHeader& get_header() noexcept
         {
-            return type == GCType::kString;
+            return *reinterpret_cast<GCOHeader*>(this);
         }
 
-        constexpr bool is_table() const
+        BEHL_FORCEINLINE
+        const GCOHeader& get_header() const noexcept
         {
-            return type == GCType::kTable;
+            return *reinterpret_cast<const GCOHeader*>(this);
         }
 
-        constexpr bool is_closure() const
+        BEHL_FORCEINLINE
+        bool is_string() const
         {
-            return type == GCType::kClosure;
+            return get_header().type == GCType::kString;
         }
 
-        constexpr bool is_proto() const
+        BEHL_FORCEINLINE
+        bool is_table() const
         {
-            return type == GCType::kProto;
+            return get_header().type == GCType::kTable;
         }
 
-        constexpr bool is_userdata() const
+        BEHL_FORCEINLINE
+        bool is_closure() const
         {
-            return type == GCType::kUserdata;
+            return get_header().type == GCType::kClosure;
+        }
+
+        BEHL_FORCEINLINE
+        bool is_proto() const
+        {
+            return get_header().type == GCType::kProto;
+        }
+
+        BEHL_FORCEINLINE
+        bool is_userdata() const
+        {
+            return get_header().type == GCType::kUserdata;
         }
     };
 

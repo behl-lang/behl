@@ -9,7 +9,7 @@
 #include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
-#include "vm/integer_ops.hpp"
+#include "vm/numeric_ops.hpp"
 #include "vm_detail.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"

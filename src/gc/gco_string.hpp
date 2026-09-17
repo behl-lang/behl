@@ -8,8 +8,10 @@
 #include <behl/config.hpp>
 #include <bit>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <type_traits>
 
 namespace behl
 {
@@ -33,6 +35,8 @@ namespace behl
     struct GCString : GCObject
     {
         static constexpr auto kObjectType = GCType::kString;
+
+        GCOHeader header{};
 
         // SSO capacity: 31 bytes total (30 bytes string data + 1 null terminator)
         static constexpr size_t kSSOCapacity = 31;
@@ -69,7 +73,7 @@ namespace behl
         constexpr GCString() = default;
 
         constexpr GCString([[maybe_unused]] bool sso, std::string_view str) noexcept
-            : GCObject(GCType::kString)
+            : header(kObjectType)
         {
             assert(sso && str.size() < kSSOCapacity);
             storage.sso = {};
@@ -206,7 +210,9 @@ namespace behl
     };
 
     // Verify 32-byte layout (excluding GCObject)
-    static_assert(sizeof(GCString) - sizeof(GCObject) == 32, "GCString should be 32 bytes excluding GCObject");
+    static_assert(sizeof(GCString) - sizeof(GCOHeader) == 32, "GCString should be 32 bytes excluding GCObject");
+    static_assert(std::is_standard_layout_v<GCString>);
+    static_assert(offsetof(GCString, header) == 0);
 
     struct GCStringHash
     {
@@ -214,7 +220,7 @@ namespace behl
 
         size_t operator()(const GCString* str) const noexcept
         {
-            return string_key_hash(str->str_hash);
+            return string_key_hash(str->header.object_hash);
         }
 
         size_t operator()(const std::string_view str) const noexcept

@@ -61,10 +61,6 @@ namespace behl
         bool jit_enabled{ true };
         bool jit_pending_clear{};
 
-#if defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
-#endif
         static constexpr int32_t stack_data_offset()
         {
             return static_cast<int32_t>(offsetof(State, stack) + decltype(stack)::data_offset());
@@ -114,9 +110,6 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(State, gc) + offsetof(GCState, gc_debt));
         }
-#if defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#endif
     };
 
     static_assert(std::is_standard_layout_v<std::exception_ptr>);

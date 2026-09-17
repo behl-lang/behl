@@ -6,13 +6,13 @@ using namespace behl;
 
 struct MockGCObject : GCObject
 {
+    GCOHeader header{ GCType::kDead };
     int id;
     explicit MockGCObject(int id_val)
-        : GCObject(GCType::kDead)
-        , id(id_val)
+        : id(id_val)
     {
-        next = nullptr;
-        prev = nullptr;
+        header.next = nullptr;
+        header.prev = nullptr;
     }
 };
 
@@ -57,8 +57,8 @@ TEST_F(GCListTest, AppendSingleObject)
     EXPECT_EQ(list.count(), 1);
     EXPECT_EQ(list.head(), objects[0]);
     EXPECT_EQ(list.tail(), objects[0]);
-    EXPECT_EQ(objects[0]->prev, nullptr);
-    EXPECT_EQ(objects[0]->next, nullptr);
+    EXPECT_EQ(objects[0]->header.prev, nullptr);
+    EXPECT_EQ(objects[0]->header.next, nullptr);
     EXPECT_TRUE(list.validate());
 }
 
@@ -76,17 +76,17 @@ TEST_F(GCListTest, AppendMultipleObjects)
     EXPECT_EQ(list.tail(), objects[4]);
     EXPECT_TRUE(list.validate());
 
-    EXPECT_EQ(objects[0]->next, objects[1]);
-    EXPECT_EQ(objects[1]->next, objects[2]);
-    EXPECT_EQ(objects[2]->next, objects[3]);
-    EXPECT_EQ(objects[3]->next, objects[4]);
-    EXPECT_EQ(objects[4]->next, nullptr);
+    EXPECT_EQ(objects[0]->header.next, objects[1]);
+    EXPECT_EQ(objects[1]->header.next, objects[2]);
+    EXPECT_EQ(objects[2]->header.next, objects[3]);
+    EXPECT_EQ(objects[3]->header.next, objects[4]);
+    EXPECT_EQ(objects[4]->header.next, nullptr);
 
-    EXPECT_EQ(objects[0]->prev, nullptr);
-    EXPECT_EQ(objects[1]->prev, objects[0]);
-    EXPECT_EQ(objects[2]->prev, objects[1]);
-    EXPECT_EQ(objects[3]->prev, objects[2]);
-    EXPECT_EQ(objects[4]->prev, objects[3]);
+    EXPECT_EQ(objects[0]->header.prev, nullptr);
+    EXPECT_EQ(objects[1]->header.prev, objects[0]);
+    EXPECT_EQ(objects[2]->header.prev, objects[1]);
+    EXPECT_EQ(objects[3]->header.prev, objects[2]);
+    EXPECT_EQ(objects[4]->header.prev, objects[3]);
 }
 
 TEST_F(GCListTest, FirstObjectStaysHead)
@@ -117,10 +117,10 @@ TEST_F(GCListTest, RemoveMiddleObject)
     list.remove(objects[2]);
 
     EXPECT_EQ(list.count(), 4);
-    EXPECT_EQ(objects[1]->next, objects[3]);
-    EXPECT_EQ(objects[3]->prev, objects[1]);
-    EXPECT_EQ(objects[2]->next, nullptr);
-    EXPECT_EQ(objects[2]->prev, nullptr);
+    EXPECT_EQ(objects[1]->header.next, objects[3]);
+    EXPECT_EQ(objects[3]->header.prev, objects[1]);
+    EXPECT_EQ(objects[2]->header.next, nullptr);
+    EXPECT_EQ(objects[2]->header.prev, nullptr);
     EXPECT_TRUE(list.validate());
 }
 
@@ -137,9 +137,9 @@ TEST_F(GCListTest, RemoveHeadObject)
 
     EXPECT_EQ(list.count(), 4);
     EXPECT_EQ(list.head(), objects[1]);
-    EXPECT_EQ(objects[1]->prev, nullptr);
-    EXPECT_EQ(objects[0]->next, nullptr);
-    EXPECT_EQ(objects[0]->prev, nullptr);
+    EXPECT_EQ(objects[1]->header.prev, nullptr);
+    EXPECT_EQ(objects[0]->header.next, nullptr);
+    EXPECT_EQ(objects[0]->header.prev, nullptr);
     EXPECT_TRUE(list.validate());
 }
 
@@ -156,9 +156,9 @@ TEST_F(GCListTest, RemoveTailObject)
 
     EXPECT_EQ(list.count(), 4);
     EXPECT_EQ(list.tail(), objects[3]);
-    EXPECT_EQ(objects[3]->next, nullptr);
-    EXPECT_EQ(objects[4]->next, nullptr);
-    EXPECT_EQ(objects[4]->prev, nullptr);
+    EXPECT_EQ(objects[3]->header.next, nullptr);
+    EXPECT_EQ(objects[4]->header.next, nullptr);
+    EXPECT_EQ(objects[4]->header.prev, nullptr);
     EXPECT_TRUE(list.validate());
 }
 
@@ -173,8 +173,8 @@ TEST_F(GCListTest, RemoveOnlyObject)
     EXPECT_EQ(list.count(), 0);
     EXPECT_EQ(list.head(), nullptr);
     EXPECT_EQ(list.tail(), nullptr);
-    EXPECT_EQ(objects[0]->next, nullptr);
-    EXPECT_EQ(objects[0]->prev, nullptr);
+    EXPECT_EQ(objects[0]->header.next, nullptr);
+    EXPECT_EQ(objects[0]->header.prev, nullptr);
     EXPECT_TRUE(list.validate());
 }
 
@@ -222,10 +222,10 @@ TEST_F(GCListTest, PrependMultipleObjects)
     EXPECT_EQ(list.tail(), objects[4]);
     EXPECT_TRUE(list.validate());
 
-    EXPECT_EQ(objects[0]->next, objects[1]);
-    EXPECT_EQ(objects[1]->next, objects[2]);
-    EXPECT_EQ(objects[2]->next, objects[3]);
-    EXPECT_EQ(objects[3]->next, objects[4]);
+    EXPECT_EQ(objects[0]->header.next, objects[1]);
+    EXPECT_EQ(objects[1]->header.next, objects[2]);
+    EXPECT_EQ(objects[2]->header.next, objects[3]);
+    EXPECT_EQ(objects[3]->header.next, objects[4]);
 }
 
 TEST_F(GCListTest, MixedAppendPrepend)
@@ -243,10 +243,10 @@ TEST_F(GCListTest, MixedAppendPrepend)
     EXPECT_EQ(list.tail(), objects[4]);
     EXPECT_TRUE(list.validate());
 
-    EXPECT_EQ(objects[0]->next, objects[1]);
-    EXPECT_EQ(objects[1]->next, objects[2]);
-    EXPECT_EQ(objects[2]->next, objects[3]);
-    EXPECT_EQ(objects[3]->next, objects[4]);
+    EXPECT_EQ(objects[0]->header.next, objects[1]);
+    EXPECT_EQ(objects[1]->header.next, objects[2]);
+    EXPECT_EQ(objects[2]->header.next, objects[3]);
+    EXPECT_EQ(objects[3]->header.next, objects[4]);
 }
 
 TEST_F(GCListTest, ContainsCheck)
@@ -326,7 +326,7 @@ TEST_F(GCListTest, IterateForward)
     }
 
     int expected_id = 0;
-    for (GCObject* obj = list.head(); obj != nullptr; obj = obj->next)
+    for (GCObject* obj = list.head(); obj != nullptr; obj = obj->get_header().next)
     {
         auto* mock = static_cast<MockGCObject*>(obj);
         EXPECT_EQ(mock->id, expected_id++);
@@ -344,7 +344,7 @@ TEST_F(GCListTest, IterateBackward)
     }
 
     int expected_id = 4;
-    for (GCObject* obj = list.tail(); obj != nullptr; obj = obj->prev)
+    for (GCObject* obj = list.tail(); obj != nullptr; obj = obj->get_header().prev)
     {
         auto* mock = static_cast<MockGCObject*>(obj);
         EXPECT_EQ(mock->id, expected_id--);
@@ -394,8 +394,8 @@ TEST_F(GCListTest, ConstructAfterAddingToList)
     void* raw_mem = std::malloc(sizeof(MockGCObject));
     auto* obj_ptr = static_cast<MockGCObject*>(raw_mem);
 
-    obj_ptr->next = nullptr;
-    obj_ptr->prev = nullptr;
+    obj_ptr->header.next = nullptr;
+    obj_ptr->header.prev = nullptr;
 
     list.append(obj_ptr);
     EXPECT_EQ(list.count(), 1);

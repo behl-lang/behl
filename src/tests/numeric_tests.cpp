@@ -451,6 +451,146 @@ TEST_F(NumericTest, Arithmetic_LargeIntegerConstants)
     ASSERT_EQ(behl::to_integer(S, -1), 999);
 }
 
+TEST_F(NumericTest, Power_IntegerBasics)
+{
+    constexpr std::string_view code = R"(
+        let a = 2 ** 10
+        let b = 3 ** 4
+        let c = 5 ** 0
+        let d = 0 ** 0
+        let e = 0 ** 5
+        let f = 7 ** 1
+        return a, b, c, d, e, f
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_EQ(behl::get_top(S), 6);
+    ASSERT_EQ(behl::type(S, -6), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -6), 1024);
+    ASSERT_EQ(behl::to_integer(S, -5), 81);
+    ASSERT_EQ(behl::to_integer(S, -4), 1);
+    ASSERT_EQ(behl::to_integer(S, -3), 1);
+    ASSERT_EQ(behl::to_integer(S, -2), 0);
+    ASSERT_EQ(behl::to_integer(S, -1), 7);
+}
+
+TEST_F(NumericTest, Power_NegativeBase)
+{
+    constexpr std::string_view code = R"(
+        let a = (0 - 2) ** 3
+        let b = (0 - 2) ** 4
+        let c = (0 - 1) ** 63
+        return a, b, c
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::get_top(S), 3);
+    ASSERT_EQ(behl::to_integer(S, -3), -8);
+    ASSERT_EQ(behl::to_integer(S, -2), 16);
+    ASSERT_EQ(behl::to_integer(S, -1), -1);
+}
+
+TEST_F(NumericTest, Power_ExactAboveDoublePrecision)
+{
+    constexpr std::string_view code = R"(
+        let a = 3 ** 39
+        let b = 2 ** 62
+        let c = 7 ** 22
+        return a, b, c
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::get_top(S), 3);
+    ASSERT_EQ(behl::type(S, -3), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -3), 4052555153018976267LL);
+    ASSERT_EQ(behl::to_integer(S, -2), 4611686018427387904LL);
+    ASSERT_EQ(behl::to_integer(S, -1), 3909821048582988049LL);
+}
+
+TEST_F(NumericTest, Power_NegativeExponentTruncatesToZero)
+{
+    constexpr std::string_view code = R"(
+        let a = 2 ** (0 - 1)
+        let b = 10 ** (0 - 3)
+        let c = 1 ** (0 - 5)
+        let d = (0 - 1) ** (0 - 3)
+        let e = (0 - 1) ** (0 - 4)
+        let f = 0 ** (0 - 1)
+        return a, b, c, d, e, f
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_EQ(behl::get_top(S), 6);
+    ASSERT_EQ(behl::type(S, -6), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -6), 0);
+    ASSERT_EQ(behl::to_integer(S, -5), 0);
+    ASSERT_EQ(behl::to_integer(S, -4), 1);
+    ASSERT_EQ(behl::to_integer(S, -3), -1);
+    ASSERT_EQ(behl::to_integer(S, -2), 1);
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_F(NumericTest, Power_RuntimeIntegerPathIsExact)
+{
+    constexpr std::string_view code = R"(
+        function ipow(b, e) { return b ** e }
+        let a = ipow(3, 39)
+        let b = ipow(2, 10)
+        let c = ipow(0 - 2, 3)
+        let d = ipow(2, 64)
+        let e = ipow(2, 0 - 1)
+        return a, b, c, d, e
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_EQ(behl::get_top(S), 5);
+    ASSERT_EQ(behl::type(S, -5), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -5), 4052555153018976267LL);
+    ASSERT_EQ(behl::to_integer(S, -4), 1024);
+    ASSERT_EQ(behl::to_integer(S, -3), -8);
+    ASSERT_EQ(behl::type(S, -2), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -2), 0);
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_F(NumericTest, Power_RuntimeFloatPath)
+{
+    constexpr std::string_view code = R"(
+        function fpow(b, e) { return b ** e }
+        let a = fpow(2.0, 10)
+        let b = fpow(9.0, 0.5)
+        let c = fpow(2.0, 0 - 2)
+        return a, b, c
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::get_top(S), 3);
+    ASSERT_EQ(behl::type(S, -3), behl::Type::kNumber);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -3), 1024.0);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -2), 3.0);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 0.25);
+}
+
+TEST_F(NumericTest, Power_FloatOperandsStayFloat)
+{
+    constexpr std::string_view code = R"(
+        let a = 2.0 ** 10
+        let b = 2 ** 0.5
+        let c = 9.0 ** 0.5
+        let d = 2.0 ** (0 - 2)
+        return a, b, c, d
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_EQ(behl::get_top(S), 4);
+    ASSERT_EQ(behl::type(S, -4), behl::Type::kNumber);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -4), 1024.0);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -3), std::sqrt(2.0));
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -2), 3.0);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 0.25);
+}
+
 TEST_F(NumericTest, Comparison_LargeIntegerConstants)
 {
     constexpr std::string_view code = R"(

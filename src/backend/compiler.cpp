@@ -3306,6 +3306,11 @@ namespace behl
             emit(C, make_op_loadi(step_reg, k), C.lastline);
         }
 
+        if (C.freereg > C.min_freereg)
+        {
+            C.min_freereg = C.freereg;
+        }
+
         size_t prep_pc = C.current_proto->code.size();
         emit(C, make_op_forprep(base, 0), C.lastline);
 

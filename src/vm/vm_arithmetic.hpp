@@ -10,7 +10,7 @@
 #include "state.hpp"
 #include "types.hpp"
 #include "value.hpp"
-#include "vm/integer_ops.hpp"
+#include "vm/numeric_ops.hpp"
 #include "vm_detail.hpp"
 #include "vm_metatable.hpp"
 #include "vm_upvalues.hpp"
@@ -212,7 +212,7 @@ namespace behl
                 {
                     throw TypeError("attempt to perform 'n%0'", get_current_location(frame));
                 }
-                return a % b;
+                return int_op::mod(a, b);
             }
         }
     };
@@ -224,11 +224,11 @@ namespace behl
         {
             if constexpr (std::is_same_v<T, FP>)
             {
-                return std::pow(a, b);
+                return fp_op::pow(a, b);
             }
             else
             {
-                return static_cast<Integer>(std::pow(static_cast<FP>(a), static_cast<FP>(b)));
+                return int_op::pow(a, b);
             }
         }
     };

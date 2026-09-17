@@ -812,6 +812,8 @@ namespace behl
             case CgOpKind::kShlI64:
                 if (!failed_)
                 {
+                    e_.cmp(gp(op.var2), 63u);
+                    e_.bcond(A64Cond::hi, label(op.label));
                     e_.lslv(gp(op.var), gp(op.var), gp(op.var2));
                 }
                 break;
@@ -819,6 +821,8 @@ namespace behl
             case CgOpKind::kShrI64:
                 if (!failed_)
                 {
+                    e_.cmp(gp(op.var2), 63u);
+                    e_.bcond(A64Cond::hi, label(op.label));
                     e_.asrv(gp(op.var), gp(op.var), gp(op.var2));
                 }
                 break;

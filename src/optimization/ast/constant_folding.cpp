@@ -3,6 +3,7 @@
 #include "ast/ast_transformer.hpp"
 #include "common/print.hpp"
 #include "config_internal.hpp"
+#include "vm/numeric_ops.hpp"
 
 #include <cmath>
 
@@ -49,18 +50,21 @@ namespace behl
                 switch (node->op)
                 {
                     case TokenType::kPlus:
-                        result = left_int->value + right_int->value;
+                        result = int_op::add(left_int->value, right_int->value);
                         break;
                     case TokenType::kMinus:
-                        result = left_int->value - right_int->value;
+                        result = int_op::sub(left_int->value, right_int->value);
                         break;
                     case TokenType::kStar:
-                        result = left_int->value * right_int->value;
+                        result = int_op::mul(left_int->value, right_int->value);
+                        break;
+                    case TokenType::kPower:
+                        result = int_op::pow(left_int->value, right_int->value);
                         break;
                     case TokenType::kPercent:
                         if (right_int->value != 0)
                         {
-                            result = left_int->value % right_int->value;
+                            result = int_op::mod(left_int->value, right_int->value);
                         }
                         else
                         {
@@ -77,10 +81,10 @@ namespace behl
                         result = left_int->value ^ right_int->value;
                         break;
                     case TokenType::kBShl:
-                        result = left_int->value << right_int->value;
+                        result = int_op::shl(left_int->value, right_int->value);
                         break;
                     case TokenType::kBShr:
-                        result = left_int->value >> right_int->value;
+                        result = int_op::shr(left_int->value, right_int->value);
                         break;
                     default:
                         can_fold = false;
