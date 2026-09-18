@@ -41,6 +41,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         /wd4251 # Disable 'class needs dll-interface' (common in libs)
         /wd4275 # Disable non-dll-interface base class
         /utf-8  # Warning C4819 utf-8 source file
+        /fp:precise # No contraction or reordering of float ops
         $<$<CONFIG:Release>:/Oi> # Enable intrinsic functions
         $<$<CONFIG:Release>:/GS-> # Disable security checks
         $<$<CONFIG:Release>:/Zi> # Debug info in release
@@ -55,6 +56,16 @@ else()
         -Wconversion -Wsign-conversion -Wnull-dereference
         -Wdouble-promotion -Wformat=2
     )
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag(-ffp-contract=off BEHL_HAS_FP_CONTRACT_OFF)
+    if(BEHL_HAS_FP_CONTRACT_OFF)
+        target_compile_options(compiler_opts INTERFACE -ffp-contract=off)
+    endif()
+    target_compile_options(compiler_opts INTERFACE -fno-fast-math)
+    check_cxx_compiler_flag(-mfpmath=sse BEHL_HAS_MFPMATH_SSE)
+    if(BEHL_HAS_MFPMATH_SSE)
+        target_compile_options(compiler_opts INTERFACE -msse2 -mfpmath=sse)
+    endif()
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(compiler_opts INTERFACE -Werror)
     endif()
@@ -171,6 +182,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode_meta.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/frame.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/numeric_ops.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/numeric_ops.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/upvalue.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.cpp
@@ -297,6 +309,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/integer_wrapping_tests.cpp
         src/tests/operator_tests.cpp
         src/tests/parser_tests.cpp
+        src/tests/pow_accuracy_tests.cpp
         src/tests/pcall_tests.cpp
         src/tests/pinning_tests.cpp
         src/tests/process_tests.cpp

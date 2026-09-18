@@ -36,9 +36,10 @@ namespace behl
         if (key.is_fp())
         {
             const FP d = key.get_fp();
-            if (std::floor(d) == d && d >= 0 && d <= static_cast<FP>(INT64_MAX))
+            Integer k = 0;
+            if (std::floor(d) == d && d >= 0 && int_op::try_from_fp(d, k))
             {
-                return static_cast<size_t>(static_cast<Integer>(d));
+                return static_cast<size_t>(k);
             }
         }
 

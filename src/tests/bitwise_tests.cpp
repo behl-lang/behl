@@ -513,6 +513,30 @@ TEST_F(BitwiseTest, Shifts_ZeroShift)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
+TEST_F(BitwiseTest, FloatOperand_OutOfIntegerRange_ThrowsError)
+{
+    constexpr std::string_view code = R"(
+        function band(a, b) { return a & b }
+        let big = 1.0
+        let i = 0
+        while (i < 200) { big = big * 10.0
+         i = i + 1 }
+        return band(big, 1)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    EXPECT_ANY_THROW(behl::call(S, 0, 1));
+}
+
+TEST_F(BitwiseTest, FloatOperand_NaN_ThrowsError)
+{
+    constexpr std::string_view code = R"(
+        function band(a, b) { return a & b }
+        return band(0.0 / 0.0, 1)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    EXPECT_ANY_THROW(behl::call(S, 0, 1));
+}
+
 TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Folded)
 {
     constexpr std::string_view code = R"(

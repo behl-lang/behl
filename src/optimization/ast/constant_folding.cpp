@@ -127,7 +127,7 @@ namespace behl
                         }
                         break;
                     case TokenType::kPower:
-                        result = std::pow(left_val, right_val);
+                        result = fp_op::pow(left_val, right_val);
                         break;
                     case TokenType::kPlus:
                         if (left_float || right_float)
@@ -173,10 +173,10 @@ namespace behl
                     }
                     changed = true;
                     // If result is whole number and both inputs were int, keep as int
-                    if (left_int && right_int && std::floor(result) == result && result >= static_cast<FP>(INT64_MIN)
-                        && result <= static_cast<FP>(INT64_MAX))
+                    Integer folded_int = 0;
+                    if (left_int && right_int && std::floor(result) == result && int_op::try_from_fp(result, folded_int))
                     {
-                        auto* folded = holder.make<AstInt>(static_cast<Integer>(result));
+                        auto* folded = holder.make<AstInt>(folded_int);
                         folded->line = node->line;
                         folded->column = node->column;
                         return folded;

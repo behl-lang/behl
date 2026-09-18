@@ -34,6 +34,21 @@ namespace behl
         throw TypeError(msg, loc);
     }
 
+    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_no_integer_representation(const CallFrame& frame)
+    {
+        throw TypeError("number has no integer representation", get_current_location(frame));
+    }
+
+    BEHL_INLINE Integer bitwise_fp_operand(FP d, const CallFrame& frame)
+    {
+        Integer out = 0;
+        if (!int_op::try_from_fp(d, out))
+        {
+            throw_no_integer_representation(frame);
+        }
+        return out;
+    }
+
     //////////////////////////////////////////////////////////////////////////
     // Metamethod Helpers
 
@@ -120,7 +135,7 @@ namespace behl
             case kTypePairIntFloat:
             {
                 const Integer ai = a.get_integer();
-                const Integer bf = static_cast<Integer>(b.get_fp());
+                const Integer bf = bitwise_fp_operand(b.get_fp(), frame);
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(ai, bf));
                 return;
@@ -128,7 +143,7 @@ namespace behl
 
             case kTypePairFloatInt:
             {
-                const Integer af = static_cast<Integer>(a.get_fp());
+                const Integer af = bitwise_fp_operand(a.get_fp(), frame);
                 const Integer bi = b.get_integer();
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(af, bi));
@@ -137,8 +152,8 @@ namespace behl
 
             case kTypePairFloatFloat:
             {
-                const Integer af = static_cast<Integer>(a.get_fp());
-                const Integer bf = static_cast<Integer>(b.get_fp());
+                const Integer af = bitwise_fp_operand(a.get_fp(), frame);
+                const Integer bf = bitwise_fp_operand(b.get_fp(), frame);
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(af, bf));
                 return;
@@ -181,19 +196,19 @@ namespace behl
             case kTypePairIntFloat:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(a.get_integer(), static_cast<Integer>(b.get_fp())));
+                dst.emplace<Integer>(op(a.get_integer(), bitwise_fp_operand(b.get_fp(), frame)));
                 return true;
             }
             case kTypePairFloatInt:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(static_cast<Integer>(a.get_fp()), b.get_integer()));
+                dst.emplace<Integer>(op(bitwise_fp_operand(a.get_fp(), frame), b.get_integer()));
                 return true;
             }
             case kTypePairFloatFloat:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(static_cast<Integer>(a.get_fp()), static_cast<Integer>(b.get_fp())));
+                dst.emplace<Integer>(op(bitwise_fp_operand(a.get_fp(), frame), bitwise_fp_operand(b.get_fp(), frame)));
                 return true;
             }
             default:

@@ -3,7 +3,6 @@
 #include "platform/platform.hpp"
 
 #include <behl/types.hpp>
-#include <cmath>
 #include <cstdint>
 #include <type_traits>
 
@@ -46,6 +45,17 @@ namespace behl::int_op
     constexpr Integer dec(Integer a) noexcept
     {
         return static_cast<Integer>(static_cast<UnsignedInteger>(a) - UnsignedInteger{ 1 });
+    }
+
+    BEHL_FORCEINLINE
+    constexpr bool try_from_fp(FP value, Integer& out) noexcept
+    {
+        if (value >= static_cast<FP>(INT64_MIN) && value < -static_cast<FP>(INT64_MIN))
+        {
+            out = static_cast<Integer>(value);
+            return true;
+        }
+        return false;
     }
 
     BEHL_FORCEINLINE
@@ -136,10 +146,6 @@ namespace behl::int_op
 namespace behl::fp_op
 {
 
-    BEHL_FORCEINLINE
-    FP pow(FP base, FP exp) noexcept
-    {
-        return std::pow(base, exp);
-    }
+    FP pow(FP base, FP exp) noexcept;
 
 } // namespace behl::fp_op

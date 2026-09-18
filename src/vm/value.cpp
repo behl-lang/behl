@@ -7,6 +7,7 @@
 #include "gc/gco_proto.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
+#include "numeric_ops.hpp"
 
 #include <bit>
 #include <cassert>
@@ -99,10 +100,10 @@ namespace behl
                 // For integer-valued floats, hash as integer to match equality semantics
                 // (e.g., 1000.0 == 1000, so they must have the same hash)
                 FP f = get_fp();
-                Integer i = static_cast<Integer>(f);
+                Integer i = 0;
 
                 // If the round-trip matches, it's an integer-valued float in range
-                if (static_cast<FP>(i) == f)
+                if (int_op::try_from_fp(f, i) && static_cast<FP>(i) == f)
                 {
                     return fold_to_size_t(fmix64(static_cast<uint64_t>(i)));
                 }

@@ -591,6 +591,72 @@ TEST_F(NumericTest, Power_FloatOperandsStayFloat)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 0.25);
 }
 
+TEST_F(NumericTest, FloatToIntegerConversion_OutOfRangeStaysFloat)
+{
+    constexpr std::string_view code = R"(
+        let math = import("math")
+        let big = 1.0
+        let i = 0
+        while (i < 200) { big = big * 10.0
+         i = i + 1 }
+        return math.floor(big), math.floor(0.0 - big), math.floor(1.0 / 0.0), math.floor(3.7)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_EQ(behl::get_top(S), 4);
+    ASSERT_EQ(behl::type(S, -4), behl::Type::kNumber);
+    ASSERT_GT(behl::to_number(S, -4), 0.0);
+    ASSERT_EQ(behl::type(S, -3), behl::Type::kNumber);
+    ASSERT_LT(behl::to_number(S, -3), 0.0);
+    ASSERT_EQ(behl::type(S, -2), behl::Type::kNumber);
+    ASSERT_TRUE(std::isinf(behl::to_number(S, -2)));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_F(NumericTest, FloatToIntegerConversion_NanStaysFloat)
+{
+    constexpr std::string_view code = R"(
+        let math = import("math")
+        return math.floor(0.0 / 0.0), math.ceil(0.0 / 0.0)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::type(S, -2), behl::Type::kNumber);
+    ASSERT_TRUE(std::isnan(behl::to_number(S, -2)));
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kNumber);
+    ASSERT_TRUE(std::isnan(behl::to_number(S, -1)));
+}
+
+TEST_F(NumericTest, MathAbsOfIntegerMinWraps)
+{
+    constexpr std::string_view code = R"(
+        let math = import("math")
+        return math.abs(0 - 9223372036854775807 - 1), math.abs(0 - 5), math.abs(5)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::type(S, -3), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -3), static_cast<int64_t>(0x8000000000000000ULL));
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_F(NumericTest, TableKeyAtTwoToThe63IsNotAnArrayIndex)
+{
+    constexpr std::string_view code = R"(
+        let t = {}
+        let two63 = 9223372036854775807.0 + 1.0
+        t[two63] = "high"
+        t[0] = "zero"
+        return t[two63], t[0]
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_string(S, -2), "high");
+    ASSERT_EQ(behl::to_string(S, -1), "zero");
+}
+
 TEST_F(NumericTest, Comparison_LargeIntegerConstants)
 {
     constexpr std::string_view code = R"(
