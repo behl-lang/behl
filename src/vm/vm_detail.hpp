@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common/charconv_compat.hpp"
+#include "common/charconv.hpp"
 #include "common/format.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_proto.hpp"
@@ -122,7 +122,7 @@ namespace behl
             {
                 double d = val.get_fp();
                 char buffer[64];
-                auto result = behl::to_chars(buffer, buffer + sizeof(buffer), d, std::chars_format::general, 14);
+                auto result = behl::to_chars(buffer, buffer + sizeof(buffer), d);
                 if (result.ec == std::errc{})
                 {
                     return vm_makestring(S, std::string_view(buffer, static_cast<size_t>(result.ptr - buffer)));

@@ -2,7 +2,7 @@
 
 #include "ast/ast.hpp"
 #include "ast/ast_holder.hpp"
-#include "common/charconv_compat.hpp"
+#include "common/charconv.hpp"
 #include "frontend/lexer.hpp"
 #include "gc/gc.hpp"
 
