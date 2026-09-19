@@ -37,7 +37,7 @@ namespace behl
         {
             const FP d = key.get_fp();
             Integer k = 0;
-            if (std::floor(d) == d && d >= 0 && int_op::try_from_fp(d, k))
+            if (std::floor(d) == d && d >= 0 && arithmetic::try_from_fp(d, k))
             {
                 return static_cast<size_t>(k);
             }

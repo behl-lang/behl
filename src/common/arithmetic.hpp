@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <type_traits>
 
-namespace behl::int_op
+namespace behl::arithmetic
 {
 
     using UnsignedInteger = std::make_unsigned_t<Integer>;
@@ -141,11 +141,6 @@ namespace behl::int_op
         return result;
     }
 
-} // namespace behl::int_op
-
-namespace behl::fp_op
-{
-
     FP pow(FP base, FP exp) noexcept;
 
-} // namespace behl::fp_op
+} // namespace behl::arithmetic

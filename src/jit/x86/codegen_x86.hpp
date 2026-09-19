@@ -84,6 +84,7 @@ namespace behl
         void emit_call_fast(const CgOp& op);
         void emit_frame_push_fast(const CgOp& op);
         void emit_tail_frame_fast(const CgOp& op);
+        void emit_return_fast(const CgOp& op);
         void emit_return_dispatch(const CgOp& op);
         void emit_branch_i64_imm(const CgOp& op);
         void emit_const_f64(const CgOp& op);

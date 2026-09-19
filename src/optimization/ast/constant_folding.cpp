@@ -3,7 +3,7 @@
 #include "ast/ast_transformer.hpp"
 #include "common/print.hpp"
 #include "config_internal.hpp"
-#include "vm/numeric_ops.hpp"
+#include "common/arithmetic.hpp"
 
 #include <cmath>
 
@@ -50,21 +50,21 @@ namespace behl
                 switch (node->op)
                 {
                     case TokenType::kPlus:
-                        result = int_op::add(left_int->value, right_int->value);
+                        result = arithmetic::add(left_int->value, right_int->value);
                         break;
                     case TokenType::kMinus:
-                        result = int_op::sub(left_int->value, right_int->value);
+                        result = arithmetic::sub(left_int->value, right_int->value);
                         break;
                     case TokenType::kStar:
-                        result = int_op::mul(left_int->value, right_int->value);
+                        result = arithmetic::mul(left_int->value, right_int->value);
                         break;
                     case TokenType::kPower:
-                        result = int_op::pow(left_int->value, right_int->value);
+                        result = arithmetic::pow(left_int->value, right_int->value);
                         break;
                     case TokenType::kPercent:
                         if (right_int->value != 0)
                         {
-                            result = int_op::mod(left_int->value, right_int->value);
+                            result = arithmetic::mod(left_int->value, right_int->value);
                         }
                         else
                         {
@@ -81,10 +81,10 @@ namespace behl
                         result = left_int->value ^ right_int->value;
                         break;
                     case TokenType::kBShl:
-                        result = int_op::shl(left_int->value, right_int->value);
+                        result = arithmetic::shl(left_int->value, right_int->value);
                         break;
                     case TokenType::kBShr:
-                        result = int_op::shr(left_int->value, right_int->value);
+                        result = arithmetic::shr(left_int->value, right_int->value);
                         break;
                     default:
                         can_fold = false;
@@ -127,7 +127,7 @@ namespace behl
                         }
                         break;
                     case TokenType::kPower:
-                        result = fp_op::pow(left_val, right_val);
+                        result = arithmetic::pow(left_val, right_val);
                         break;
                     case TokenType::kPlus:
                         if (left_float || right_float)
@@ -174,7 +174,7 @@ namespace behl
                     changed = true;
                     // If result is whole number and both inputs were int, keep as int
                     Integer folded_int = 0;
-                    if (left_int && right_int && std::floor(result) == result && int_op::try_from_fp(result, folded_int))
+                    if (left_int && right_int && std::floor(result) == result && arithmetic::try_from_fp(result, folded_int))
                     {
                         auto* folded = holder.make<AstInt>(folded_int);
                         folded->line = node->line;

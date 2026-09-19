@@ -10,7 +10,7 @@
 #include "state.hpp"
 #include "types.hpp"
 #include "value.hpp"
-#include "vm/numeric_ops.hpp"
+#include "common/arithmetic.hpp"
 #include "vm_detail.hpp"
 #include "vm_metatable.hpp"
 #include "vm_upvalues.hpp"
@@ -146,7 +146,7 @@ namespace behl
         {
             if constexpr (std::is_same_v<T, Integer>)
             {
-                return int_op::add(a, b);
+                return arithmetic::add(a, b);
             }
             else
             {
@@ -162,7 +162,7 @@ namespace behl
         {
             if constexpr (std::is_same_v<T, Integer>)
             {
-                return int_op::sub(a, b);
+                return arithmetic::sub(a, b);
             }
             else
             {
@@ -178,7 +178,7 @@ namespace behl
         {
             if constexpr (std::is_same_v<T, Integer>)
             {
-                return int_op::mul(a, b);
+                return arithmetic::mul(a, b);
             }
             else
             {
@@ -212,7 +212,7 @@ namespace behl
                 {
                     throw TypeError("attempt to perform 'n%0'", get_current_location(frame));
                 }
-                return int_op::mod(a, b);
+                return arithmetic::mod(a, b);
             }
         }
     };
@@ -222,14 +222,7 @@ namespace behl
         template<typename T>
         BEHL_FORCEINLINE auto operator()(T a, T b) const
         {
-            if constexpr (std::is_same_v<T, FP>)
-            {
-                return fp_op::pow(a, b);
-            }
-            else
-            {
-                return int_op::pow(a, b);
-            }
+            return arithmetic::pow(a, b);
         }
     };
 
@@ -318,7 +311,7 @@ namespace behl
     {
         if (value.is_integer()) [[likely]]
         {
-            value.update(int_op::inc(value.get_integer()));
+            value.update(arithmetic::inc(value.get_integer()));
             return true;
         }
 
@@ -348,7 +341,7 @@ namespace behl
     {
         if (value.is_integer())
         {
-            value.update(int_op::dec(value.get_integer()));
+            value.update(arithmetic::dec(value.get_integer()));
             return true;
         }
 
@@ -558,7 +551,7 @@ namespace behl
         if (lhs.is_integer())
         {
             Value& dst = get_register(S, frame, a);
-            dst.emplace<Integer>(int_op::add(lhs.get_integer(), imm));
+            dst.emplace<Integer>(arithmetic::add(lhs.get_integer(), imm));
         }
         else if (lhs.is_fp())
         {
@@ -589,7 +582,7 @@ namespace behl
         if (val.is_integer())
         {
             auto i = val.get_integer();
-            dst.emplace<Integer>(int_op::neg(i));
+            dst.emplace<Integer>(arithmetic::neg(i));
             return;
         }
         if (val.is_fp())

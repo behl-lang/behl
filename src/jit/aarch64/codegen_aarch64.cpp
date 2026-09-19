@@ -20,6 +20,20 @@ namespace behl
     static constexpr size_t kFpPoolSize = sizeof(kFpPool) / sizeof(kFpPool[0]);
     static constexpr uint8_t kNoReg = 0xFF;
 
+    static constexpr int32_t kFrameSize = 48;
+    static constexpr int32_t kSavedLinkSlot = 16;
+    static constexpr int32_t kEntryDepthSlot = 24;
+    static constexpr int32_t kSpillItems = 32;
+    static constexpr int32_t kSpillBase = 40;
+
+    static constexpr int32_t kCallFrameStride = static_cast<int32_t>(sizeof(CallFrame));
+    static constexpr int32_t kCallHeaderTop = 0;
+    static constexpr int32_t kCallHeaderCallPos = 4;
+    static constexpr int32_t kCallHeaderNumVarargs = 8;
+    static constexpr int32_t kCallHeaderDeferMask = 12;
+    static constexpr int32_t kCallHeaderRetBase = 16;
+    static constexpr int32_t kCallHeaderNResults = 20;
+
     static A64Mem slot_tag(int32_t reg) noexcept
     {
         return mem(kFrameBase, Value::size() * reg);
@@ -193,17 +207,19 @@ namespace behl
 
     void CodegenAArch64::emit_prologue()
     {
-        e_.stp_pre(kStateReg, kFrameBase, A64Reg::sp, -32);
-        e_.str(A64Reg::x30, mem(A64Reg::sp, 16));
+        e_.stp_pre(kStateReg, kFrameBase, A64Reg::sp, -kFrameSize);
+        e_.str(A64Reg::x30, mem(A64Reg::sp, kSavedLinkSlot));
         e_.mov(kStateReg, A64Reg::x0);
+        e_.ldr(A64Reg::x0, mem(kStateReg, State::call_stack_size_offset()));
+        e_.str(A64Reg::x0, mem(A64Reg::sp, kEntryDepthSlot));
         base_valid_ = false;
     }
 
     void CodegenAArch64::emit_epilogue(uint32_t result_code)
     {
         e_.mov32(A64Reg::x0, result_code);
-        e_.ldr(A64Reg::x30, mem(A64Reg::sp, 16));
-        e_.ldp_post(kStateReg, kFrameBase, A64Reg::sp, 32);
+        e_.ldr(A64Reg::x30, mem(A64Reg::sp, kSavedLinkSlot));
+        e_.ldp_post(kStateReg, kFrameBase, A64Reg::sp, kFrameSize);
         e_.ret();
     }
 
@@ -223,6 +239,461 @@ namespace behl
             base_valid_ = false;
         }
         alloc_result(op.var);
+    }
+
+    void CodegenAArch64::emit_tail_jump_native(const CgOp& op)
+    {
+        constexpr A64Reg kTarget = A64Reg::x17;
+
+        e_.ldr(A64Reg::x0, mem(kStateReg, State::call_stack_size_offset()));
+        e_.ldr(A64Reg::x1, mem(A64Reg::sp, kEntryDepthSlot));
+        e_.cmp(A64Reg::x0, A64Reg::x1);
+        e_.bcond(A64Cond::ne, label(op.label));
+
+        e_.ldr(A64Reg::x1, mem(kStateReg, State::call_stack_data_offset()));
+        e_.sub(A64Reg::x0, A64Reg::x0, 1);
+        e_.lsl(A64Reg::x0, A64Reg::x0, kCallFrameShift);
+        e_.add(A64Reg::x1, A64Reg::x1, A64Reg::x0);
+        e_.ldr(kTarget, mem(A64Reg::x1, CallFrame::proto_offset()));
+        e_.ldr(kTarget, mem(kTarget, GCProto::jit_code_offset()));
+        e_.cmp(kTarget, 0u);
+        e_.bcond(A64Cond::eq, label(op.label));
+
+        e_.mov(A64Reg::x0, kStateReg);
+        e_.ldr(A64Reg::x30, mem(A64Reg::sp, kSavedLinkSlot));
+        e_.ldp_post(kStateReg, kFrameBase, A64Reg::sp, kFrameSize);
+        e_.br(kTarget);
+    }
+
+    void CodegenAArch64::emit_return_dispatch(const CgOp& op)
+    {
+        e_.ldr(A64Reg::x0, mem(kStateReg, State::call_stack_size_offset()));
+        e_.ldr(A64Reg::x1, mem(A64Reg::sp, kEntryDepthSlot));
+        e_.cmp(A64Reg::x0, A64Reg::x1);
+        e_.bcond(A64Cond::hs, label(op.label));
+        e_.b(label(op.label2));
+    }
+
+    void CodegenAArch64::emit_return_fast(const CgOp& op)
+    {
+        const int32_t a = op.slot;
+        const int32_t moved = static_cast<int32_t>(op.var);
+        const A64Label slow = label(op.label);
+
+        constexpr A64Reg kIdx = A64Reg::x0;
+        constexpr A64Reg kDest = A64Reg::x1;
+        constexpr A64Reg kSize = A64Reg::x2;
+        constexpr A64Reg kTmpA = A64Reg::x9;
+        constexpr A64Reg kTmpB = A64Reg::x10;
+
+        ensure_base();
+
+        e_.ldr(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+        e_.cmp(kIdx, 2u);
+        e_.bcond(A64Cond::lo, slow);
+
+        e_.sub(kSize, kIdx, 1);
+        e_.ldr(kTmpA, mem(A64Reg::sp, kEntryDepthSlot));
+        e_.cmp(kSize, kTmpA);
+        e_.bcond(A64Cond::lo, slow);
+
+        e_.ldr(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+        e_.lsl(kTmpB, kSize, 1);
+        e_.add(kTmpB, kTmpB, kSize);
+        e_.lsl(kTmpB, kTmpB, 3);
+        e_.add(kTmpA, kTmpA, kTmpB);
+
+        const A64Label nresults_ok = e_.new_label();
+        e_.ldrw(kTmpB, mem(kTmpA, kCallHeaderNResults));
+        e_.cmpw(kTmpB, static_cast<uint32_t>(moved));
+        e_.bcond(A64Cond::eq, nresults_ok);
+        e_.cmpw(kTmpB, 255u);
+        e_.bcond(A64Cond::ne, slow);
+        e_.bind(nresults_ok);
+        e_.ldrw(kDest, mem(kTmpA, kCallHeaderCallPos));
+
+        if (moved == 1)
+        {
+            e_.ldr(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lsl(kTmpB, kDest, 4);
+            e_.add(kTmpA, kTmpA, kTmpB);
+            e_.ldr(kTmpB, mem(kFrameBase, a * Value::size()));
+            e_.str(kTmpB, mem(kTmpA, 0));
+            e_.ldr(kTmpB, mem(kFrameBase, a * Value::size() + 8));
+            e_.str(kTmpB, mem(kTmpA, 8));
+        }
+
+        e_.ldr(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+        e_.sub(kTmpB, kIdx, 2);
+        e_.lsl(kTmpB, kTmpB, kCallFrameShift);
+        e_.add(kTmpA, kTmpA, kTmpB);
+        e_.ldr(kTmpB, mem(kTmpA, CallFrame::proto_offset()));
+        e_.cmp(kTmpB, 0u);
+        e_.bcond(A64Cond::eq, slow);
+        e_.ldrw(kTmpB, mem(kTmpB, GCProto::max_stack_size_offset()));
+        e_.ldrw(kTmpA, mem(kTmpA, CallFrame::base_offset()));
+        e_.add(kTmpB, kTmpB, kTmpA);
+
+        e_.add(kTmpA, kDest, static_cast<uint32_t>(moved));
+
+        const A64Label have_size = e_.new_label();
+        e_.cmp(kTmpB, kTmpA);
+        e_.bcond(A64Cond::hs, have_size);
+        e_.mov(kTmpB, kTmpA);
+        e_.bind(have_size);
+
+        e_.ldr(kIdx, mem(kStateReg, State::stack_size_offset()));
+        e_.cmp(kTmpB, kIdx);
+        e_.bcond(A64Cond::hi, slow);
+        e_.str(kTmpB, mem(kStateReg, State::stack_size_offset()));
+
+        e_.str(kSize, mem(kStateReg, State::call_stack_size_offset()));
+        e_.str(kSize, mem(kStateReg, State::call_headers_size_offset()));
+
+        e_.ldr(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+        e_.sub(kIdx, kSize, 1);
+        e_.lsl(kDest, kIdx, 1);
+        e_.add(kDest, kDest, kIdx);
+        e_.lsl(kDest, kDest, 3);
+        e_.add(kTmpB, kTmpB, kDest);
+        e_.strw(kTmpA, mem(kTmpB, kCallHeaderTop));
+
+        base_valid_ = false;
+    }
+
+    void CodegenAArch64::emit_frame_push_fast(const CgOp& op)
+    {
+        const auto* proto = reinterpret_cast<const GCProto*>(static_cast<uintptr_t>(op.imm));
+        const int32_t a = op.slot;
+        const int32_t num_args = static_cast<int32_t>(op.var);
+        const int32_t nresults = static_cast<int32_t>(op.var2);
+        const int32_t window = static_cast<int32_t>(proto->max_stack_size);
+        const int32_t items = num_args + 1;
+        const int32_t needed = (items > window) ? items : window;
+
+        const A64Label slow = label(op.label);
+        constexpr A64Reg kPos = A64Reg::x2;
+        constexpr A64Reg kIdx = A64Reg::x0;
+        constexpr A64Reg kReq = A64Reg::x1;
+        constexpr A64Reg kTmpA = A64Reg::x9;
+        constexpr A64Reg kTmpB = A64Reg::x10;
+
+        ensure_base();
+
+        e_.ldr(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+        e_.ldr(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+        e_.sub(kPos, kTmpB, 1);
+        e_.lsl(kPos, kPos, kCallFrameShift);
+        e_.add(kTmpA, kTmpA, kPos);
+        e_.ldrw(kPos, mem(kTmpA, CallFrame::base_offset()));
+        emit_add_imm(kPos, a);
+
+        e_.ldr(kTmpA, mem(kStateReg, State::gc_debt_offset()));
+        e_.cmp(kTmpA, 0u);
+        e_.bcond(A64Cond::gt, slow);
+
+        e_.ldr(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+        e_.ldr(kTmpA, mem(kStateReg, State::call_stack_capacity_offset()));
+        e_.cmp(kIdx, kTmpA);
+        e_.bcond(A64Cond::hs, slow);
+        e_.ldr(kTmpA, mem(kStateReg, State::call_headers_size_offset()));
+        e_.ldr(kTmpB, mem(kStateReg, State::call_headers_capacity_offset()));
+        e_.cmp(kTmpA, kTmpB);
+        e_.bcond(A64Cond::hs, slow);
+
+        e_.mov(kReq, kPos);
+        emit_add_imm(kReq, needed);
+        e_.ldr(kTmpA, mem(kStateReg, State::stack_capacity_offset()));
+        e_.cmp(kReq, kTmpA);
+        e_.bcond(A64Cond::hi, slow);
+
+        if (proto->has_upvalues)
+        {
+            e_.ldr(kTmpA, mem(kFrameBase, 0));
+            e_.ldr(kTmpB, mem(kFrameBase, 8));
+            e_.str(kTmpA, mem(kFrameBase, a * Value::size()));
+            e_.str(kTmpB, mem(kFrameBase, a * Value::size() + 8));
+        }
+
+        if (num_args < static_cast<int32_t>(proto->num_params))
+        {
+            e_.mov32(kScratch, 0);
+            for (int32_t i = num_args; i < static_cast<int32_t>(proto->num_params); ++i)
+            {
+                e_.strw(kScratch, mem(kFrameBase, (a + 1 + i) * Value::size() + Value::type_offset()));
+            }
+        }
+
+        e_.ldr(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+        e_.lsl(kTmpB, kIdx, kCallFrameShift);
+        e_.add(kTmpA, kTmpA, kTmpB);
+        e_.sub(kTmpB, kTmpA, static_cast<uint32_t>(kCallFrameStride));
+        e_.mov32(kScratch, static_cast<uint32_t>(op.pcn));
+        e_.strw(kScratch, mem(kTmpB, CallFrame::pc_offset()));
+
+        e_.mov(kScratch, reinterpret_cast<uint64_t>(proto));
+        e_.str(kScratch, mem(kTmpA, CallFrame::proto_offset()));
+        e_.mov32(kScratch, 0);
+        e_.strw(kScratch, mem(kTmpA, CallFrame::pc_offset()));
+        e_.strw(kPos, mem(kTmpA, CallFrame::base_offset()));
+
+        e_.ldr(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+        e_.lsl(kTmpB, kIdx, 1);
+        e_.add(kTmpB, kTmpB, kIdx);
+        e_.lsl(kTmpB, kTmpB, 3);
+        e_.add(kTmpA, kTmpA, kTmpB);
+        e_.mov(kTmpB, kPos);
+        emit_add_imm(kTmpB, items);
+        e_.strw(kTmpB, mem(kTmpA, kCallHeaderTop));
+        e_.strw(kPos, mem(kTmpA, kCallHeaderCallPos));
+        e_.mov32(kScratch, 0);
+        e_.strw(kScratch, mem(kTmpA, kCallHeaderNumVarargs));
+        e_.strw(kScratch, mem(kTmpA, kCallHeaderDeferMask));
+        e_.strw(kScratch, mem(kTmpA, kCallHeaderRetBase));
+        e_.mov32(kScratch, static_cast<uint32_t>(nresults));
+        e_.strw(kScratch, mem(kTmpA, kCallHeaderNResults));
+
+        e_.add(kTmpB, kIdx, 1);
+        e_.str(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+        e_.str(kTmpB, mem(kStateReg, State::call_headers_size_offset()));
+
+        const A64Label done = e_.new_label();
+        e_.ldr(kIdx, mem(kStateReg, State::stack_size_offset()));
+        e_.cmp(kIdx, kReq);
+        e_.bcond(A64Cond::hs, done);
+
+        const A64Label fill = e_.new_label();
+        e_.ldr(kTmpA, mem(kStateReg, State::stack_data_offset()));
+        e_.lsl(kTmpB, kIdx, 4);
+        e_.add(kTmpA, kTmpA, kTmpB);
+        e_.mov32(kScratch, 0);
+        e_.bind(fill);
+        e_.strw(kScratch, mem(kTmpA, Value::type_offset()));
+        e_.add(kTmpA, kTmpA, static_cast<uint32_t>(Value::size()));
+        e_.add(kIdx, kIdx, 1);
+        e_.cmp(kIdx, kReq);
+        e_.bcond(A64Cond::lo, fill);
+        e_.str(kReq, mem(kStateReg, State::stack_size_offset()));
+        e_.bind(done);
+
+        base_valid_ = false;
+    }
+
+    void CodegenAArch64::emit_tail_frame_fast(const CgOp& op)
+    {
+        const auto* proto = reinterpret_cast<const GCProto*>(static_cast<uintptr_t>(op.imm));
+        const int32_t a = op.slot;
+        const int32_t num_args = static_cast<int32_t>(op.var);
+        const int32_t window = static_cast<int32_t>(proto->max_stack_size);
+        const int32_t items = num_args + 1;
+        const A64Label slow = label(op.label);
+
+        constexpr A64Reg kBase = A64Reg::x2;
+        constexpr A64Reg kReq = A64Reg::x1;
+        constexpr A64Reg kTmpA = A64Reg::x9;
+        constexpr A64Reg kTmpB = A64Reg::x10;
+        constexpr A64Reg kCur = A64Reg::x0;
+
+        ensure_base();
+
+        e_.ldr(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+        e_.ldr(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+        e_.sub(kCur, kTmpB, 1);
+        e_.lsl(kCur, kCur, kCallFrameShift);
+        e_.add(kTmpA, kTmpA, kCur);
+        e_.ldrw(kBase, mem(kTmpA, CallFrame::base_offset()));
+
+        if (op.flag)
+        {
+            e_.ldr(kCur, mem(kStateReg, State::call_headers_data_offset()));
+            e_.sub(kReq, kTmpB, 1);
+            e_.lsl(kScratch, kReq, 1);
+            e_.add(kReq, kScratch, kReq);
+            e_.lsl(kReq, kReq, 3);
+            e_.add(kCur, kCur, kReq);
+
+            e_.ldrw(kReq, mem(kCur, kCallHeaderTop));
+            e_.sub(kReq, kReq, kBase);
+            e_.sub(kReq, kReq, static_cast<uint32_t>(a));
+            e_.cmp(kReq, 1u);
+            e_.bcond(A64Cond::lo, slow);
+            emit_cmp_imm(kReq, window);
+            e_.bcond(A64Cond::hi, slow);
+            e_.str(kReq, mem(A64Reg::sp, kSpillItems));
+            e_.str(kBase, mem(A64Reg::sp, kSpillBase));
+
+            e_.mov(kReq, kBase);
+            emit_add_imm(kReq, window);
+            e_.ldr(kScratch, mem(kStateReg, State::stack_capacity_offset()));
+            e_.cmp(kReq, kScratch);
+            e_.bcond(A64Cond::hi, slow);
+
+            e_.mov32(kScratch, 0);
+            e_.strw(kScratch, mem(kTmpA, CallFrame::pc_offset()));
+
+            e_.ldr(kTmpB, mem(A64Reg::sp, kSpillItems));
+            e_.add(kTmpB, kTmpB, kBase);
+            e_.strw(kTmpB, mem(kCur, kCallHeaderTop));
+
+            e_.mov(kTmpA, kFrameBase);
+            emit_add_imm(kTmpA, (a + 1) * Value::size());
+            e_.mov(kTmpB, kFrameBase);
+            e_.add(kTmpB, kTmpB, static_cast<uint32_t>(Value::size()));
+            e_.ldr(kCur, mem(A64Reg::sp, kSpillItems));
+            e_.sub(kCur, kCur, 1);
+
+            const A64Label copy_done = e_.new_label();
+            const A64Label copy_loop = e_.new_label();
+            e_.cmp(kCur, 0u);
+            e_.bcond(A64Cond::ls, copy_done);
+            e_.bind(copy_loop);
+            e_.ldr(kBase, mem(kTmpA, 0));
+            e_.str(kBase, mem(kTmpB, 0));
+            e_.ldr(kBase, mem(kTmpA, 8));
+            e_.str(kBase, mem(kTmpB, 8));
+            e_.add(kTmpA, kTmpA, static_cast<uint32_t>(Value::size()));
+            e_.add(kTmpB, kTmpB, static_cast<uint32_t>(Value::size()));
+            e_.sub(kCur, kCur, 1);
+            e_.cmp(kCur, 0u);
+            e_.bcond(A64Cond::hi, copy_loop);
+            e_.bind(copy_done);
+
+            e_.ldr(kCur, mem(A64Reg::sp, kSpillItems));
+            e_.mov(kTmpA, kFrameBase);
+            e_.lsl(kTmpB, kCur, 4);
+            e_.add(kTmpA, kTmpA, kTmpB);
+
+            const A64Label pad_done = e_.new_label();
+            const A64Label pad_loop = e_.new_label();
+            emit_cmp_imm(kCur, window);
+            e_.bcond(A64Cond::hs, pad_done);
+            e_.mov32(kBase, 0);
+            e_.bind(pad_loop);
+            e_.strw(kBase, mem(kTmpA, Value::type_offset()));
+            e_.add(kTmpA, kTmpA, static_cast<uint32_t>(Value::size()));
+            e_.add(kCur, kCur, 1);
+            emit_cmp_imm(kCur, window);
+            e_.bcond(A64Cond::lo, pad_loop);
+            e_.bind(pad_done);
+
+            e_.ldr(kReq, mem(A64Reg::sp, kSpillBase));
+            emit_add_imm(kReq, window);
+
+            const A64Label grow_done = e_.new_label();
+            e_.ldr(kCur, mem(kStateReg, State::stack_size_offset()));
+            e_.cmp(kCur, kReq);
+            e_.bcond(A64Cond::hs, grow_done);
+
+            const A64Label grow_fill = e_.new_label();
+            e_.ldr(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lsl(kTmpB, kCur, 4);
+            e_.add(kTmpA, kTmpA, kTmpB);
+            e_.mov32(kBase, 0);
+            e_.bind(grow_fill);
+            e_.strw(kBase, mem(kTmpA, Value::type_offset()));
+            e_.add(kTmpA, kTmpA, static_cast<uint32_t>(Value::size()));
+            e_.add(kCur, kCur, 1);
+            e_.cmp(kCur, kReq);
+            e_.bcond(A64Cond::lo, grow_fill);
+            e_.str(kReq, mem(kStateReg, State::stack_size_offset()));
+            e_.bind(grow_done);
+
+            base_valid_ = false;
+            return;
+        }
+
+        e_.mov(kReq, kBase);
+        emit_add_imm(kReq, window);
+        e_.ldr(kCur, mem(kStateReg, State::stack_capacity_offset()));
+        e_.cmp(kReq, kCur);
+        e_.bcond(A64Cond::hi, slow);
+
+        for (int32_t i = 0; i < num_args; ++i)
+        {
+            const int32_t src = (a + 1 + i) * Value::size();
+            const int32_t dst = (1 + i) * Value::size();
+            e_.ldr(kTmpB, mem(kFrameBase, src));
+            e_.str(kTmpB, mem(kFrameBase, dst));
+            e_.ldr(kTmpB, mem(kFrameBase, src + 8));
+            e_.str(kTmpB, mem(kFrameBase, dst + 8));
+        }
+
+        e_.mov32(kScratch, 0);
+        for (int32_t i = items; i < window; ++i)
+        {
+            e_.strw(kScratch, mem(kFrameBase, i * Value::size() + Value::type_offset()));
+        }
+
+        e_.strw(kScratch, mem(kTmpA, CallFrame::pc_offset()));
+
+        e_.ldr(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+        e_.ldr(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+        e_.sub(kTmpB, kTmpB, 1);
+        e_.lsl(kCur, kTmpB, 1);
+        e_.add(kCur, kCur, kTmpB);
+        e_.lsl(kCur, kCur, 3);
+        e_.add(kTmpA, kTmpA, kCur);
+        e_.mov(kTmpB, kBase);
+        emit_add_imm(kTmpB, items);
+        e_.strw(kTmpB, mem(kTmpA, kCallHeaderTop));
+
+        const A64Label done = e_.new_label();
+        e_.ldr(kCur, mem(kStateReg, State::stack_size_offset()));
+        e_.cmp(kCur, kReq);
+        e_.bcond(A64Cond::hs, done);
+
+        const A64Label fill = e_.new_label();
+        e_.ldr(kTmpA, mem(kStateReg, State::stack_data_offset()));
+        e_.lsl(kTmpB, kCur, 4);
+        e_.add(kTmpA, kTmpA, kTmpB);
+        e_.mov32(kBase, 0);
+        e_.bind(fill);
+        e_.strw(kBase, mem(kTmpA, Value::type_offset()));
+        e_.add(kTmpA, kTmpA, static_cast<uint32_t>(Value::size()));
+        e_.add(kCur, kCur, 1);
+        e_.cmp(kCur, kReq);
+        e_.bcond(A64Cond::lo, fill);
+        e_.bind(done);
+        e_.str(kReq, mem(kStateReg, State::stack_size_offset()));
+
+        base_valid_ = false;
+    }
+
+    void CodegenAArch64::emit_call_fast(const CgOp& op)
+    {
+        assert(gp_used_ == 0 && fp_used_ == 0 && "call fast with live variables");
+
+        constexpr A64Reg kTarget = A64Reg::x17;
+
+        e_.mov(A64Reg::x0, kStateReg);
+        e_.mov32(A64Reg::x1, op.raw);
+        e_.mov32(A64Reg::x2, op.pcn);
+        e_.call(reinterpret_cast<uintptr_t>(&jit_call_setup));
+
+        base_valid_ = false;
+
+        e_.cmp(A64Reg::x0, static_cast<uint32_t>(kJitSetupDecline));
+        e_.bcond(A64Cond::eq, label(op.label));
+        e_.cmp(A64Reg::x0, static_cast<uint32_t>(kJitSetupError));
+        e_.bcond(A64Cond::eq, label(op.var));
+        e_.cmp(A64Reg::x0, static_cast<uint32_t>(kJitSetupPushedOther));
+        e_.bcond(A64Cond::eq, label(op.var2));
+
+        if (op.flag)
+        {
+            e_.b(label(static_cast<uint32_t>(op.slot)));
+            return;
+        }
+
+        e_.mov(kTarget, A64Reg::x0);
+        e_.mov(A64Reg::x0, kStateReg);
+        e_.blr(kTarget);
+
+        e_.cmpw(A64Reg::x0, kJitResultOk);
+        e_.bcond(A64Cond::eq, label(op.label2));
+        e_.cmpw(A64Reg::x0, kJitResultError);
+        e_.bcond(A64Cond::eq, label(op.var));
+        e_.b(label(op.var2));
     }
 
     void CodegenAArch64::emit_cmp_imm(A64Reg reg, int64_t imm)
@@ -945,14 +1416,46 @@ namespace behl
                 break;
 
             case CgOpKind::kTailJumpNative:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
+                emit_tail_jump_native(op);
+                break;
+
             case CgOpKind::kCallFast:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
+                emit_call_fast(op);
+                break;
+
             case CgOpKind::kFramePushFast:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
+                emit_frame_push_fast(op);
+                break;
+
             case CgOpKind::kTailFrameFast:
                 if (cache_enabled_)
                 {
                     cache_drop_all();
                 }
-                e_.b(label(op.label));
+                emit_tail_frame_fast(op);
+                break;
+
+            case CgOpKind::kReturnFast:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
+                if (!failed_)
+                {
+                    emit_return_fast(op);
+                }
                 break;
 
             case CgOpKind::kReturnDispatch:
@@ -960,7 +1463,7 @@ namespace behl
                 {
                     cache_drop_all();
                 }
-                e_.b(label(op.label2));
+                emit_return_dispatch(op);
                 break;
 
             case CgOpKind::kHelperCall:

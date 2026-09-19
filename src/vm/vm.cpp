@@ -13,7 +13,7 @@
 #include "state.hpp"
 #include "state_debug.hpp"
 #include "value.hpp"
-#include "vm/numeric_ops.hpp"
+#include "common/arithmetic.hpp"
 #include "vm_arithmetic.hpp"
 #include "vm_bitwise.hpp"
 #include "vm_controlflow.hpp"

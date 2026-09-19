@@ -1,4 +1,4 @@
-#include "vm/numeric_ops.hpp"
+#include "common/arithmetic.hpp"
 
 #include <bit>
 #include <chrono>
@@ -42,6 +42,12 @@ namespace
         return (da > db) ? (da - db) : (db - da);
     }
 
+    double uniform(std::mt19937_64& rng, double lo, double hi)
+    {
+        const double unit = static_cast<double>(rng() >> 11) * 0x1p-53;
+        return lo + (hi - lo) * unit;
+    }
+
     struct Summary
     {
         int64_t max_ulp = 0;
@@ -52,10 +58,72 @@ namespace
         size_t total = 0;
     };
 
-    void measure(Summary& s, double base, double exp)
+    struct Wide
     {
-        const double mine = behl::fp_op::pow(base, exp);
-        const double theirs = std::pow(base, exp);
+        double hi;
+        double lo;
+    };
+
+    Wide wide_split(double a)
+    {
+        const double c = 134217729.0 * a;
+        const double hi = c - (c - a);
+        return { hi, a - hi };
+    }
+
+    Wide wide_mul(Wide a, Wide b)
+    {
+        const double p = a.hi * b.hi;
+        const Wide as = wide_split(a.hi);
+        const Wide bs = wide_split(b.hi);
+        const double e = ((as.hi * bs.hi - p) + as.hi * bs.lo + as.lo * bs.hi) + as.lo * bs.lo;
+        const double lo = e + (a.hi * b.lo + a.lo * b.hi);
+        const double s = p + lo;
+        return { s, lo - (s - p) };
+    }
+
+    Wide wide_recip(Wide a)
+    {
+        const double q = 1.0 / a.hi;
+        Wide r{ q, 0.0 };
+        for (int i = 0; i < 3; ++i)
+        {
+            const Wide t = wide_mul(a, r);
+            const double corr = (1.0 - t.hi) - t.lo;
+            const Wide adj = wide_mul(r, Wide{ corr, 0.0 });
+            const double s = r.hi + adj.hi;
+            r = { s, (r.hi - s) + adj.hi + adj.lo + r.lo };
+        }
+        return r;
+    }
+
+    double reference_int_pow(double base, int n)
+    {
+        Wide acc{ 1.0, 0.0 };
+        Wide b{ base, 0.0 };
+        int e = (n < 0) ? -n : n;
+        while (e > 0)
+        {
+            if ((e & 1) != 0)
+            {
+                acc = wide_mul(acc, b);
+            }
+            e >>= 1;
+            if (e > 0)
+            {
+                b = wide_mul(b, b);
+            }
+        }
+        if (n < 0)
+        {
+            acc = wide_recip(acc);
+        }
+        return acc.hi + acc.lo;
+    }
+
+    void measure_against(Summary& s, double base, double exp, double theirs)
+    {
+        const double mine = behl::arithmetic::pow(base, exp);
         const int64_t d = ulp_distance(mine, theirs);
 
         s.total++;
@@ -75,6 +143,11 @@ namespace
         }
     }
 
+    void measure(Summary& s, double base, double exp)
+    {
+        measure_against(s, base, exp, std::pow(base, exp));
+    }
+
     void report(const char* name, const Summary& s)
     {
         std::printf("%-22s n=%-8zu max=%-6lld exact=%5.1f%% within1=%5.1f%%  worst pow(%.17g, %.17g)\n", name, s.total,
@@ -86,15 +159,14 @@ namespace
 TEST(PowAccuracy, RandomWideRange)
 {
     std::mt19937_64 rng(12345);
-    std::uniform_real_distribution<double> base_exp(-300.0, 300.0);
-    std::uniform_real_distribution<double> mant(1.0, 2.0);
-    std::uniform_real_distribution<double> y_dist(-40.0, 40.0);
 
     Summary s;
     for (int i = 0; i < 200000; ++i)
     {
-        const double base = std::ldexp(mant(rng), static_cast<int>(base_exp(rng) / 3.0));
-        const double y = y_dist(rng);
+        const double mant = uniform(rng, 1.0, 2.0);
+        const double scale = uniform(rng, -300.0, 300.0);
+        const double base = std::ldexp(mant, static_cast<int>(scale / 3.0));
+        const double y = uniform(rng, -40.0, 40.0);
         const double probe = std::pow(base, y);
         if (!std::isfinite(probe) || probe == 0.0)
         {
@@ -110,14 +182,12 @@ TEST(PowAccuracy, RandomWideRange)
 TEST(PowAccuracy, NearOneBase)
 {
     std::mt19937_64 rng(999);
-    std::uniform_real_distribution<double> base_dist(0.5, 2.0);
-    std::uniform_real_distribution<double> y_dist(-100.0, 100.0);
 
     Summary s;
     for (int i = 0; i < 200000; ++i)
     {
-        const double base = base_dist(rng);
-        const double y = y_dist(rng);
+        const double base = uniform(rng, 0.5, 2.0);
+        const double y = uniform(rng, -100.0, 100.0);
         const double probe = std::pow(base, y);
         if (!std::isfinite(probe) || probe == 0.0)
         {
@@ -133,20 +203,19 @@ TEST(PowAccuracy, NearOneBase)
 TEST(PowAccuracy, SmallIntegerExponents)
 {
     std::mt19937_64 rng(4242);
-    std::uniform_real_distribution<double> base_dist(0.01, 100.0);
 
     Summary s;
     for (int i = 0; i < 20000; ++i)
     {
-        const double base = base_dist(rng);
+        const double base = uniform(rng, 0.01, 100.0);
         for (int y = -20; y <= 20; ++y)
         {
-            const double probe = std::pow(base, static_cast<double>(y));
+            const double probe = reference_int_pow(base, y);
             if (!std::isfinite(probe) || probe == 0.0)
             {
                 continue;
             }
-            measure(s, base, static_cast<double>(y));
+            measure_against(s, base, static_cast<double>(y), probe);
         }
     }
 
@@ -157,46 +226,45 @@ TEST(PowAccuracy, SmallIntegerExponents)
 TEST(PowAccuracy, ThroughputAgainstStdPow)
 {
     std::mt19937_64 rng(7);
-    std::uniform_real_distribution<double> base_dist(0.1, 100.0);
-    std::uniform_real_distribution<double> y_dist(-30.0, 30.0);
 
-    constexpr int kN = 200000;
+    constexpr size_t kN = 200000;
+    const double kNd = static_cast<double>(kN);
     std::vector<double> bs(kN);
     std::vector<double> ys(kN);
-    for (int i = 0; i < kN; ++i)
+    for (size_t i = 0; i < kN; ++i)
     {
-        bs[i] = base_dist(rng);
-        ys[i] = y_dist(rng);
+        bs[i] = uniform(rng, 0.1, 100.0);
+        ys[i] = uniform(rng, -30.0, 30.0);
     }
 
     double sink_std = 0.0;
     const auto t0 = std::chrono::steady_clock::now();
-    for (int i = 0; i < kN; ++i)
+    for (size_t i = 0; i < kN; ++i)
     {
         sink_std += std::pow(bs[i], ys[i]);
     }
     const auto t1 = std::chrono::steady_clock::now();
 
     double sink_mine = 0.0;
-    for (int i = 0; i < kN; ++i)
+    for (size_t i = 0; i < kN; ++i)
     {
-        sink_mine += behl::fp_op::pow(bs[i], ys[i]);
+        sink_mine += behl::arithmetic::pow(bs[i], ys[i]);
     }
     const auto t2 = std::chrono::steady_clock::now();
 
-    const double ns_std = std::chrono::duration<double, std::nano>(t1 - t0).count() / kN;
-    const double ns_mine = std::chrono::duration<double, std::nano>(t2 - t1).count() / kN;
+    const double ns_std = std::chrono::duration<double, std::nano>(t1 - t0).count() / kNd;
+    const double ns_mine = std::chrono::duration<double, std::nano>(t2 - t1).count() / kNd;
 
     double sink_fma = 0.0;
     const auto t3 = std::chrono::steady_clock::now();
-    for (int i = 0; i < kN; ++i)
+    for (size_t i = 0; i < kN; ++i)
     {
         sink_fma += std::fma(bs[i], ys[i], sink_fma);
     }
     const auto t4 = std::chrono::steady_clock::now();
-    const double ns_fma = std::chrono::duration<double, std::nano>(t4 - t3).count() / kN;
+    const double ns_fma = std::chrono::duration<double, std::nano>(t4 - t3).count() / kNd;
 
-    std::printf("std::pow %7.1f ns   fp_op::pow %7.1f ns   ratio %5.2fx   std::fma %6.2f ns\n", ns_std, ns_mine,
+    std::printf("std::pow %7.1f ns   arithmetic::pow %7.1f ns   ratio %5.2fx   std::fma %6.2f ns\n", ns_std, ns_mine,
         ns_mine / ns_std, ns_fma);
     EXPECT_NE(sink_fma, 1.0);
     EXPECT_NE(sink_std, 0.0);
@@ -215,7 +283,7 @@ TEST(PowAccuracy, SpecialCasesMatchStdPow)
     {
         for (double e : exps)
         {
-            const double mine = behl::fp_op::pow(b, e);
+            const double mine = behl::arithmetic::pow(b, e);
             const double theirs = std::pow(b, e);
 
             if (std::isnan(theirs))

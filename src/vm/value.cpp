@@ -7,7 +7,7 @@
 #include "gc/gco_proto.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
-#include "numeric_ops.hpp"
+#include "common/arithmetic.hpp"
 
 #include <bit>
 #include <cassert>
@@ -103,7 +103,7 @@ namespace behl
                 Integer i = 0;
 
                 // If the round-trip matches, it's an integer-valued float in range
-                if (int_op::try_from_fp(f, i) && static_cast<FP>(i) == f)
+                if (arithmetic::try_from_fp(f, i) && static_cast<FP>(i) == f)
                 {
                     return fold_to_size_t(fmix64(static_cast<uint64_t>(i)));
                 }

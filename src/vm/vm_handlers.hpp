@@ -9,7 +9,7 @@
 #include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
-#include "vm/numeric_ops.hpp"
+#include "common/arithmetic.hpp"
 #include "vm_detail.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
@@ -332,7 +332,7 @@ namespace behl
 
             // The index keeps advancing on the final iteration so it ends on
             // the first failing value, same as the generic path
-            idx.update(int_op::add(idx.get_integer(), step.get_integer()));
+            idx.update(arithmetic::add(idx.get_integer(), step.get_integer()));
 
             if (remaining != 0)
             {

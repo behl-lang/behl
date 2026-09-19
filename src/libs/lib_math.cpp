@@ -1,6 +1,6 @@
 #include "behl.hpp"
 #include "state.hpp"
-#include "vm/numeric_ops.hpp"
+#include "common/arithmetic.hpp"
 
 #include <cmath>
 #include <limits>
@@ -15,7 +15,7 @@ namespace behl
         if (type(S, 0) == Type::kInteger)
         {
             Integer n = to_integer(S, 0);
-            push_integer(S, (n < 0) ? int_op::neg(n) : n);
+            push_integer(S, (n < 0) ? arithmetic::neg(n) : n);
         }
         else
         {
@@ -28,7 +28,7 @@ namespace behl
     static void push_numeric_integral(State* S, FP d)
     {
         Integer n = 0;
-        if (int_op::try_from_fp(d, n))
+        if (arithmetic::try_from_fp(d, n))
         {
             push_integer(S, n);
         }
@@ -84,7 +84,7 @@ namespace behl
     {
         FP x = to_number(S, 0);
         FP y = to_number(S, 1);
-        push_number(S, fp_op::pow(x, y));
+        push_number(S, arithmetic::pow(x, y));
         return 1;
     }
 

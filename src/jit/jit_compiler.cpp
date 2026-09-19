@@ -642,9 +642,11 @@ namespace behl
 
             void tail_frame_fast(const Instruction& ins, uint32_t pcn, uint32_t on_slow)
             {
+                const bool mult_args = ins.b() == static_cast<uint8_t>(kMultArgs);
                 CgOp& op = push(CgOpKind::kTailFrameFast);
                 op.slot = ins.a();
-                op.var = static_cast<uint32_t>(ins.b() - 1);
+                op.var = mult_args ? 0u : static_cast<uint32_t>(ins.b() - 1);
+                op.flag = mult_args;
                 op.imm = static_cast<int64_t>(reinterpret_cast<uintptr_t>(proto_));
                 op.label = on_slow;
                 op.pcn = pcn;
@@ -1403,8 +1405,7 @@ namespace behl
 
                 case OpCode::kOpTailCall:
                 {
-                    if (ins.c() != 0 && ins.b() != static_cast<uint8_t>(kMultArgs) && !proto_->has_upvalues
-                        && !proto_->is_vararg && proto_->defer_blocks.empty())
+                    if (ins.c() != 0 && !proto_->has_upvalues && !proto_->is_vararg && proto_->defer_blocks.empty())
                     {
                         const uint32_t slow = new_label();
                         tail_frame_fast(ins, pcn, slow);
@@ -1465,7 +1466,25 @@ namespace behl
                 }
 
                 case OpCode::kOpReturn0:
-                    helper_call(jit_op_return0, ins.raw, pcn);
+                {
+                    if (!proto_->has_upvalues)
+                    {
+                        const uint32_t slow = new_label();
+                        const uint32_t joined = new_label();
+                        CgOp& fast = push(CgOpKind::kReturnFast);
+                        fast.slot = 0;
+                        fast.var = 0;
+                        fast.label = slow;
+                        fast.pcn = pcn;
+                        jump(joined);
+                        bind(slow, true);
+                        helper_call(jit_op_return0, ins.raw, pcn);
+                        bind(joined, true);
+                    }
+                    else
+                    {
+                        helper_call(jit_op_return0, ins.raw, pcn);
+                    }
                     if (inline_depth_ > 0)
                     {
                         jump(inline_return_label_);
@@ -1473,9 +1492,28 @@ namespace behl
                     }
                     return_dispatch();
                     break;
+                }
 
                 case OpCode::kOpReturn1:
-                    helper_call(jit_op_return1, ins.raw, pcn);
+                {
+                    if (!proto_->has_upvalues)
+                    {
+                        const uint32_t slow = new_label();
+                        const uint32_t joined = new_label();
+                        CgOp& fast = push(CgOpKind::kReturnFast);
+                        fast.slot = ins.a();
+                        fast.var = 1;
+                        fast.label = slow;
+                        fast.pcn = pcn;
+                        jump(joined);
+                        bind(slow, true);
+                        helper_call(jit_op_return1, ins.raw, pcn);
+                        bind(joined, true);
+                    }
+                    else
+                    {
+                        helper_call(jit_op_return1, ins.raw, pcn);
+                    }
                     if (inline_depth_ > 0)
                     {
                         jump(inline_return_label_);
@@ -1483,6 +1521,7 @@ namespace behl
                     }
                     return_dispatch();
                     break;
+                }
 
                 case OpCode::kOpLoadBool:
                 {

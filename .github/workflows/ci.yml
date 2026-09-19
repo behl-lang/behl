@@ -53,6 +53,41 @@ jobs:
       working-directory: build
       run: ctest -C Release --output-on-failure --timeout 30
 
+  windows-arm64-debug:
+    name: Windows MSVC ARM64 Debug
+    runs-on: windows-11-arm
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: cmake -B build -A ARM64 -DBEHL_BUILD_TESTS=ON
+
+    - name: Build
+      run: cmake --build build --config Debug -j
+
+    - name: Run Tests
+      working-directory: build
+      run: ctest -C Debug --output-on-failure --timeout 30
+
+  windows-arm64-release:
+    name: Windows MSVC ARM64 Release
+    runs-on: windows-11-arm
+    needs: windows-arm64-debug
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: cmake -B build -A ARM64 -DBEHL_BUILD_TESTS=ON
+
+    - name: Build
+      run: cmake --build build --config Release -j
+
+    - name: Run Tests
+      working-directory: build
+      run: ctest -C Release --output-on-failure --timeout 30
+
   # Shared Library builds - Debug
   shared-library-debug:
     name: Shared Library - ${{ matrix.os }} Debug
@@ -268,6 +303,41 @@ jobs:
     - name: Build
       run: cmake --build build -j
     
+    - name: Run Tests
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+
+  linux-arm64-debug:
+    name: Linux GCC ARM64 Debug
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+
+    - name: Build
+      run: cmake --build build -j
+
+    - name: Run Tests
+      working-directory: build
+      run: ctest --output-on-failure --timeout 30
+
+  linux-arm64-release:
+    name: Linux GCC ARM64 Release
+    runs-on: ubuntu-24.04-arm
+    needs: linux-arm64-debug
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
+
+    - name: Build
+      run: cmake --build build -j
+
     - name: Run Tests
       working-directory: build
       run: ctest --output-on-failure --timeout 30

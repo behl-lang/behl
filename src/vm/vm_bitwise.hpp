@@ -42,7 +42,7 @@ namespace behl
     BEHL_INLINE Integer bitwise_fp_operand(FP d, const CallFrame& frame)
     {
         Integer out = 0;
-        if (!int_op::try_from_fp(d, out))
+        if (!arithmetic::try_from_fp(d, out))
         {
             throw_no_integer_representation(frame);
         }
@@ -102,14 +102,14 @@ namespace behl
     {
         BEHL_FORCEINLINE Integer operator()(Integer a, Integer b) const
         {
-            return int_op::shl(a, b);
+            return arithmetic::shl(a, b);
         }
     };
     struct BitwiseShrOp
     {
         BEHL_FORCEINLINE Integer operator()(Integer a, Integer b) const
         {
-            return int_op::shr(a, b);
+            return arithmetic::shr(a, b);
         }
     };
 

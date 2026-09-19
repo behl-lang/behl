@@ -1,10 +1,10 @@
-#include "numeric_ops.hpp"
+#include "arithmetic.hpp"
 
 #include <cmath>
 #include <cstdint>
 #include <limits>
 
-namespace behl::fp_op
+namespace behl::arithmetic
 {
     namespace
     {
@@ -36,10 +36,33 @@ namespace behl::fp_op
             return { s, b - (s - a) };
         }
 
+        constexpr FP kSplitter = 134217729.0;
+        constexpr FP kSplitThreshold = 6.69692879491417e+299;
+        constexpr FP kSplitScaleDown = 3.7252902984619140625e-09;
+        constexpr FP kSplitScaleUp = 268435456.0;
+
+        DD split(FP a) noexcept
+        {
+            if (a > kSplitThreshold || a < -kSplitThreshold)
+            {
+                const FP scaled = a * kSplitScaleDown;
+                const FP c = kSplitter * scaled;
+                const FP hi = c - (c - scaled);
+                return { hi * kSplitScaleUp, (scaled - hi) * kSplitScaleUp };
+            }
+
+            const FP c = kSplitter * a;
+            const FP hi = c - (c - a);
+            return { hi, a - hi };
+        }
+
         DD two_prod(FP a, FP b) noexcept
         {
             const FP p = a * b;
-            return { p, std::fma(a, b, -p) };
+            const DD as = split(a);
+            const DD bs = split(b);
+            const FP err = ((as.hi * bs.hi - p) + as.hi * bs.lo + as.lo * bs.hi) + as.lo * bs.lo;
+            return { p, err };
         }
 
         DD dd_from(FP a) noexcept
@@ -273,4 +296,4 @@ namespace behl::fp_op
         return pow_general(base, exp);
     }
 
-} // namespace behl::fp_op
+} // namespace behl::arithmetic

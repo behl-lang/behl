@@ -231,6 +231,10 @@ namespace behl
         {
             constexpr GpReg kTarget = GpReg::r10;
 
+            e_.mov(kScratchA, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kScratchA, mem(kStackPtr, kEntryDepthSlot));
+            e_.jcc(Cond::ne, label(op.label));
+
             e_.mov(kScratchA, mem(kStateReg, State::call_stack_data_offset()));
             e_.mov(kScratchB, mem(kStateReg, State::call_stack_size_offset()));
             e_.lea(kScratchA, mem(kScratchA, kScratchB, kCallFrameHalfScale));
@@ -355,6 +359,95 @@ namespace behl
             e_.cmp(kScratchA, mem(kStackPtr, kEntryDepthSlot));
             e_.jcc(Cond::ae, label(op.label));
             e_.jmp(label(op.label2));
+        }
+    }
+
+    void CodegenX86::emit_return_fast(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            const int32_t a = op.slot;
+            const Label slow = label(op.label);
+
+            constexpr GpReg kIdx = GpReg::r0;
+            constexpr GpReg kDest = GpReg::r1;
+            constexpr GpReg kSize = GpReg::r2;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+
+            ensure_base();
+
+            e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kIdx, 2);
+            e_.jcc(Cond::b, slow);
+
+            e_.lea(kSize, mem(kIdx, -1));
+            e_.cmp(kSize, mem(kStackPtr, kEntryDepthSlot));
+            e_.jcc(Cond::b, slow);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kTmpB, mem(kSize, kSize, 2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            const int32_t moved = static_cast<int32_t>(op.var);
+
+            Label nresults_ok = e_.new_label();
+            e_.mov32(kTmpB, mem(kTmpA, 20));
+            e_.cmp32(kTmpB, static_cast<uint32_t>(moved));
+            e_.jcc(Cond::e, nresults_ok);
+            e_.cmp32(kTmpB, 255);
+            e_.jcc(Cond::ne, slow);
+            e_.bind(nresults_ok);
+            e_.mov32(kDest, mem(kTmpA, 4));
+
+            if (moved == 1)
+            {
+                e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+                e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+                e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+                e_.mov(kTmpB, mem(kFrameBase, a * Value::size()));
+                e_.mov(mem(kTmpA, 0), kTmpB);
+                e_.mov(kTmpB, mem(kFrameBase, a * Value::size() + 8));
+                e_.mov(mem(kTmpA, 8), kTmpB);
+            }
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.lea(kTmpB, mem(kIdx, -2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.mov(kTmpB, mem(kTmpA, CallFrame::proto_offset()));
+            e_.test(kTmpB, kTmpB);
+            e_.jcc(Cond::e, slow);
+            e_.mov32(kTmpB, mem(kTmpB, GCProto::max_stack_size_offset()));
+            e_.mov32(kTmpA, mem(kTmpA, CallFrame::base_offset()));
+            e_.add(kTmpB, kTmpA);
+
+            e_.lea(kTmpA, mem(kDest, moved));
+
+            Label have_size = e_.new_label();
+            e_.cmp(kTmpB, kTmpA);
+            e_.jcc(Cond::ae, have_size);
+            e_.mov(kTmpB, kTmpA);
+            e_.bind(have_size);
+
+            e_.cmp(kTmpB, mem(kStateReg, State::stack_size_offset()));
+            e_.jcc(Cond::a, slow);
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kTmpB);
+
+            e_.mov(mem(kStateReg, State::call_stack_size_offset()), kSize);
+            e_.mov(mem(kStateReg, State::call_headers_size_offset()), kSize);
+
+            e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kIdx, mem(kSize, -1));
+            e_.lea(kDest, mem(kIdx, kIdx, 2));
+            e_.lea(kTmpB, mem(kTmpB, kDest, 8));
+            e_.mov32(mem(kTmpB, 0), kTmpA);
+
+            base_valid_ = false;
         }
     }
 
@@ -485,6 +578,8 @@ namespace behl
             constexpr GpReg kTmpA = GpReg::r9;
             constexpr GpReg kTmpB = GpReg::r10;
             constexpr GpReg kCur = GpReg::r0;
+            constexpr int32_t kSpillItems = 0;
+            constexpr int32_t kSpillBase = 8;
 
             ensure_base();
 
@@ -493,6 +588,98 @@ namespace behl
             e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
             e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
             e_.mov32(kBase, mem(kTmpA, CallFrame::base_offset() - kCallFrameStride));
+
+            if (op.flag)
+            {
+                e_.mov(kCur, mem(kStateReg, State::call_headers_data_offset()));
+                e_.lea(kReq, mem(kTmpB, -1));
+                e_.lea(kReq, mem(kReq, kReq, 2));
+                e_.lea(kCur, mem(kCur, kReq, 8));
+
+                e_.mov32(kReq, mem(kCur, 0));
+                e_.sub(kReq, kBase);
+                e_.sub(kReq, a);
+                e_.cmp(kReq, 1);
+                e_.jcc(Cond::b, slow);
+                e_.cmp(kReq, window);
+                e_.jcc(Cond::a, slow);
+                e_.mov(mem(kStackPtr, kSpillItems), kReq);
+                e_.mov(mem(kStackPtr, kSpillBase), kBase);
+
+                e_.lea(kReq, mem(kBase, window));
+                e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
+                e_.jcc(Cond::a, slow);
+
+                e_.mov32(mem(kTmpA, CallFrame::pc_offset() - kCallFrameStride), 0);
+
+                e_.mov(kTmpB, mem(kStackPtr, kSpillItems));
+                e_.add(kTmpB, kBase);
+                e_.mov32(mem(kCur, 0), kTmpB);
+
+                e_.mov(kTmpA, kFrameBase);
+                e_.add(kTmpA, (a + 1) * Value::size());
+                e_.mov(kTmpB, kFrameBase);
+                e_.add(kTmpB, Value::size());
+                e_.mov(kCur, mem(kStackPtr, kSpillItems));
+                e_.sub(kCur, 1);
+
+                Label copy_done = e_.new_label();
+                Label copy_loop = e_.new_label();
+                e_.cmp(kCur, 0);
+                e_.jcc(Cond::be, copy_done);
+                e_.bind(copy_loop);
+                e_.mov(kBase, mem(kTmpA, 0));
+                e_.mov(mem(kTmpB, 0), kBase);
+                e_.mov(kBase, mem(kTmpA, 8));
+                e_.mov(mem(kTmpB, 8), kBase);
+                e_.add(kTmpA, Value::size());
+                e_.add(kTmpB, Value::size());
+                e_.sub(kCur, 1);
+                e_.cmp(kCur, 0);
+                e_.jcc(Cond::a, copy_loop);
+                e_.bind(copy_done);
+
+                e_.mov(kCur, mem(kStackPtr, kSpillItems));
+                e_.mov(kTmpA, kFrameBase);
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+
+                Label pad_done = e_.new_label();
+                Label pad_loop = e_.new_label();
+                e_.cmp(kCur, window);
+                e_.jcc(Cond::ae, pad_done);
+                e_.bind(pad_loop);
+                e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+                e_.add(kTmpA, Value::size());
+                e_.add(kCur, 1);
+                e_.cmp(kCur, window);
+                e_.jcc(Cond::b, pad_loop);
+                e_.bind(pad_done);
+
+                e_.mov(kReq, mem(kStackPtr, kSpillBase));
+                e_.add(kReq, window);
+
+                Label grow_done = e_.new_label();
+                e_.mov(kCur, mem(kStateReg, State::stack_size_offset()));
+                e_.cmp(kCur, kReq);
+                e_.jcc(Cond::ae, grow_done);
+
+                Label grow_fill = e_.new_label();
+                e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+                e_.bind(grow_fill);
+                e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+                e_.add(kTmpA, Value::size());
+                e_.add(kCur, 1);
+                e_.cmp(kCur, kReq);
+                e_.jcc(Cond::b, grow_fill);
+                e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
+                e_.bind(grow_done);
+
+                base_valid_ = false;
+                return;
+            }
 
             e_.lea(kReq, mem(kBase, window));
             e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
@@ -1932,6 +2119,18 @@ namespace behl
                     cache_drop_all();
                 }
                 emit_tail_frame_fast(op);
+                break;
+
+            case CgOpKind::kReturnFast:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                if (!failed_)
+                {
+                    emit_return_fast(op);
+                }
                 break;
 
             case CgOpKind::kReturnDispatch:

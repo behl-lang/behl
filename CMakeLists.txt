@@ -62,9 +62,13 @@ else()
         target_compile_options(compiler_opts INTERFACE -ffp-contract=off)
     endif()
     target_compile_options(compiler_opts INTERFACE -fno-fast-math)
+    check_cxx_compiler_flag(-msse2 BEHL_HAS_MSSE2)
+    if(BEHL_HAS_MSSE2)
+        target_compile_options(compiler_opts INTERFACE -msse2)
+    endif()
     check_cxx_compiler_flag(-mfpmath=sse BEHL_HAS_MFPMATH_SSE)
     if(BEHL_HAS_MFPMATH_SSE)
-        target_compile_options(compiler_opts INTERFACE -msse2 -mfpmath=sse)
+        target_compile_options(compiler_opts INTERFACE -mfpmath=sse)
     endif()
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(compiler_opts INTERFACE -Werror)
@@ -182,8 +186,8 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode_meta.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/frame.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/numeric_ops.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/numeric_ops.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/arithmetic.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/arithmetic.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/upvalue.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.hpp
@@ -225,10 +229,19 @@ set(BEHL_PRIVATE_INCLUDE_DIRS
 
 add_library(libbehl)
 
+if(BEHL_BUILD_TESTS OR BEHL_BUILD_BENCHMARKS)
+    set(BEHL_VISIBILITY default)
+    set(BEHL_EXPORT_ALL ON)
+else()
+    set(BEHL_VISIBILITY hidden)
+    set(BEHL_EXPORT_ALL OFF)
+endif()
+
 set_target_properties(libbehl PROPERTIES
-    CXX_VISIBILITY_PRESET hidden
+    CXX_VISIBILITY_PRESET ${BEHL_VISIBILITY}
     VISIBILITY_INLINES_HIDDEN ON
     POSITION_INDEPENDENT_CODE ON
+    WINDOWS_EXPORT_ALL_SYMBOLS ${BEHL_EXPORT_ALL}
 )
 
 if(MSVC)
@@ -265,11 +278,8 @@ target_link_libraries(libbehl
 )
 
 target_compile_definitions(libbehl PRIVATE BEHL_BUILDING_LIBRARY)
-if(BUILD_SHARED_LIBS)
+if(BUILD_SHARED_LIBS AND NOT BEHL_EXPORT_ALL)
     target_compile_definitions(libbehl PUBLIC BEHL_SHARED_LIBRARY)
-endif()
-if(BEHL_BUILD_TESTS OR BEHL_BUILD_BENCHMARKS)
-    target_compile_definitions(libbehl PUBLIC BEHL_EXPORT_INTERNAL)
 endif()
 
 # Tests
