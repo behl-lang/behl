@@ -313,9 +313,9 @@ namespace behl
                 offset += s.size();
             }
 
+            new_obj->header.add_flag(GCOFlags::kHeapString);
             new_obj->storage.heap.ptr = heap_data;
             new_obj->storage.heap.len = total_size_required;
-            new_obj->storage.heap.flag = GCString::kHeapFlag;
         }
 
         new_obj->header.object_hash = StringHash32{}(new_obj->view());
@@ -901,7 +901,7 @@ namespace behl
             for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
             {
                 if (obj->get_header().color == GCColor::kWhite && obj->get_header().type == GCType::kUserdata
-                    && !obj->get_header().finalized)
+                    && !obj->get_header().has_flag(GCOFlags::kFinalized))
                 {
                     auto* userdata = static_cast<UserdataData*>(obj);
                     if (userdata->metatable != nullptr)
@@ -1128,7 +1128,7 @@ namespace behl
             S->gc.gc_finalize_queue.pop_back();
 
             userdata->header.color = GCColor::kWhite;
-            userdata->header.finalized = true;
+            userdata->header.add_flag(GCOFlags::kFinalized);
 
             // Call __gc metamethod
             if (userdata->metatable != nullptr)

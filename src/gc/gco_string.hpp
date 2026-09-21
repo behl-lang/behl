@@ -24,7 +24,6 @@ namespace behl
 
         // SSO capacity: 31 bytes total (30 bytes string data + 1 null terminator)
         static constexpr size_t kSSOCapacity = 31;
-        static constexpr uint8_t kHeapFlag = 0x80;
 
         union Storage
         {
@@ -32,27 +31,28 @@ namespace behl
             {
                 char* ptr;
                 size_t len;
-                char padding[32 - (sizeof(ptr) + sizeof(len) + sizeof(uint8_t))];
-                uint8_t flag;
             } heap;
-
-            static_assert(sizeof(Storage::heap) == 32, "GCString::Storage::heap must be 32 bytes");
 
             struct
             {
                 char buffer[kSSOCapacity]; // 31 bytes: inline string buffer + null terminator
-                uint8_t len;               // 1 byte: length (0-30), high bit clear
+                uint8_t len;               // 1 byte: length (0-30)
             } sso;
 
             static_assert(sizeof(Storage::sso) == 32, "GCString::Storage::sso must be 32 bytes");
 
-            std::array<SysInt, 32 / sizeof(SysInt)> chunks;
-
-            static_assert(sizeof(Storage::chunks) == 32, "GCString::Storage::chunks must be 32 bytes");
-
         } storage{};
 
         static_assert(sizeof(Storage) == 32, "GCString::Storage must be 32 bytes");
+
+        using Chunks = std::array<SysInt, 32 / sizeof(SysInt)>;
+
+        static_assert(sizeof(Chunks) == sizeof(Storage), "GCString::Chunks must cover the whole storage");
+
+        [[nodiscard]] Chunks chunks() const noexcept
+        {
+            return std::bit_cast<Chunks>(storage);
+        }
 
         constexpr GCString() = default;
 
@@ -71,8 +71,7 @@ namespace behl
 
         [[nodiscard]] constexpr bool is_sso() const noexcept
         {
-            // Check the last byte - if high bit is clear, it's SSO
-            return (storage.sso.len & kHeapFlag) == 0;
+            return !header.has_flag(GCOFlags::kHeapString);
         }
 
         [[nodiscard]] constexpr size_t size() const noexcept
@@ -116,10 +115,7 @@ namespace behl
 
         void sso_reset() noexcept
         {
-            [&]<size_t... Is>(std::index_sequence<Is...>) {
-                //
-                ((storage.chunks[Is] = 0), ...);
-            }(std::make_index_sequence<32 / sizeof(size_t)>{});
+            storage.sso = {};
         }
 
         static std::strong_ordering sso_compare_impl(const GCString*, const GCString*, size_t, std::index_sequence<>) noexcept
@@ -131,8 +127,8 @@ namespace behl
         static std::strong_ordering sso_compare_impl(
             const GCString* a, const GCString* b, size_t min_len, std::index_sequence<I, Rest...>) noexcept
         {
-            const auto& ca = a->storage.chunks;
-            const auto& cb = b->storage.chunks;
+            const auto ca = a->chunks();
+            const auto cb = b->chunks();
 
             if (min_len > I * sizeof(size_t) && ca[I] != cb[I])
             {
@@ -187,11 +183,7 @@ namespace behl
 
             if (a->is_sso() && b->is_sso())
             {
-                return [&]<size_t... Is>(std::index_sequence<Is...>) {
-                    const auto& ac = a->storage.chunks;
-                    const auto& bc = b->storage.chunks;
-                    return ((ac[Is] == bc[Is]) && ...);
-                }(std::make_index_sequence<32 / sizeof(size_t)>{});
+                return a->chunks() == b->chunks();
             }
 
             return a->view() == b->view();

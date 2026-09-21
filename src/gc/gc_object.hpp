@@ -10,11 +10,18 @@ namespace behl
 
     struct GCObject;
 
+    enum class GCOFlags : uint8_t
+    {
+        kNone = 0,
+        kFinalized = 1u << 0,
+        kHeapString = 1u << 1,
+    };
+
     struct GCOHeader
     {
         GCType type{};
         GCColor color{};
-        bool finalized{};
+        GCOFlags flags{};
 
         uint32_t object_hash{};
 
@@ -26,6 +33,21 @@ namespace behl
         constexpr explicit GCOHeader(GCType t)
             : type(t)
         {
+        }
+
+        constexpr bool has_flag(GCOFlags flag) const
+        {
+            return static_cast<uint8_t>(flags) & static_cast<uint8_t>(flag);
+        }
+
+        constexpr void add_flag(GCOFlags flag)
+        {
+            flags = static_cast<GCOFlags>(static_cast<uint8_t>(flags) | static_cast<uint8_t>(flag));
+        }
+
+        constexpr void remove_flag(GCOFlags flag)
+        {
+            flags = static_cast<GCOFlags>(static_cast<uint8_t>(flags) & ~static_cast<uint8_t>(flag));
         }
     };
 
