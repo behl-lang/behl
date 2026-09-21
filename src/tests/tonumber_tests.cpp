@@ -1,10 +1,11 @@
 #include "behl/behl.hpp"
+#include "state.hpp"
 
 #include <cmath>
 #include <gtest/gtest.h>
 #include <string>
 
-class ToNumberTest : public ::testing::Test
+class ToNumberTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -12,6 +13,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_lib_core(S);
     }
@@ -26,7 +28,7 @@ protected:
     }
 };
 
-TEST_F(ToNumberTest, ToNumber_Integer)
+TEST_P(ToNumberTest, ToNumber_Integer)
 {
     constexpr std::string_view code = R"(
         let result = tonumber(42);
@@ -37,7 +39,7 @@ TEST_F(ToNumberTest, ToNumber_Integer)
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
-TEST_F(ToNumberTest, ToNumber_NegativeInteger)
+TEST_P(ToNumberTest, ToNumber_NegativeInteger)
 {
     constexpr std::string_view code = R"(
         return tonumber(-123);
@@ -47,7 +49,7 @@ TEST_F(ToNumberTest, ToNumber_NegativeInteger)
     EXPECT_EQ(to_integer(S, -1), -123);
 }
 
-TEST_F(ToNumberTest, ToNumber_ZeroInteger)
+TEST_P(ToNumberTest, ToNumber_ZeroInteger)
 {
     constexpr std::string_view code = R"(
         return tonumber(0);
@@ -57,7 +59,7 @@ TEST_F(ToNumberTest, ToNumber_ZeroInteger)
     EXPECT_EQ(to_integer(S, -1), 0);
 }
 
-TEST_F(ToNumberTest, ToNumber_LargeInteger)
+TEST_P(ToNumberTest, ToNumber_LargeInteger)
 {
     constexpr std::string_view code = R"(
         return tonumber(9223372036854775807);
@@ -67,7 +69,7 @@ TEST_F(ToNumberTest, ToNumber_LargeInteger)
     EXPECT_EQ(to_integer(S, -1), 9223372036854775807LL);
 }
 
-TEST_F(ToNumberTest, ToNumber_Float)
+TEST_P(ToNumberTest, ToNumber_Float)
 {
     constexpr std::string_view code = R"(
         return tonumber(3.14);
@@ -77,7 +79,7 @@ TEST_F(ToNumberTest, ToNumber_Float)
     EXPECT_NEAR(to_number(S, -1), 3.14, 0.01);
 }
 
-TEST_F(ToNumberTest, ToNumber_NegativeFloat)
+TEST_P(ToNumberTest, ToNumber_NegativeFloat)
 {
     constexpr std::string_view code = R"(
         return tonumber(-2.718);
@@ -87,7 +89,7 @@ TEST_F(ToNumberTest, ToNumber_NegativeFloat)
     EXPECT_NEAR(to_number(S, -1), -2.718, 0.001);
 }
 
-TEST_F(ToNumberTest, ToNumber_ZeroFloat)
+TEST_P(ToNumberTest, ToNumber_ZeroFloat)
 {
     constexpr std::string_view code = R"(
         return tonumber(0.0);
@@ -97,7 +99,7 @@ TEST_F(ToNumberTest, ToNumber_ZeroFloat)
     EXPECT_DOUBLE_EQ(to_number(S, -1), 0.0);
 }
 
-TEST_F(ToNumberTest, ToNumber_StringInteger)
+TEST_P(ToNumberTest, ToNumber_StringInteger)
 {
     constexpr std::string_view code = R"(
         return tonumber("42");
@@ -107,7 +109,7 @@ TEST_F(ToNumberTest, ToNumber_StringInteger)
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
-TEST_F(ToNumberTest, ToNumber_StringNegativeInteger)
+TEST_P(ToNumberTest, ToNumber_StringNegativeInteger)
 {
     constexpr std::string_view code = R"(
         return tonumber("-123");
@@ -117,7 +119,7 @@ TEST_F(ToNumberTest, ToNumber_StringNegativeInteger)
     EXPECT_EQ(to_integer(S, -1), -123);
 }
 
-TEST_F(ToNumberTest, ToNumber_StringFloat)
+TEST_P(ToNumberTest, ToNumber_StringFloat)
 {
     constexpr std::string_view code = R"(
         return tonumber("3.14159");
@@ -127,7 +129,7 @@ TEST_F(ToNumberTest, ToNumber_StringFloat)
     EXPECT_NEAR(to_number(S, -1), 3.14159, 0.00001);
 }
 
-TEST_F(ToNumberTest, ToNumber_StringNegativeFloat)
+TEST_P(ToNumberTest, ToNumber_StringNegativeFloat)
 {
     constexpr std::string_view code = R"(
         return tonumber("-2.5");
@@ -137,7 +139,7 @@ TEST_F(ToNumberTest, ToNumber_StringNegativeFloat)
     EXPECT_NEAR(to_number(S, -1), -2.5, 0.01);
 }
 
-TEST_F(ToNumberTest, ToNumber_StringZero)
+TEST_P(ToNumberTest, ToNumber_StringZero)
 {
     constexpr std::string_view code = R"(
         return tonumber("0");
@@ -147,7 +149,7 @@ TEST_F(ToNumberTest, ToNumber_StringZero)
     EXPECT_EQ(to_integer(S, -1), 0);
 }
 
-TEST_F(ToNumberTest, ToNumber_StringWithSpaces)
+TEST_P(ToNumberTest, ToNumber_StringWithSpaces)
 {
     constexpr std::string_view code = R"(
         return tonumber("  42  ");
@@ -157,7 +159,7 @@ TEST_F(ToNumberTest, ToNumber_StringWithSpaces)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_StringWithLeadingZeros)
+TEST_P(ToNumberTest, ToNumber_StringWithLeadingZeros)
 {
     constexpr std::string_view code = R"(
         return tonumber("0042");
@@ -167,7 +169,7 @@ TEST_F(ToNumberTest, ToNumber_StringWithLeadingZeros)
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
-TEST_F(ToNumberTest, ToNumber_InvalidString)
+TEST_P(ToNumberTest, ToNumber_InvalidString)
 {
     constexpr std::string_view code = R"(
         return tonumber("hello");
@@ -177,7 +179,7 @@ TEST_F(ToNumberTest, ToNumber_InvalidString)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_EmptyString)
+TEST_P(ToNumberTest, ToNumber_EmptyString)
 {
     constexpr std::string_view code = R"(
         return tonumber("");
@@ -187,7 +189,7 @@ TEST_F(ToNumberTest, ToNumber_EmptyString)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_StringWithText)
+TEST_P(ToNumberTest, ToNumber_StringWithText)
 {
     constexpr std::string_view code = R"(
         return tonumber("42abc");
@@ -197,7 +199,7 @@ TEST_F(ToNumberTest, ToNumber_StringWithText)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_StringWithTrailingText)
+TEST_P(ToNumberTest, ToNumber_StringWithTrailingText)
 {
     constexpr std::string_view code = R"(
         return tonumber("3.14pi");
@@ -207,7 +209,7 @@ TEST_F(ToNumberTest, ToNumber_StringWithTrailingText)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_StringMultipleDots)
+TEST_P(ToNumberTest, ToNumber_StringMultipleDots)
 {
     constexpr std::string_view code = R"(
         return tonumber("1.2.3");
@@ -217,7 +219,7 @@ TEST_F(ToNumberTest, ToNumber_StringMultipleDots)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_Nil)
+TEST_P(ToNumberTest, ToNumber_Nil)
 {
     constexpr std::string_view code = R"(
         return tonumber(nil);
@@ -227,7 +229,7 @@ TEST_F(ToNumberTest, ToNumber_Nil)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_Boolean)
+TEST_P(ToNumberTest, ToNumber_Boolean)
 {
     constexpr std::string_view code = R"(
         return tonumber(true);
@@ -237,7 +239,7 @@ TEST_F(ToNumberTest, ToNumber_Boolean)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_BooleanFalse)
+TEST_P(ToNumberTest, ToNumber_BooleanFalse)
 {
     constexpr std::string_view code = R"(
         return tonumber(false);
@@ -247,7 +249,7 @@ TEST_F(ToNumberTest, ToNumber_BooleanFalse)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_Table)
+TEST_P(ToNumberTest, ToNumber_Table)
 {
     constexpr std::string_view code = R"(
         let t = {1, 2, 3};
@@ -258,7 +260,7 @@ TEST_F(ToNumberTest, ToNumber_Table)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_Function)
+TEST_P(ToNumberTest, ToNumber_Function)
 {
     constexpr std::string_view code = R"(
         function foo() {}
@@ -269,7 +271,7 @@ TEST_F(ToNumberTest, ToNumber_Function)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_ScientificNotation)
+TEST_P(ToNumberTest, ToNumber_ScientificNotation)
 {
     constexpr std::string_view code = R"(
         return tonumber("1e10");
@@ -279,7 +281,7 @@ TEST_F(ToNumberTest, ToNumber_ScientificNotation)
     EXPECT_NEAR(to_number(S, -1), 1e10, 1e5);
 }
 
-TEST_F(ToNumberTest, ToNumber_ScientificNotationNegative)
+TEST_P(ToNumberTest, ToNumber_ScientificNotationNegative)
 {
     constexpr std::string_view code = R"(
         return tonumber("1e-5");
@@ -289,7 +291,7 @@ TEST_F(ToNumberTest, ToNumber_ScientificNotationNegative)
     EXPECT_NEAR(to_number(S, -1), 1e-5, 1e-10);
 }
 
-TEST_F(ToNumberTest, ToNumber_HexString)
+TEST_P(ToNumberTest, ToNumber_HexString)
 {
     constexpr std::string_view code = R"(
         return tonumber("0x10");
@@ -299,7 +301,7 @@ TEST_F(ToNumberTest, ToNumber_HexString)
     EXPECT_TRUE(is_nil(S, -1));
 }
 
-TEST_F(ToNumberTest, ToNumber_MultipleConversions)
+TEST_P(ToNumberTest, ToNumber_MultipleConversions)
 {
     constexpr std::string_view code = R"(
         let a = tonumber("10");
@@ -312,7 +314,7 @@ TEST_F(ToNumberTest, ToNumber_MultipleConversions)
     EXPECT_EQ(to_integer(S, -1), 60);
 }
 
-TEST_F(ToNumberTest, ToNumber_InExpression)
+TEST_P(ToNumberTest, ToNumber_InExpression)
 {
     constexpr std::string_view code = R"(
         let result = tonumber("5") * tonumber("3");
@@ -323,7 +325,7 @@ TEST_F(ToNumberTest, ToNumber_InExpression)
     EXPECT_EQ(to_integer(S, -1), 15);
 }
 
-TEST_F(ToNumberTest, ToNumber_InLoop)
+TEST_P(ToNumberTest, ToNumber_InLoop)
 {
     constexpr std::string_view code = R"(
         let sum = 0;
@@ -337,7 +339,7 @@ TEST_F(ToNumberTest, ToNumber_InLoop)
     EXPECT_EQ(to_integer(S, -1), 3);
 }
 
-TEST_F(ToNumberTest, ToNumber_WithConditional)
+TEST_P(ToNumberTest, ToNumber_WithConditional)
 {
     constexpr std::string_view code = R"(
         let x = tonumber("not a number");
@@ -351,7 +353,7 @@ TEST_F(ToNumberTest, ToNumber_WithConditional)
     EXPECT_EQ(to_integer(S, -1), 999);
 }
 
-TEST_F(ToNumberTest, ToNumber_ValidStringConditional)
+TEST_P(ToNumberTest, ToNumber_ValidStringConditional)
 {
     constexpr std::string_view code = R"(
         let x = tonumber("42");
@@ -366,7 +368,7 @@ TEST_F(ToNumberTest, ToNumber_ValidStringConditional)
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
-TEST_F(ToNumberTest, ToNumber_PreservesIntegerType)
+TEST_P(ToNumberTest, ToNumber_PreservesIntegerType)
 {
     constexpr std::string_view code = R"(
         return typeof(tonumber("123"));
@@ -376,7 +378,7 @@ TEST_F(ToNumberTest, ToNumber_PreservesIntegerType)
     EXPECT_EQ(to_string(S, -1), "integer");
 }
 
-TEST_F(ToNumberTest, ToNumber_PreservesFloatType)
+TEST_P(ToNumberTest, ToNumber_PreservesFloatType)
 {
     constexpr std::string_view code = R"(
         return typeof(tonumber("3.14"));
@@ -386,7 +388,7 @@ TEST_F(ToNumberTest, ToNumber_PreservesFloatType)
     EXPECT_EQ(to_string(S, -1), "number");
 }
 
-TEST_F(ToNumberTest, ToNumber_IntegerPassthrough)
+TEST_P(ToNumberTest, ToNumber_IntegerPassthrough)
 {
     constexpr std::string_view code = R"(
         return typeof(tonumber(42));
@@ -396,7 +398,7 @@ TEST_F(ToNumberTest, ToNumber_IntegerPassthrough)
     EXPECT_EQ(to_string(S, -1), "integer");
 }
 
-TEST_F(ToNumberTest, ToNumber_FloatPassthrough)
+TEST_P(ToNumberTest, ToNumber_FloatPassthrough)
 {
     constexpr std::string_view code = R"(
         return typeof(tonumber(3.14));
@@ -405,3 +407,6 @@ TEST_F(ToNumberTest, ToNumber_FloatPassthrough)
     ASSERT_NO_THROW(call(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "number");
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, ToNumberTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

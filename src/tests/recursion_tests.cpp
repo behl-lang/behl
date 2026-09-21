@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class RecursionTest : public ::testing::Test
+class RecursionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_stdlib(S);
     }
@@ -19,7 +22,7 @@ protected:
     }
 };
 
-TEST_F(RecursionTest, BasicFunctionCall)
+TEST_P(RecursionTest, BasicFunctionCall)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -33,7 +36,7 @@ TEST_F(RecursionTest, BasicFunctionCall)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(RecursionTest, FactorialRecursion)
+TEST_P(RecursionTest, FactorialRecursion)
 {
     constexpr std::string_view code = R"(
         function fact(n) {
@@ -52,7 +55,7 @@ TEST_F(RecursionTest, FactorialRecursion)
     ASSERT_EQ(behl::to_integer(S, -1), 120);
 }
 
-TEST_F(RecursionTest, FibonacciRecursion)
+TEST_P(RecursionTest, FibonacciRecursion)
 {
     constexpr std::string_view code = R"(
         function fib(n) {
@@ -73,7 +76,7 @@ TEST_F(RecursionTest, FibonacciRecursion)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(RecursionTest, TailRecursiveCountdown)
+TEST_P(RecursionTest, TailRecursiveCountdown)
 {
     constexpr std::string_view code = R"(
         function countdown(n) {
@@ -91,7 +94,7 @@ TEST_F(RecursionTest, TailRecursiveCountdown)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(RecursionTest, TailCallMultipleParameters)
+TEST_P(RecursionTest, TailCallMultipleParameters)
 {
     constexpr std::string_view code = R"(
         function test(a, b) {
@@ -108,7 +111,7 @@ TEST_F(RecursionTest, TailCallMultipleParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
 
-TEST_F(RecursionTest, TailCallThreeParameters)
+TEST_P(RecursionTest, TailCallThreeParameters)
 {
     constexpr std::string_view code = R"(
         function sum3(a, b, c) {
@@ -125,7 +128,7 @@ TEST_F(RecursionTest, TailCallThreeParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(RecursionTest, TailCallComplexExpressions)
+TEST_P(RecursionTest, TailCallComplexExpressions)
 {
     constexpr std::string_view code = R"(
         function compute(x, y, z) {
@@ -143,7 +146,7 @@ TEST_F(RecursionTest, TailCallComplexExpressions)
     ASSERT_EQ(behl::to_integer(S, -1), 1001);
 }
 
-TEST_F(RecursionTest, TailCallDeepRecursion)
+TEST_P(RecursionTest, TailCallDeepRecursion)
 {
     constexpr std::string_view code = R"(
         function deep(n, acc) {
@@ -160,7 +163,7 @@ TEST_F(RecursionTest, TailCallDeepRecursion)
     ASSERT_EQ(behl::to_integer(S, -1), 1000);
 }
 
-TEST_F(RecursionTest, TailCallToNativeFunction)
+TEST_P(RecursionTest, TailCallToNativeFunction)
 {
     const char* check_code = R"(
         return print
@@ -186,7 +189,7 @@ TEST_F(RecursionTest, TailCallToNativeFunction)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(RecursionTest, TailCallToNativeFunctionWithReturn)
+TEST_P(RecursionTest, TailCallToNativeFunctionWithReturn)
 {
     constexpr std::string_view code = R"(
         function get_type(n) {
@@ -205,7 +208,7 @@ TEST_F(RecursionTest, TailCallToNativeFunctionWithReturn)
     ASSERT_EQ(result, "integer");
 }
 
-TEST_F(RecursionTest, ComprehensiveHandlerCoverageDeep)
+TEST_P(RecursionTest, ComprehensiveHandlerCoverageDeep)
 {
     constexpr std::string_view code = R"(
         function test_all_ops(depth) {
@@ -270,3 +273,6 @@ TEST_F(RecursionTest, ComprehensiveHandlerCoverageDeep)
     ASSERT_NO_THROW(call(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, RecursionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

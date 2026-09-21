@@ -1,9 +1,11 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 #include <string>
 
-class RegressionTest : public ::testing::Test
+class RegressionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -11,6 +13,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
     }
 
@@ -20,7 +23,7 @@ protected:
     }
 };
 
-TEST_F(RegressionTest, RecursiveFibonacciDirectExpression)
+TEST_P(RegressionTest, RecursiveFibonacciDirectExpression)
 {
     constexpr std::string_view code = R"(
         function fib(n) { 
@@ -37,7 +40,7 @@ TEST_F(RegressionTest, RecursiveFibonacciDirectExpression)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(RegressionTest, MultipleRecursiveCallsInExpression)
+TEST_P(RegressionTest, MultipleRecursiveCallsInExpression)
 {
     constexpr std::string_view code = R"(
         function test(n) {
@@ -55,7 +58,7 @@ TEST_F(RegressionTest, MultipleRecursiveCallsInExpression)
     ASSERT_EQ(behl::to_integer(S, -1), 27);
 }
 
-TEST_F(RegressionTest, JitReturnFastDeepRecursionValues)
+TEST_P(RegressionTest, JitReturnFastDeepRecursionValues)
 {
     constexpr std::string_view code = R"(
         function depth(n) {
@@ -78,7 +81,7 @@ TEST_F(RegressionTest, JitReturnFastDeepRecursionValues)
     ASSERT_EQ(behl::to_integer(S, -1), 8);
 }
 
-TEST_F(RegressionTest, JitReturnFastDistinctValuesPerFrame)
+TEST_P(RegressionTest, JitReturnFastDistinctValuesPerFrame)
 {
     constexpr std::string_view code = R"(
         function leaf(n) { return n * 3 }
@@ -101,7 +104,7 @@ TEST_F(RegressionTest, JitReturnFastDistinctValuesPerFrame)
     ASSERT_EQ(behl::to_integer(S, -1), 27);
 }
 
-TEST_F(RegressionTest, JitReturnFastWithUpvaluesStillCorrect)
+TEST_P(RegressionTest, JitReturnFastWithUpvaluesStillCorrect)
 {
     constexpr std::string_view code = R"(
         function make(base) {
@@ -127,7 +130,7 @@ TEST_F(RegressionTest, JitReturnFastWithUpvaluesStillCorrect)
     ASSERT_EQ(behl::to_integer(S, -1), 105);
 }
 
-TEST_F(RegressionTest, JitReturnFastMixedResultCounts)
+TEST_P(RegressionTest, JitReturnFastMixedResultCounts)
 {
     constexpr std::string_view code = R"(
         function one(n) { return n + 1 }
@@ -153,7 +156,7 @@ TEST_F(RegressionTest, JitReturnFastMixedResultCounts)
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
 
-TEST_F(RegressionTest, MultretTableConstructorFromHotCalls)
+TEST_P(RegressionTest, MultretTableConstructorFromHotCalls)
 {
     constexpr std::string_view code = R"(
         function one(n) { return n + 1 }
@@ -180,7 +183,7 @@ TEST_F(RegressionTest, MultretTableConstructorFromHotCalls)
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
 
-TEST_F(RegressionTest, JitTailCallMultArgsSelfRecursion)
+TEST_P(RegressionTest, JitTailCallMultArgsSelfRecursion)
 {
     constexpr std::string_view code = R"(
         function ack(m, n) {
@@ -209,7 +212,7 @@ TEST_F(RegressionTest, JitTailCallMultArgsSelfRecursion)
     ASSERT_EQ(behl::to_integer(S, -1), 61);
 }
 
-TEST_F(RegressionTest, JitNonSelfTailCallFromNestedSelfRecursion)
+TEST_P(RegressionTest, JitNonSelfTailCallFromNestedSelfRecursion)
 {
     constexpr std::string_view code = R"(
         function pick(a, b, c) {
@@ -244,7 +247,7 @@ TEST_F(RegressionTest, JitNonSelfTailCallFromNestedSelfRecursion)
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
-TEST_F(RegressionTest, JitReturnFastThroughPcall)
+TEST_P(RegressionTest, JitReturnFastThroughPcall)
 {
     constexpr std::string_view code = R"(
         function leaf(n) {
@@ -270,7 +273,7 @@ TEST_F(RegressionTest, JitReturnFastThroughPcall)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionDefinition)
+TEST_P(RegressionTest, LocalVariableNotCorruptedByFunctionDefinition)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -285,7 +288,7 @@ TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionDefinition)
     ASSERT_EQ(behl::to_integer(S, -1), 10) << "x should remain 10, not be corrupted by function";
 }
 
-TEST_F(RegressionTest, MultipleLocalsNotCorruptedByFunctionDefinition)
+TEST_P(RegressionTest, MultipleLocalsNotCorruptedByFunctionDefinition)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -302,7 +305,7 @@ TEST_F(RegressionTest, MultipleLocalsNotCorruptedByFunctionDefinition)
     ASSERT_EQ(behl::to_integer(S, -1), 60) << "All locals should remain uncorrupted";
 }
 
-TEST_F(RegressionTest, LocalVariableNotCorruptedByExpressionStatement)
+TEST_P(RegressionTest, LocalVariableNotCorruptedByExpressionStatement)
 {
     constexpr std::string_view code = R"(
         let x = 100
@@ -315,7 +318,7 @@ TEST_F(RegressionTest, LocalVariableNotCorruptedByExpressionStatement)
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
-TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionCall)
+TEST_P(RegressionTest, LocalVariableNotCorruptedByFunctionCall)
 {
     constexpr std::string_view code = R"(
         function helper() {
@@ -331,7 +334,7 @@ TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionCall)
     ASSERT_EQ(behl::to_integer(S, -1), 50);
 }
 
-TEST_F(RegressionTest, LocalInOuterScopeNotCorruptedByNestedFunction)
+TEST_P(RegressionTest, LocalInOuterScopeNotCorruptedByNestedFunction)
 {
     constexpr std::string_view code = R"(
         let outer = 123
@@ -348,7 +351,7 @@ TEST_F(RegressionTest, LocalInOuterScopeNotCorruptedByNestedFunction)
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(RegressionTest, LocalCapturedByClosureNotCorrupted)
+TEST_P(RegressionTest, LocalCapturedByClosureNotCorrupted)
 {
     constexpr std::string_view code = R"(
         let captured = 999
@@ -364,7 +367,7 @@ TEST_F(RegressionTest, LocalCapturedByClosureNotCorrupted)
     ASSERT_EQ(behl::to_integer(S, -1), 999);
 }
 
-TEST_F(RegressionTest, ComplexInterleavingOfLocalsAndFunctions)
+TEST_P(RegressionTest, ComplexInterleavingOfLocalsAndFunctions)
 {
     constexpr std::string_view code = R"(
         let a = 1
@@ -381,7 +384,7 @@ TEST_F(RegressionTest, ComplexInterleavingOfLocalsAndFunctions)
     ASSERT_EQ(behl::to_integer(S, -1), 6) << "All locals should preserve their values";
 }
 
-TEST_F(RegressionTest, LocalNotCorruptedByTableCreation)
+TEST_P(RegressionTest, LocalNotCorruptedByTableCreation)
 {
     constexpr std::string_view code = R"(
         let x = 42
@@ -394,7 +397,7 @@ TEST_F(RegressionTest, LocalNotCorruptedByTableCreation)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(RegressionTest, LocalInConditionalNotCorrupted)
+TEST_P(RegressionTest, LocalInConditionalNotCorrupted)
 {
     constexpr std::string_view code = R"(
         let x = 5
@@ -409,7 +412,7 @@ TEST_F(RegressionTest, LocalInConditionalNotCorrupted)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(RegressionTest, OriginalBugReportCase)
+TEST_P(RegressionTest, OriginalBugReportCase)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -424,7 +427,7 @@ TEST_F(RegressionTest, OriginalBugReportCase)
     ASSERT_EQ(behl::to_integer(S, -1), 18) << "Should compute 5 + 3 + 10 = 18";
 }
 
-TEST_F(RegressionTest, FunctionWithSixParameters)
+TEST_P(RegressionTest, FunctionWithSixParameters)
 {
     constexpr std::string_view code = R"(function sum6(a, b, c, d, e, f) {
             return a + b + c + d + e + f
@@ -437,7 +440,7 @@ TEST_F(RegressionTest, FunctionWithSixParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 21);
 }
 
-TEST_F(RegressionTest, FunctionWithTenParameters)
+TEST_P(RegressionTest, FunctionWithTenParameters)
 {
     constexpr std::string_view code = R"(
         function sum10(a, b, c, d, e, f, g, h, i, j) {
@@ -451,7 +454,7 @@ TEST_F(RegressionTest, FunctionWithTenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(RegressionTest, FunctionWithFifteenParameters)
+TEST_P(RegressionTest, FunctionWithFifteenParameters)
 {
     constexpr std::string_view code = R"(
         function sum15(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) {
@@ -465,7 +468,7 @@ TEST_F(RegressionTest, FunctionWithFifteenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 120);
 }
 
-TEST_F(RegressionTest, RecursiveFunctionWithSixParameters)
+TEST_P(RegressionTest, RecursiveFunctionWithSixParameters)
 {
     constexpr std::string_view code = R"(
         function rec_sum(a, b, c, d, e, depth) {
@@ -482,7 +485,7 @@ TEST_F(RegressionTest, RecursiveFunctionWithSixParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 155);
 }
 
-TEST_F(RegressionTest, RecursiveFunctionWithTenParameters)
+TEST_P(RegressionTest, RecursiveFunctionWithTenParameters)
 {
     constexpr std::string_view code = R"(
         function rec_product(a, b, c, d, e, f, g, h, i, depth) {
@@ -500,7 +503,7 @@ TEST_F(RegressionTest, RecursiveFunctionWithTenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 150);
 }
 
-TEST_F(RegressionTest, TailCallWithSixParameters)
+TEST_P(RegressionTest, TailCallWithSixParameters)
 {
     constexpr std::string_view code = R"(
         function countdown(a, b, c, d, e, n) {
@@ -518,7 +521,7 @@ TEST_F(RegressionTest, TailCallWithSixParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 65);
 }
 
-TEST_F(RegressionTest, TailCallWithTenParameters)
+TEST_P(RegressionTest, TailCallWithTenParameters)
 {
     constexpr std::string_view code = R"(
         function accumulate(a, b, c, d, e, f, g, h, i, n) {
@@ -536,7 +539,7 @@ TEST_F(RegressionTest, TailCallWithTenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 945);
 }
 
-TEST_F(RegressionTest, DeepTailRecursionWithEightParameters)
+TEST_P(RegressionTest, DeepTailRecursionWithEightParameters)
 {
     constexpr std::string_view code = R"(
         function deep_tail(a, b, c, d, e, f, g, depth) {
@@ -553,7 +556,7 @@ TEST_F(RegressionTest, DeepTailRecursionWithEightParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 28);
 }
 
-TEST_F(RegressionTest, NestedCallsWithSevenParameters)
+TEST_P(RegressionTest, NestedCallsWithSevenParameters)
 {
     constexpr std::string_view code = R"(
         function inner(a, b, c) {
@@ -572,7 +575,7 @@ TEST_F(RegressionTest, NestedCallsWithSevenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 334);
 }
 
-TEST_F(RegressionTest, ManyParametersWithUpvalues)
+TEST_P(RegressionTest, ManyParametersWithUpvalues)
 {
     constexpr std::string_view code = R"(
         function make_adder(base1, base2, base3, base4, base5) {
@@ -591,7 +594,7 @@ TEST_F(RegressionTest, ManyParametersWithUpvalues)
     ASSERT_EQ(behl::to_integer(S, -1), 165);
 }
 
-TEST_F(RegressionTest, RecursionPreservesAllTwelveParameters)
+TEST_P(RegressionTest, RecursionPreservesAllTwelveParameters)
 {
     constexpr std::string_view code = R"(
         function check_params(a, b, c, d, e, f, g, h, i, j, k, depth) {
@@ -619,7 +622,7 @@ TEST_F(RegressionTest, RecursionPreservesAllTwelveParameters)
     ASSERT_TRUE(behl::to_boolean(S, -1)) << "All parameters should be preserved through recursion";
 }
 
-TEST_F(RegressionTest, MixedCallsWithEightParameters)
+TEST_P(RegressionTest, MixedCallsWithEightParameters)
 {
     constexpr std::string_view code = R"(
         function helper(a, b, c) {
@@ -643,7 +646,7 @@ TEST_F(RegressionTest, MixedCallsWithEightParameters)
     ASSERT_TRUE(behl::to_integer(S, -1) > 0) << "Should compute without corruption";
 }
 
-TEST_F(RegressionTest, FunctionCallInIfCondition)
+TEST_P(RegressionTest, FunctionCallInIfCondition)
 {
     constexpr std::string_view code = R"(
         function returns_true() {
@@ -660,7 +663,7 @@ TEST_F(RegressionTest, FunctionCallInIfCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 42) << "Should execute then-block";
 }
 
-TEST_F(RegressionTest, FunctionCallInIfConditionReturnsFalse)
+TEST_P(RegressionTest, FunctionCallInIfConditionReturnsFalse)
 {
     constexpr std::string_view code = R"(
         function returns_false() {
@@ -677,7 +680,7 @@ TEST_F(RegressionTest, FunctionCallInIfConditionReturnsFalse)
     ASSERT_EQ(behl::to_integer(S, -1), 99) << "Should skip then-block";
 }
 
-TEST_F(RegressionTest, MultipleFunctionCallsInIfConditions)
+TEST_P(RegressionTest, MultipleFunctionCallsInIfConditions)
 {
     constexpr std::string_view code = R"(
         function test1() { return true }
@@ -702,7 +705,7 @@ TEST_F(RegressionTest, MultipleFunctionCallsInIfConditions)
     ASSERT_EQ(behl::to_integer(S, -1), 101) << "Should execute test1 and test3 blocks only";
 }
 
-TEST_F(RegressionTest, FunctionCallWithParametersInIfCondition)
+TEST_P(RegressionTest, FunctionCallWithParametersInIfCondition)
 {
     constexpr std::string_view code = R"(
         function check(value) {
@@ -719,7 +722,7 @@ TEST_F(RegressionTest, FunctionCallWithParametersInIfCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(RegressionTest, FunctionCallInWhileCondition)
+TEST_P(RegressionTest, FunctionCallInWhileCondition)
 {
     constexpr std::string_view code = R"(
         let counter = 0
@@ -737,7 +740,7 @@ TEST_F(RegressionTest, FunctionCallInWhileCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 5) << "Should loop until counter reaches 5";
 }
 
-TEST_F(RegressionTest, ErrorColumnNumberForCallToNilValue)
+TEST_P(RegressionTest, ErrorColumnNumberForCallToNilValue)
 {
     constexpr std::string_view code = R"(
         let undefined_func = nil;
@@ -748,7 +751,7 @@ TEST_F(RegressionTest, ErrorColumnNumberForCallToNilValue)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError) << "Call should fail because undefined_func is nil";
 }
 
-TEST_F(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
+TEST_P(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
 {
     std::string code = "function generated(seed, k) {\n    let acc = seed;\n";
     for (int i = 0; i < 512; i++)
@@ -763,7 +766,7 @@ TEST_F(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
     ASSERT_EQ(behl::to_integer(S, -1), 2561);
 }
 
-TEST_F(RegressionTest, SelfTailCallPreservesArgumentCount)
+TEST_P(RegressionTest, SelfTailCallPreservesArgumentCount)
 {
     constexpr std::string_view code = R"(
         function countdown(n, acc) {
@@ -777,7 +780,7 @@ TEST_F(RegressionTest, SelfTailCallPreservesArgumentCount)
     EXPECT_EQ(behl::to_integer(S, -1), 11325);
 }
 
-TEST_F(RegressionTest, SelfTailCallArityOneTwoThree)
+TEST_P(RegressionTest, SelfTailCallArityOneTwoThree)
 {
     constexpr std::string_view code = R"(
         function one(n) {
@@ -799,7 +802,7 @@ TEST_F(RegressionTest, SelfTailCallArityOneTwoThree)
     EXPECT_EQ(behl::to_integer(S, -1), 7 + 120 + 180);
 }
 
-TEST_F(RegressionTest, TwoDistinctCallsInOneLoopBody)
+TEST_P(RegressionTest, TwoDistinctCallsInOneLoopBody)
 {
     constexpr std::string_view code = R"(
         let ping = nil;
@@ -831,7 +834,7 @@ TEST_F(RegressionTest, TwoDistinctCallsInOneLoopBody)
     EXPECT_EQ(behl::to_integer(S, -1), 11325 + 11325);
 }
 
-TEST_F(RegressionTest, NonTailSelfCallPreservesArgumentCount)
+TEST_P(RegressionTest, NonTailSelfCallPreservesArgumentCount)
 {
     constexpr std::string_view code = R"(
         function sum_to(n) {
@@ -849,7 +852,7 @@ TEST_F(RegressionTest, NonTailSelfCallPreservesArgumentCount)
     EXPECT_EQ(behl::to_integer(S, -1), 5050 + 10100);
 }
 
-TEST_F(RegressionTest, TopLevelLoopMatchesFunctionLoop)
+TEST_P(RegressionTest, TopLevelLoopMatchesFunctionLoop)
 {
     constexpr std::string_view code = R"(
         function loop_in_function(n) {
@@ -874,7 +877,7 @@ TEST_F(RegressionTest, TopLevelLoopMatchesFunctionLoop)
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(RegressionTest, SelfCallLeavesUnpassedParamsNil)
+TEST_P(RegressionTest, SelfCallLeavesUnpassedParamsNil)
 {
     constexpr std::string_view code = R"(
         function dirty(p, q, r, s) {
@@ -900,3 +903,6 @@ TEST_F(RegressionTest, SelfCallLeavesUnpassedParamsNil)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1)) << "unpassed parameters must read nil after a self call";
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, RegressionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

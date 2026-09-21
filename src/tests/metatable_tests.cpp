@@ -1,13 +1,14 @@
 #include "common/string.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
+#include "state.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 #include <string>
 using namespace behl;
 
-class MetatableTest : public ::testing::Test
+class MetatableTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S;
@@ -15,6 +16,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         load_stdlib(S);
     }
 
@@ -24,7 +26,7 @@ protected:
     }
 };
 
-TEST_F(MetatableTest, GetMetatableReturnsNilForNoMetatable)
+TEST_P(MetatableTest, GetMetatableReturnsNilForNoMetatable)
 {
     constexpr std::string_view code = R"(
         let t = {a = 1}
@@ -35,7 +37,7 @@ TEST_F(MetatableTest, GetMetatableReturnsNilForNoMetatable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, SetAndGetMetatable)
+TEST_P(MetatableTest, SetAndGetMetatable)
 {
     constexpr std::string_view code = R"(
         let t = {a = 1}
@@ -49,7 +51,7 @@ TEST_F(MetatableTest, SetAndGetMetatable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, SetMetatableReturnsTable)
+TEST_P(MetatableTest, SetMetatableReturnsTable)
 {
     constexpr std::string_view code = R"(
         let t = {a = 1}
@@ -62,7 +64,7 @@ TEST_F(MetatableTest, SetMetatableReturnsTable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, SetMetatableToNilRemovesMetatable)
+TEST_P(MetatableTest, SetMetatableToNilRemovesMetatable)
 {
     constexpr std::string_view code = R"(
         let t = {a = 1}
@@ -76,7 +78,7 @@ TEST_F(MetatableTest, SetMetatableToNilRemovesMetatable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, IndexMetamethodWithFunction)
+TEST_P(MetatableTest, IndexMetamethodWithFunction)
 {
     constexpr std::string_view code = R"(
         let t = {a = 1}
@@ -96,7 +98,7 @@ TEST_F(MetatableTest, IndexMetamethodWithFunction)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, IndexMetamethodWithTable)
+TEST_P(MetatableTest, IndexMetamethodWithTable)
 {
     constexpr std::string_view code = R"(
         let t = {a = 1}
@@ -110,7 +112,7 @@ TEST_F(MetatableTest, IndexMetamethodWithTable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, IndexMetamethodChaining)
+TEST_P(MetatableTest, IndexMetamethodChaining)
 {
     constexpr std::string_view code = R"(
         let t = {a = 1}
@@ -127,7 +129,7 @@ TEST_F(MetatableTest, IndexMetamethodChaining)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, IndexMetamethodNotCalledForExistingKey)
+TEST_P(MetatableTest, IndexMetamethodNotCalledForExistingKey)
 {
     constexpr std::string_view code = R"(
         let called = false
@@ -147,7 +149,7 @@ TEST_F(MetatableTest, IndexMetamethodNotCalledForExistingKey)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, NewIndexMetamethodWithFunction)
+TEST_P(MetatableTest, NewIndexMetamethodWithFunction)
 {
     constexpr std::string_view code = R"(
         let storage = {}
@@ -166,7 +168,7 @@ TEST_F(MetatableTest, NewIndexMetamethodWithFunction)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, NewIndexMetamethodWithTable)
+TEST_P(MetatableTest, NewIndexMetamethodWithTable)
 {
     constexpr std::string_view code = R"(
         let proxy = {}
@@ -181,7 +183,7 @@ TEST_F(MetatableTest, NewIndexMetamethodWithTable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, NewIndexMetamethodNotCalledForExistingKey)
+TEST_P(MetatableTest, NewIndexMetamethodNotCalledForExistingKey)
 {
     constexpr std::string_view code = R"(
         let called = false
@@ -200,7 +202,7 @@ TEST_F(MetatableTest, NewIndexMetamethodNotCalledForExistingKey)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, AddMetamethod)
+TEST_P(MetatableTest, AddMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 10}
@@ -220,7 +222,7 @@ TEST_F(MetatableTest, AddMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, SubMetamethod)
+TEST_P(MetatableTest, SubMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 10}
@@ -240,7 +242,7 @@ TEST_F(MetatableTest, SubMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, MulMetamethod)
+TEST_P(MetatableTest, MulMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 6}
@@ -260,7 +262,7 @@ TEST_F(MetatableTest, MulMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, DivMetamethod)
+TEST_P(MetatableTest, DivMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 20}
@@ -280,7 +282,7 @@ TEST_F(MetatableTest, DivMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, ModMetamethod)
+TEST_P(MetatableTest, ModMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 17}
@@ -300,7 +302,7 @@ TEST_F(MetatableTest, ModMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, PowMetamethod)
+TEST_P(MetatableTest, PowMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 2}
@@ -320,7 +322,7 @@ TEST_F(MetatableTest, PowMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, UnmMetamethod)
+TEST_P(MetatableTest, UnmMetamethod)
 {
     constexpr std::string_view code = R"(
         let t = {value = 10}
@@ -338,7 +340,7 @@ TEST_F(MetatableTest, UnmMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, ArithmeticWithMixedTypes)
+TEST_P(MetatableTest, ArithmeticWithMixedTypes)
 {
     constexpr std::string_view code = R"(
         let t = {value = 10}
@@ -361,7 +363,7 @@ TEST_F(MetatableTest, ArithmeticWithMixedTypes)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, EqMetamethod)
+TEST_P(MetatableTest, EqMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 10}
@@ -382,7 +384,7 @@ TEST_F(MetatableTest, EqMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, LtMetamethod)
+TEST_P(MetatableTest, LtMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -401,7 +403,7 @@ TEST_F(MetatableTest, LtMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, LeMetamethod)
+TEST_P(MetatableTest, LeMetamethod)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -422,7 +424,7 @@ TEST_F(MetatableTest, LeMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, CallMetamethod)
+TEST_P(MetatableTest, CallMetamethod)
 {
     constexpr std::string_view code = R"(
         let t = {value = 10}
@@ -440,7 +442,7 @@ TEST_F(MetatableTest, CallMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, CallMetamethodWithMultipleArgs)
+TEST_P(MetatableTest, CallMetamethodWithMultipleArgs)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -458,7 +460,7 @@ TEST_F(MetatableTest, CallMetamethodWithMultipleArgs)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, ToStringMetamethod)
+TEST_P(MetatableTest, ToStringMetamethod)
 {
     constexpr std::string_view code = R"(
         let t = {name = "MyObject"}
@@ -476,7 +478,7 @@ TEST_F(MetatableTest, ToStringMetamethod)
     EXPECT_EQ(to_string(S, -1), "Table: MyObject");
 }
 
-TEST_F(MetatableTest, LenMetamethod)
+TEST_P(MetatableTest, LenMetamethod)
 {
     constexpr std::string_view code = R"(
         let t = {1, 2, 3}  // Array part with 3 elements
@@ -493,7 +495,7 @@ TEST_F(MetatableTest, LenMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, RawGetBypassesMetatable)
+TEST_P(MetatableTest, RawGetBypassesMetatable)
 {
     constexpr std::string_view code = R"(
         const table = import("table");
@@ -511,7 +513,7 @@ TEST_F(MetatableTest, RawGetBypassesMetatable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, RawSetBypassesMetatable)
+TEST_P(MetatableTest, RawSetBypassesMetatable)
 {
     constexpr std::string_view code = R"(
         const table = import("table");
@@ -531,7 +533,7 @@ TEST_F(MetatableTest, RawSetBypassesMetatable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, RawLenBypassesMetatable)
+TEST_P(MetatableTest, RawLenBypassesMetatable)
 {
     constexpr std::string_view code = R"(
         let t = {1, 2, 3}
@@ -548,7 +550,7 @@ TEST_F(MetatableTest, RawLenBypassesMetatable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, SimpleClassPattern)
+TEST_P(MetatableTest, SimpleClassPattern)
 {
     constexpr std::string_view code = R"(
         let Animal = {
@@ -572,7 +574,7 @@ TEST_F(MetatableTest, SimpleClassPattern)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, InheritancePattern)
+TEST_P(MetatableTest, InheritancePattern)
 {
     constexpr std::string_view code = R"(
         let Animal = {
@@ -604,7 +606,7 @@ TEST_F(MetatableTest, InheritancePattern)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, MetatableOnMetatable)
+TEST_P(MetatableTest, MetatableOnMetatable)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -622,7 +624,7 @@ TEST_F(MetatableTest, MetatableOnMetatable)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, MetamethodReturnsMultipleValues)
+TEST_P(MetatableTest, MetamethodReturnsMultipleValues)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -640,7 +642,7 @@ TEST_F(MetatableTest, MetamethodReturnsMultipleValues)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, RecursiveIndexLookup)
+TEST_P(MetatableTest, RecursiveIndexLookup)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -663,7 +665,7 @@ TEST_F(MetatableTest, RecursiveIndexLookup)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, ArithmeticMetamethodOnlyOneOperand)
+TEST_P(MetatableTest, ArithmeticMetamethodOnlyOneOperand)
 {
     constexpr std::string_view code = R"(
         let t = {value = 10}
@@ -685,7 +687,7 @@ TEST_F(MetatableTest, ArithmeticMetamethodOnlyOneOperand)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, ComparisonRequiresBothMetamethods)
+TEST_P(MetatableTest, ComparisonRequiresBothMetamethods)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 10}
@@ -704,7 +706,7 @@ TEST_F(MetatableTest, ComparisonRequiresBothMetamethods)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, DeepNestedAddMetamethod32Levels)
+TEST_P(MetatableTest, DeepNestedAddMetamethod32Levels)
 {
     constexpr std::string_view code = R"(
         let call_depth = 0;
@@ -738,7 +740,7 @@ TEST_F(MetatableTest, DeepNestedAddMetamethod32Levels)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, DeepNestedMultipleArithmeticOps)
+TEST_P(MetatableTest, DeepNestedMultipleArithmeticOps)
 {
     constexpr std::string_view code = R"(
         let call_count = 0;
@@ -796,7 +798,7 @@ TEST_F(MetatableTest, DeepNestedMultipleArithmeticOps)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, DeepNestedWithTableCreation)
+TEST_P(MetatableTest, DeepNestedWithTableCreation)
 {
     constexpr std::string_view code = R"(
         function create_deep_structure(depth) {
@@ -841,7 +843,7 @@ TEST_F(MetatableTest, DeepNestedWithTableCreation)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, DeepNestedChainedMetamethods)
+TEST_P(MetatableTest, DeepNestedChainedMetamethods)
 {
     constexpr std::string_view code = R"(
         let call_chain = {};
@@ -891,7 +893,7 @@ TEST_F(MetatableTest, DeepNestedChainedMetamethods)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, ExtremeMixedOperationsDepth64)
+TEST_P(MetatableTest, ExtremeMixedOperationsDepth64)
 {
     constexpr std::string_view code = R"(
         let global_counter = 0;
@@ -951,7 +953,7 @@ TEST_F(MetatableTest, ExtremeMixedOperationsDepth64)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, DeepNestedWithUpvalues)
+TEST_P(MetatableTest, DeepNestedWithUpvalues)
 {
     constexpr std::string_view code = R"(
         function create_nested_closures(depth) {
@@ -992,7 +994,7 @@ TEST_F(MetatableTest, DeepNestedWithUpvalues)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, StressTestMassiveStackGrowth)
+TEST_P(MetatableTest, StressTestMassiveStackGrowth)
 {
     constexpr std::string_view code = R"(
         function allocate_heavy(depth, size) {
@@ -1035,7 +1037,7 @@ TEST_F(MetatableTest, StressTestMassiveStackGrowth)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseAndMetamethod)
+TEST_P(MetatableTest, BitwiseAndMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -1057,7 +1059,7 @@ TEST_F(MetatableTest, BitwiseAndMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseOrMetamethod)
+TEST_P(MetatableTest, BitwiseOrMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -1079,7 +1081,7 @@ TEST_F(MetatableTest, BitwiseOrMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseXorMetamethod)
+TEST_P(MetatableTest, BitwiseXorMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -1101,7 +1103,7 @@ TEST_F(MetatableTest, BitwiseXorMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseLeftShiftMetamethod)
+TEST_P(MetatableTest, BitwiseLeftShiftMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -1123,7 +1125,7 @@ TEST_F(MetatableTest, BitwiseLeftShiftMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseRightShiftMetamethod)
+TEST_P(MetatableTest, BitwiseRightShiftMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -1145,7 +1147,7 @@ TEST_F(MetatableTest, BitwiseRightShiftMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseNotMetamethod)
+TEST_P(MetatableTest, BitwiseNotMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -1165,7 +1167,7 @@ TEST_F(MetatableTest, BitwiseNotMetamethod)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseMixedOperations)
+TEST_P(MetatableTest, BitwiseMixedOperations)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -1198,7 +1200,7 @@ TEST_F(MetatableTest, BitwiseMixedOperations)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseDeepNested)
+TEST_P(MetatableTest, BitwiseDeepNested)
 {
     constexpr std::string_view code = R"(
         function create_nested_closures(n) {
@@ -1233,7 +1235,7 @@ TEST_F(MetatableTest, BitwiseDeepNested)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, BitwiseWithUpvalues)
+TEST_P(MetatableTest, BitwiseWithUpvalues)
 {
     constexpr std::string_view code = R"(
         function make_bitwise_obj(base_val, modifier) {
@@ -1261,7 +1263,7 @@ TEST_F(MetatableTest, BitwiseWithUpvalues)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, MetatableNewCreatesNewMetatable)
+TEST_P(MetatableTest, MetatableNewCreatesNewMetatable)
 {
     bool created = metatable_new(S, "TestMetatable");
     EXPECT_TRUE(created);
@@ -1270,7 +1272,7 @@ TEST_F(MetatableTest, MetatableNewCreatesNewMetatable)
     pop(S, 1);
 }
 
-TEST_F(MetatableTest, MetatableNewReturnsFalseForExisting)
+TEST_P(MetatableTest, MetatableNewReturnsFalseForExisting)
 {
     bool created1 = metatable_new(S, "TestMetatable");
     EXPECT_TRUE(created1);
@@ -1283,7 +1285,7 @@ TEST_F(MetatableTest, MetatableNewReturnsFalseForExisting)
     pop(S, 1);
 }
 
-TEST_F(MetatableTest, MetatableNewAlwaysPushesMetatable)
+TEST_P(MetatableTest, MetatableNewAlwaysPushesMetatable)
 {
     metatable_new(S, "MyMT");
     push_string(S, "field");
@@ -1298,7 +1300,7 @@ TEST_F(MetatableTest, MetatableNewAlwaysPushesMetatable)
     pop(S, 2);
 }
 
-TEST_F(MetatableTest, MetatableFindRetrievesStoredMetatable)
+TEST_P(MetatableTest, MetatableFindRetrievesStoredMetatable)
 {
     metatable_new(S, "TestMT");
     push_string(S, "test_field");
@@ -1314,14 +1316,14 @@ TEST_F(MetatableTest, MetatableFindRetrievesStoredMetatable)
     pop(S, 2);
 }
 
-TEST_F(MetatableTest, MetatableFindPushesNilForNonexistent)
+TEST_P(MetatableTest, MetatableFindPushesNilForNonexistent)
 {
     metatable_find(S, "DoesNotExist");
     EXPECT_EQ(type(S, -1), Type::kNil);
     pop(S, 1);
 }
 
-TEST_F(MetatableTest, MetatableRegistryPersistsAcrossCalls)
+TEST_P(MetatableTest, MetatableRegistryPersistsAcrossCalls)
 {
     metatable_new(S, "FileHandle");
 
@@ -1342,7 +1344,7 @@ TEST_F(MetatableTest, MetatableRegistryPersistsAcrossCalls)
     pop(S, 2);
 }
 
-TEST_F(MetatableTest, MetatableRegistryIsolatesStates)
+TEST_P(MetatableTest, MetatableRegistryIsolatesStates)
 {
     State* S2 = new_state();
 
@@ -1356,7 +1358,7 @@ TEST_F(MetatableTest, MetatableRegistryIsolatesStates)
     close(S2);
 }
 
-TEST_F(MetatableTest, MetatableRegistryGCResistant)
+TEST_P(MetatableTest, MetatableRegistryGCResistant)
 {
     metatable_new(S, "GCMT");
     push_string(S, "data");
@@ -1375,7 +1377,7 @@ TEST_F(MetatableTest, MetatableRegistryGCResistant)
     pop(S, 2);
 }
 
-TEST_F(MetatableTest, MetatableNewWithUserdataPattern)
+TEST_P(MetatableTest, MetatableNewWithUserdataPattern)
 {
     constexpr uint32_t TestUD_UID = make_uid("UserData.File");
     void* ud = userdata_new(S, 16, TestUD_UID);
@@ -1401,7 +1403,7 @@ TEST_F(MetatableTest, MetatableNewWithUserdataPattern)
     pop(S, 2); // metatable and userdata
 }
 
-TEST_F(MetatableTest, GtMetamethodValueContext)
+TEST_P(MetatableTest, GtMetamethodValueContext)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1420,7 +1422,7 @@ TEST_F(MetatableTest, GtMetamethodValueContext)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, GeMetamethodValueContext)
+TEST_P(MetatableTest, GeMetamethodValueContext)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1441,7 +1443,7 @@ TEST_F(MetatableTest, GeMetamethodValueContext)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, LtMetamethodJumpContext)
+TEST_P(MetatableTest, LtMetamethodJumpContext)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1464,7 +1466,7 @@ TEST_F(MetatableTest, LtMetamethodJumpContext)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, LeMetamethodJumpContext)
+TEST_P(MetatableTest, LeMetamethodJumpContext)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1491,7 +1493,7 @@ TEST_F(MetatableTest, LeMetamethodJumpContext)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, GtMetamethodJumpContext)
+TEST_P(MetatableTest, GtMetamethodJumpContext)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1516,7 +1518,7 @@ TEST_F(MetatableTest, GtMetamethodJumpContext)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, GeMetamethodJumpContext)
+TEST_P(MetatableTest, GeMetamethodJumpContext)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1543,7 +1545,7 @@ TEST_F(MetatableTest, GeMetamethodJumpContext)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, LtFamilyServesBothContextsWithoutLe)
+TEST_P(MetatableTest, LtFamilyServesBothContextsWithoutLe)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1566,7 +1568,7 @@ TEST_F(MetatableTest, LtFamilyServesBothContextsWithoutLe)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, LeFamilyServesBothContextsWithoutLt)
+TEST_P(MetatableTest, LeFamilyServesBothContextsWithoutLt)
 {
     constexpr std::string_view code = R"(
         let t1 = {value = 5}
@@ -1589,7 +1591,7 @@ TEST_F(MetatableTest, LeFamilyServesBothContextsWithoutLt)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
-TEST_F(MetatableTest, ComparisonMetamethodReceivesOperandsInSourceOrder)
+TEST_P(MetatableTest, ComparisonMetamethodReceivesOperandsInSourceOrder)
 {
     constexpr std::string_view code = R"(
         let t1 = {name = "a"}
@@ -1612,7 +1614,7 @@ TEST_F(MetatableTest, ComparisonMetamethodReceivesOperandsInSourceOrder)
     EXPECT_EQ(to_string(S, -1), "ab;ab;");
 }
 
-TEST_F(MetatableTest, ComparisonMetamethodsAgreeUnderJit)
+TEST_P(MetatableTest, ComparisonMetamethodsAgreeUnderJit)
 {
     constexpr std::string_view code = R"(
         const jit = import("jit")
@@ -1653,3 +1655,6 @@ TEST_F(MetatableTest, ComparisonMetamethodsAgreeUnderJit)
     ASSERT_NO_THROW(call(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "true|truetruefalsefalseLM");
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, MetatableTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

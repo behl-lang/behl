@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class TableTest : public ::testing::Test
+class TableTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
     }
 
@@ -18,7 +21,7 @@ protected:
     }
 };
 
-TEST_F(TableTest, ExecuteTableLengthZeroIndex)
+TEST_P(TableTest, ExecuteTableLengthZeroIndex)
 {
     constexpr std::string_view code = R"(
         let t = {[0]=1, [1]=2, [2]=3}
@@ -30,7 +33,7 @@ TEST_F(TableTest, ExecuteTableLengthZeroIndex)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(TableTest, ExecuteTableWithHole)
+TEST_P(TableTest, ExecuteTableWithHole)
 {
     constexpr std::string_view code = R"(
         let t = {[0]=1, [2]=3}
@@ -42,7 +45,7 @@ TEST_F(TableTest, ExecuteTableWithHole)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(TableTest, SparseIntegerKeyUsesHash)
+TEST_P(TableTest, SparseIntegerKeyUsesHash)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -61,7 +64,7 @@ TEST_F(TableTest, SparseIntegerKeyUsesHash)
     ASSERT_EQ(behl::to_string(S, -1), "thousand");
 }
 
-TEST_F(TableTest, VeryLargeSparseIndex)
+TEST_P(TableTest, VeryLargeSparseIndex)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -76,7 +79,7 @@ TEST_F(TableTest, VeryLargeSparseIndex)
     ASSERT_EQ(behl::to_string(S, -1), "sparse");
 }
 
-TEST_F(TableTest, MixedArrayAndHashAccess)
+TEST_P(TableTest, MixedArrayAndHashAccess)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -97,7 +100,7 @@ TEST_F(TableTest, MixedArrayAndHashAccess)
     ASSERT_EQ(behl::to_string(S, -1), "sparse");
 }
 
-TEST_F(TableTest, NegativeIndexUsesHash)
+TEST_P(TableTest, NegativeIndexUsesHash)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -114,7 +117,7 @@ TEST_F(TableTest, NegativeIndexUsesHash)
     ASSERT_EQ(behl::to_string(S, -1), "very negative");
 }
 
-TEST_F(TableTest, FloatIndexConvertedToInteger)
+TEST_P(TableTest, FloatIndexConvertedToInteger)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -131,7 +134,7 @@ TEST_F(TableTest, FloatIndexConvertedToInteger)
     ASSERT_EQ(behl::to_string(S, -1), "hash");
 }
 
-TEST_F(TableTest, SparseFloatIndexUsesHash)
+TEST_P(TableTest, SparseFloatIndexUsesHash)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -147,7 +150,7 @@ TEST_F(TableTest, SparseFloatIndexUsesHash)
     ASSERT_EQ(behl::to_string(S, -1), "sparse float");
 }
 
-TEST_F(TableTest, OverwriteSparseKey)
+TEST_P(TableTest, OverwriteSparseKey)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -161,7 +164,7 @@ TEST_F(TableTest, OverwriteSparseKey)
     ASSERT_EQ(behl::to_string(S, -1), "second");
 }
 
-TEST_F(TableTest, BoundaryAtGrowthLimit)
+TEST_P(TableTest, BoundaryAtGrowthLimit)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -180,7 +183,7 @@ TEST_F(TableTest, BoundaryAtGrowthLimit)
     ASSERT_EQ(behl::to_string(S, -1), "over");
 }
 
-TEST_F(TableTest, AccessNonExistentSparseKey)
+TEST_P(TableTest, AccessNonExistentSparseKey)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -194,7 +197,7 @@ TEST_F(TableTest, AccessNonExistentSparseKey)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(TableTest, StringAndIntegerKeysDontCollide)
+TEST_P(TableTest, StringAndIntegerKeysDontCollide)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -209,7 +212,7 @@ TEST_F(TableTest, StringAndIntegerKeysDontCollide)
     ASSERT_EQ(behl::to_string(S, -1), "string zero");
 }
 
-TEST_F(TableTest, DenseArrayFollowedBySparseKey)
+TEST_P(TableTest, DenseArrayFollowedBySparseKey)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -230,7 +233,7 @@ TEST_F(TableTest, DenseArrayFollowedBySparseKey)
     ASSERT_EQ(behl::to_string(S, -1), "sparse");
 }
 
-TEST_F(TableTest, UnpackBasic)
+TEST_P(TableTest, UnpackBasic)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -245,7 +248,7 @@ TEST_F(TableTest, UnpackBasic)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(TableTest, UnpackSingleElement)
+TEST_P(TableTest, UnpackSingleElement)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -258,7 +261,7 @@ TEST_F(TableTest, UnpackSingleElement)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(TableTest, UnpackEmptyTable)
+TEST_P(TableTest, UnpackEmptyTable)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -271,7 +274,7 @@ TEST_F(TableTest, UnpackEmptyTable)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(TableTest, UnpackWithRange)
+TEST_P(TableTest, UnpackWithRange)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -286,7 +289,7 @@ TEST_F(TableTest, UnpackWithRange)
     ASSERT_EQ(behl::to_integer(S, -1), 30);
 }
 
-TEST_F(TableTest, UnpackWithStartOnly)
+TEST_P(TableTest, UnpackWithStartOnly)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -302,7 +305,7 @@ TEST_F(TableTest, UnpackWithStartOnly)
     ASSERT_EQ(behl::to_integer(S, -1), 40);
 }
 
-TEST_F(TableTest, UnpackMixedTypes)
+TEST_P(TableTest, UnpackMixedTypes)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -318,7 +321,7 @@ TEST_F(TableTest, UnpackMixedTypes)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 3.14);
 }
 
-TEST_F(TableTest, UnpackInvalidRange)
+TEST_P(TableTest, UnpackInvalidRange)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -332,7 +335,7 @@ TEST_F(TableTest, UnpackInvalidRange)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(TableTest, UnpackZeroIndex)
+TEST_P(TableTest, UnpackZeroIndex)
 {
     constexpr std::string_view code = R"(
         const table = import("table")
@@ -347,3 +350,6 @@ TEST_F(TableTest, UnpackZeroIndex)
     ASSERT_EQ(behl::to_string(S, -2), "b");
     ASSERT_EQ(behl::to_string(S, -1), "c");
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, TableTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

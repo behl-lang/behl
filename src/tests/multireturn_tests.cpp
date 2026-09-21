@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class MultiReturnTest : public ::testing::Test
+class MultiReturnTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(MultiReturnTest, FunctionReturnsTwoValues_OnlyFirstReturned)
+TEST_P(MultiReturnTest, FunctionReturnsTwoValues_OnlyFirstReturned)
 {
     constexpr std::string_view code = R"(
         function f() {
@@ -31,7 +34,7 @@ TEST_F(MultiReturnTest, FunctionReturnsTwoValues_OnlyFirstReturned)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(MultiReturnTest, FunctionReturnsThreeValues_OnlyFirstReturned)
+TEST_P(MultiReturnTest, FunctionReturnsThreeValues_OnlyFirstReturned)
 {
     constexpr std::string_view code = R"(
         function multi() {
@@ -45,7 +48,7 @@ TEST_F(MultiReturnTest, FunctionReturnsThreeValues_OnlyFirstReturned)
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
-TEST_F(MultiReturnTest, FunctionReturnsMixedTypes_OnlyFirstReturned)
+TEST_P(MultiReturnTest, FunctionReturnsMixedTypes_OnlyFirstReturned)
 {
     constexpr std::string_view code = R"(
         function f() {
@@ -60,7 +63,7 @@ TEST_F(MultiReturnTest, FunctionReturnsMixedTypes_OnlyFirstReturned)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(MultiReturnTest, FunctionWithMultipleReturns_RequestZeroResults)
+TEST_P(MultiReturnTest, FunctionWithMultipleReturns_RequestZeroResults)
 {
     constexpr std::string_view code = R"(
         function f() {
@@ -73,7 +76,7 @@ TEST_F(MultiReturnTest, FunctionWithMultipleReturns_RequestZeroResults)
     ASSERT_EQ(behl::get_top(S), 0);
 }
 
-TEST_F(MultiReturnTest, NestedFunctionWithMultipleReturns_OnlyFirstReturned)
+TEST_P(MultiReturnTest, NestedFunctionWithMultipleReturns_OnlyFirstReturned)
 {
     constexpr std::string_view code = R"(
         function inner() {
@@ -91,7 +94,7 @@ TEST_F(MultiReturnTest, NestedFunctionWithMultipleReturns_OnlyFirstReturned)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(MultiReturnTest, MultipleReturnsInExpression_OnlyFirstUsed)
+TEST_P(MultiReturnTest, MultipleReturnsInExpression_OnlyFirstUsed)
 {
     constexpr std::string_view code = R"(
         function pair() {
@@ -105,7 +108,7 @@ TEST_F(MultiReturnTest, MultipleReturnsInExpression_OnlyFirstUsed)
     ASSERT_EQ(behl::to_integer(S, -1), 13);
 }
 
-TEST_F(MultiReturnTest, AssignmentFromMultipleReturns_OnlyFirstAssigned)
+TEST_P(MultiReturnTest, AssignmentFromMultipleReturns_OnlyFirstAssigned)
 {
     constexpr std::string_view code = R"(
         function triple() {
@@ -120,7 +123,7 @@ TEST_F(MultiReturnTest, AssignmentFromMultipleReturns_OnlyFirstAssigned)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(MultiReturnTest, FunctionWithEmptyReturn)
+TEST_P(MultiReturnTest, FunctionWithEmptyReturn)
 {
     constexpr std::string_view code = R"(
         function f() {
@@ -133,7 +136,7 @@ TEST_F(MultiReturnTest, FunctionWithEmptyReturn)
     ASSERT_EQ(behl::get_top(S), 0);
 }
 
-TEST_F(MultiReturnTest, FunctionReturnsSingleValue)
+TEST_P(MultiReturnTest, FunctionReturnsSingleValue)
 {
     constexpr std::string_view code = R"(
         function f() {
@@ -147,7 +150,7 @@ TEST_F(MultiReturnTest, FunctionReturnsSingleValue)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(MultiReturnTest, FunctionReturnsComputedValues_OnlyFirstReturned)
+TEST_P(MultiReturnTest, FunctionReturnsComputedValues_OnlyFirstReturned)
 {
     constexpr std::string_view code = R"(
         function compute(x) {
@@ -162,7 +165,7 @@ TEST_F(MultiReturnTest, FunctionReturnsComputedValues_OnlyFirstReturned)
     ASSERT_EQ(behl::to_integer(S, -1), 11);
 }
 
-TEST_F(MultiReturnTest, RecursiveFunctionWithMultipleReturns_OnlyFirstReturned)
+TEST_P(MultiReturnTest, RecursiveFunctionWithMultipleReturns_OnlyFirstReturned)
 {
     constexpr std::string_view code = R"(
         function fib(n) {
@@ -180,7 +183,7 @@ TEST_F(MultiReturnTest, RecursiveFunctionWithMultipleReturns_OnlyFirstReturned)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(MultiReturnTest, FunctionImplicitReturn)
+TEST_P(MultiReturnTest, FunctionImplicitReturn)
 {
     constexpr std::string_view code = R"(
         function f() {}
@@ -193,7 +196,7 @@ TEST_F(MultiReturnTest, FunctionImplicitReturn)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(MultiReturnTest, FunctionReturnsTableAndValue_OnlyFirstReturned)
+TEST_P(MultiReturnTest, FunctionReturnsTableAndValue_OnlyFirstReturned)
 {
     constexpr std::string_view code = R"(
         function make_pair() {
@@ -207,7 +210,7 @@ TEST_F(MultiReturnTest, FunctionReturnsTableAndValue_OnlyFirstReturned)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 }
 
-TEST_F(MultiReturnTest, MultipleReturnsInTableConstructor_OnlyFirstUsed)
+TEST_P(MultiReturnTest, MultipleReturnsInTableConstructor_OnlyFirstUsed)
 {
     constexpr std::string_view code = R"(
         function pair() {
@@ -222,7 +225,7 @@ TEST_F(MultiReturnTest, MultipleReturnsInTableConstructor_OnlyFirstUsed)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(MultiReturnTest, CallingWithMultret_GetsAllValues)
+TEST_P(MultiReturnTest, CallingWithMultret_GetsAllValues)
 {
     constexpr std::string_view code = "function triple() { return 10, 20, 30 }";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -238,7 +241,7 @@ TEST_F(MultiReturnTest, CallingWithMultret_GetsAllValues)
     ASSERT_EQ(behl::to_integer(S, -1), 30);
 }
 
-TEST_F(MultiReturnTest, MultipleAssignmentFromFunctionCall)
+TEST_P(MultiReturnTest, MultipleAssignmentFromFunctionCall)
 {
     constexpr std::string_view code = R"(
         function triple() { return 100, 200, 300 }
@@ -253,7 +256,7 @@ TEST_F(MultiReturnTest, MultipleAssignmentFromFunctionCall)
     ASSERT_EQ(behl::to_integer(S, -1), 300);
 }
 
-TEST_F(MultiReturnTest, MultipleAssignmentPadsWithNil)
+TEST_P(MultiReturnTest, MultipleAssignmentPadsWithNil)
 {
     constexpr std::string_view code = R"(
         function two() { return 1, 2 }
@@ -269,7 +272,7 @@ TEST_F(MultiReturnTest, MultipleAssignmentPadsWithNil)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(MultiReturnTest, MultipleAssignmentTruncatesExtraValues)
+TEST_P(MultiReturnTest, MultipleAssignmentTruncatesExtraValues)
 {
     constexpr std::string_view code = R"(
         function five() { return 1, 2, 3, 4, 5 }
@@ -283,7 +286,7 @@ TEST_F(MultiReturnTest, MultipleAssignmentTruncatesExtraValues)
     ASSERT_EQ(behl::to_integer(S, -1), 2);
 }
 
-TEST_F(MultiReturnTest, FunctionCallAsLastArgumentPassesAllValues)
+TEST_P(MultiReturnTest, FunctionCallAsLastArgumentPassesAllValues)
 {
     constexpr std::string_view code = R"(
         function add(a, b, c) { return a + b + c }
@@ -296,7 +299,7 @@ TEST_F(MultiReturnTest, FunctionCallAsLastArgumentPassesAllValues)
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(MultiReturnTest, FunctionCallInMiddleReturnsOnlyFirst)
+TEST_P(MultiReturnTest, FunctionCallInMiddleReturnsOnlyFirst)
 {
     constexpr std::string_view code = R"(
         function add(a, b, c) { return a + b + c }
@@ -309,7 +312,7 @@ TEST_F(MultiReturnTest, FunctionCallInMiddleReturnsOnlyFirst)
     ASSERT_EQ(behl::to_integer(S, -1), 30);
 }
 
-TEST_F(MultiReturnTest, ReturnPassesThroughAllValues)
+TEST_P(MultiReturnTest, ReturnPassesThroughAllValues)
 {
     constexpr std::string_view code = R"(
         function inner() { return 1, 2, 3, 4 }
@@ -325,7 +328,7 @@ TEST_F(MultiReturnTest, ReturnPassesThroughAllValues)
     ASSERT_EQ(behl::to_integer(S, -1), 4);
 }
 
-TEST_F(MultiReturnTest, ReturnWithMixedValuesAndCall)
+TEST_P(MultiReturnTest, ReturnWithMixedValuesAndCall)
 {
     constexpr std::string_view code = R"(
         function inner() { return 3, 4, 5 }
@@ -342,7 +345,7 @@ TEST_F(MultiReturnTest, ReturnWithMixedValuesAndCall)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(MultiReturnTest, ChainedCallsWithMultret)
+TEST_P(MultiReturnTest, ChainedCallsWithMultret)
 {
     constexpr std::string_view code = R"(
         function third() { return 7, 8, 9 }
@@ -358,7 +361,7 @@ TEST_F(MultiReturnTest, ChainedCallsWithMultret)
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
 
-TEST_F(MultiReturnTest, CallInExpressionGetsOnlyFirst)
+TEST_P(MultiReturnTest, CallInExpressionGetsOnlyFirst)
 {
     constexpr std::string_view code = R"(
         function multi() { return 10, 20, 30 }
@@ -370,7 +373,7 @@ TEST_F(MultiReturnTest, CallInExpressionGetsOnlyFirst)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(MultiReturnTest, MultipleAssignmentMixedTypes)
+TEST_P(MultiReturnTest, MultipleAssignmentMixedTypes)
 {
     constexpr std::string_view code = R"(
         function mixed() { return 42, "hello", true, nil }
@@ -386,7 +389,7 @@ TEST_F(MultiReturnTest, MultipleAssignmentMixedTypes)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(MultiReturnTest, EmptyReturnAfterMultret)
+TEST_P(MultiReturnTest, EmptyReturnAfterMultret)
 {
     constexpr std::string_view code = R"(
         function foo() {
@@ -405,7 +408,7 @@ TEST_F(MultiReturnTest, EmptyReturnAfterMultret)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(MultiReturnTest, RecursiveFunctionWithMultret)
+TEST_P(MultiReturnTest, RecursiveFunctionWithMultret)
 {
     constexpr std::string_view code = R"(
         function fib_pair(n) {
@@ -424,7 +427,7 @@ TEST_F(MultiReturnTest, RecursiveFunctionWithMultret)
     ASSERT_EQ(behl::to_integer(S, -1), 2);
 }
 
-TEST_F(MultiReturnTest, NoExplicitReturnInMultipleAssignment)
+TEST_P(MultiReturnTest, NoExplicitReturnInMultipleAssignment)
 {
     constexpr std::string_view code = R"(
         function foo() {
@@ -440,7 +443,7 @@ TEST_F(MultiReturnTest, NoExplicitReturnInMultipleAssignment)
     ASSERT_EQ(behl::type(S, -2), behl::Type::kNil);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
-TEST_F(MultiReturnTest, MultipleAssignmentToGlobals)
+TEST_P(MultiReturnTest, MultipleAssignmentToGlobals)
 {
     constexpr std::string_view code = R"(
         function triple() {
@@ -457,7 +460,7 @@ TEST_F(MultiReturnTest, MultipleAssignmentToGlobals)
     ASSERT_EQ(behl::to_integer(S, -1), 300);
 }
 
-TEST_F(MultiReturnTest, MultipleAssignmentGlobalsPadsWithNil)
+TEST_P(MultiReturnTest, MultipleAssignmentGlobalsPadsWithNil)
 {
     constexpr std::string_view code = R"(
         function two() { return 1, 2 }
@@ -472,3 +475,6 @@ TEST_F(MultiReturnTest, MultipleAssignmentGlobalsPadsWithNil)
     ASSERT_EQ(behl::type(S, -2), behl::Type::kNil);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, MultiReturnTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

@@ -1,8 +1,10 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 
-class VariableTest : public ::testing::Test
+class VariableTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -10,6 +12,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -18,7 +21,7 @@ protected:
     }
 };
 
-TEST_F(VariableTest, ExecuteReturnInteger)
+TEST_P(VariableTest, ExecuteReturnInteger)
 {
     constexpr std::string_view code = R"(
         return 42
@@ -29,7 +32,7 @@ TEST_F(VariableTest, ExecuteReturnInteger)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(VariableTest, ExecuteConstVariable)
+TEST_P(VariableTest, ExecuteConstVariable)
 {
     constexpr std::string_view code = R"(
         const x = 100
@@ -41,7 +44,7 @@ TEST_F(VariableTest, ExecuteConstVariable)
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
-TEST_F(VariableTest, ConstIsImmutable)
+TEST_P(VariableTest, ConstIsImmutable)
 {
     constexpr std::string_view code = R"(
         const x = 100
@@ -51,7 +54,7 @@ TEST_F(VariableTest, ConstIsImmutable)
     EXPECT_THROW({ behl::load_string(S, code, false); }, behl::SemanticError); // Disable optimizations for error testing
 }
 
-TEST_F(VariableTest, GlobalAssignReflectsIn_G)
+TEST_P(VariableTest, GlobalAssignReflectsIn_G)
 {
     constexpr std::string_view code = R"(
         x = 42
@@ -63,7 +66,7 @@ TEST_F(VariableTest, GlobalAssignReflectsIn_G)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(VariableTest, SetVia_GReflectsAsGlobal)
+TEST_P(VariableTest, SetVia_GReflectsAsGlobal)
 {
     constexpr std::string_view code = R"(
         _G.y = 99
@@ -75,7 +78,7 @@ TEST_F(VariableTest, SetVia_GReflectsAsGlobal)
     ASSERT_EQ(behl::to_integer(S, -1), 99);
 }
 
-TEST_F(VariableTest, GlobalTablePointsToItself)
+TEST_P(VariableTest, GlobalTablePointsToItself)
 {
     constexpr std::string_view code = R"(
         _G.__sentinel = 1234
@@ -87,7 +90,7 @@ TEST_F(VariableTest, GlobalTablePointsToItself)
     ASSERT_EQ(behl::to_integer(S, -1), 1234);
 }
 
-TEST_F(VariableTest, MissingGlobalIsNil)
+TEST_P(VariableTest, MissingGlobalIsNil)
 {
     constexpr std::string_view code = R"(
         return some_missing_global
@@ -97,3 +100,6 @@ TEST_F(VariableTest, MissingGlobalIsNil)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, VariableTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

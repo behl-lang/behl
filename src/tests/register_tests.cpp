@@ -1,9 +1,11 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
 using namespace behl;
 
-class RegisterTest : public ::testing::Test
+class RegisterTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S = nullptr;
@@ -11,6 +13,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
     }
 
@@ -24,7 +27,7 @@ protected:
     }
 };
 
-TEST_F(RegisterTest, OuterScopeVariableNotCorruptedByNestedTable)
+TEST_P(RegisterTest, OuterScopeVariableNotCorruptedByNestedTable)
 {
     const char* source = R"(
         function test() {
@@ -49,7 +52,7 @@ TEST_F(RegisterTest, OuterScopeVariableNotCorruptedByNestedTable)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, MultipleOuterVariablesPreservedAcrossLoops)
+TEST_P(RegisterTest, MultipleOuterVariablesPreservedAcrossLoops)
 {
     const char* source = R"(
         function test() {
@@ -75,7 +78,7 @@ TEST_F(RegisterTest, MultipleOuterVariablesPreservedAcrossLoops)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, NestedLoopsPreserveOuterScopeVariables)
+TEST_P(RegisterTest, NestedLoopsPreserveOuterScopeVariables)
 {
     const char* source = R"(
         function test() {
@@ -105,7 +108,7 @@ TEST_F(RegisterTest, NestedLoopsPreserveOuterScopeVariables)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, ComplexExpressionsWithOuterScope)
+TEST_P(RegisterTest, ComplexExpressionsWithOuterScope)
 {
     const char* source = R"(
         function test() {
@@ -134,7 +137,7 @@ TEST_F(RegisterTest, ComplexExpressionsWithOuterScope)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, DeeplyNestedTablesPreserveOuter)
+TEST_P(RegisterTest, DeeplyNestedTablesPreserveOuter)
 {
     const char* source = R"(
         function test() {
@@ -166,7 +169,7 @@ TEST_F(RegisterTest, DeeplyNestedTablesPreserveOuter)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, FunctionCallsPreserveOuterVariables)
+TEST_P(RegisterTest, FunctionCallsPreserveOuterVariables)
 {
     const char* source = R"(
         function helper(x) {
@@ -195,7 +198,7 @@ TEST_F(RegisterTest, FunctionCallsPreserveOuterVariables)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, ClosuresAccessingOuterScope)
+TEST_P(RegisterTest, ClosuresAccessingOuterScope)
 {
     const char* source = R"(
         function test() {
@@ -223,7 +226,7 @@ TEST_F(RegisterTest, ClosuresAccessingOuterScope)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, TableFieldAdditionsPreserveBase)
+TEST_P(RegisterTest, TableFieldAdditionsPreserveBase)
 {
     const char* source = R"(
         function test() {
@@ -247,7 +250,7 @@ TEST_F(RegisterTest, TableFieldAdditionsPreserveBase)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, ManyLocalsInSingleScope)
+TEST_P(RegisterTest, ManyLocalsInSingleScope)
 {
     const char* source = R"(
         function test() {
@@ -277,7 +280,7 @@ TEST_F(RegisterTest, ManyLocalsInSingleScope)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, ComplexNestedScopeInteractions)
+TEST_P(RegisterTest, ComplexNestedScopeInteractions)
 {
     const char* source = R"(
         function test() {
@@ -318,7 +321,7 @@ TEST_F(RegisterTest, ComplexNestedScopeInteractions)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, TableArrayPreservesOuterScope)
+TEST_P(RegisterTest, TableArrayPreservesOuterScope)
 {
     const char* source = R"(
         function test() {
@@ -343,7 +346,7 @@ TEST_F(RegisterTest, TableArrayPreservesOuterScope)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, ConditionalBranchesPreserveRegisters)
+TEST_P(RegisterTest, ConditionalBranchesPreserveRegisters)
 {
     const char* source = R"(
         function test() {
@@ -374,7 +377,7 @@ TEST_F(RegisterTest, ConditionalBranchesPreserveRegisters)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, OriginalBugReportCase)
+TEST_P(RegisterTest, OriginalBugReportCase)
 {
     const char* source = R"(
         function test() {
@@ -414,7 +417,7 @@ TEST_F(RegisterTest, OriginalBugReportCase)
     behl::pop(S, 1);
 }
 
-TEST_F(RegisterTest, ExtremeRegisterPressure)
+TEST_P(RegisterTest, ExtremeRegisterPressure)
 {
     const char* source = R"(
         function test() {
@@ -458,3 +461,6 @@ TEST_F(RegisterTest, ExtremeRegisterPressure)
     ASSERT_EQ(15, behl::to_integer(S, -1));
     behl::pop(S, 1);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, RegisterTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

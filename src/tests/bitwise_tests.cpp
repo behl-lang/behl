@@ -1,13 +1,16 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class BitwiseTest : public ::testing::Test
+class BitwiseTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
 
         ASSERT_NE(S, nullptr);
@@ -19,7 +22,7 @@ protected:
     }
 };
 
-TEST_F(BitwiseTest, BitwiseAnd_Integers)
+TEST_P(BitwiseTest, BitwiseAnd_Integers)
 {
     constexpr std::string_view code = R"(
         return 0xFF & 0x0F,
@@ -35,7 +38,7 @@ TEST_F(BitwiseTest, BitwiseAnd_Integers)
     EXPECT_EQ(behl::to_integer(S, -1), 127);
 }
 
-TEST_F(BitwiseTest, BitwiseOr_Integers)
+TEST_P(BitwiseTest, BitwiseOr_Integers)
 {
     constexpr std::string_view code = R"(
         return 0xF0 | 0x0F,
@@ -51,7 +54,7 @@ TEST_F(BitwiseTest, BitwiseOr_Integers)
     EXPECT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(BitwiseTest, BitwiseXor_Integers)
+TEST_P(BitwiseTest, BitwiseXor_Integers)
 {
     constexpr std::string_view code = R"(
         return 0xFF ^ 0xAA,
@@ -67,7 +70,7 @@ TEST_F(BitwiseTest, BitwiseXor_Integers)
     EXPECT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(BitwiseTest, BitwiseNot_Integers)
+TEST_P(BitwiseTest, BitwiseNot_Integers)
 {
     constexpr std::string_view code = R"(
         return ~0,
@@ -83,7 +86,7 @@ TEST_F(BitwiseTest, BitwiseNot_Integers)
     EXPECT_EQ(behl::to_integer(S, -1), ~127);
 }
 
-TEST_F(BitwiseTest, LeftShift_Integers)
+TEST_P(BitwiseTest, LeftShift_Integers)
 {
     constexpr std::string_view code = R"(
         return 1 << 0,
@@ -99,7 +102,7 @@ TEST_F(BitwiseTest, LeftShift_Integers)
     EXPECT_EQ(behl::to_integer(S, -1), 0xFF00);
 }
 
-TEST_F(BitwiseTest, RightShift_Integers)
+TEST_P(BitwiseTest, RightShift_Integers)
 {
     constexpr std::string_view code = R"(
         return 8 >> 0,
@@ -115,7 +118,7 @@ TEST_F(BitwiseTest, RightShift_Integers)
     EXPECT_EQ(behl::to_integer(S, -1), 0xFF);
 }
 
-TEST_F(BitwiseTest, BitwiseAnd_FloatOperands)
+TEST_P(BitwiseTest, BitwiseAnd_FloatOperands)
 {
     constexpr std::string_view code = R"(
         return 15.7 & 7,
@@ -129,7 +132,7 @@ TEST_F(BitwiseTest, BitwiseAnd_FloatOperands)
     EXPECT_EQ(behl::to_integer(S, -1), 15 & 7);
 }
 
-TEST_F(BitwiseTest, BitwiseOr_FloatOperands)
+TEST_P(BitwiseTest, BitwiseOr_FloatOperands)
 {
     constexpr std::string_view code = R"(
         return 8.5 | 4,
@@ -143,7 +146,7 @@ TEST_F(BitwiseTest, BitwiseOr_FloatOperands)
     EXPECT_EQ(behl::to_integer(S, -1), 8 | 4);
 }
 
-TEST_F(BitwiseTest, BitwiseXor_FloatOperands)
+TEST_P(BitwiseTest, BitwiseXor_FloatOperands)
 {
     constexpr std::string_view code = R"(
         return 12.8 ^ 5,
@@ -157,7 +160,7 @@ TEST_F(BitwiseTest, BitwiseXor_FloatOperands)
     EXPECT_EQ(behl::to_integer(S, -1), 12 ^ 5);
 }
 
-TEST_F(BitwiseTest, LeftShift_FloatOperands)
+TEST_P(BitwiseTest, LeftShift_FloatOperands)
 {
     constexpr std::string_view code = R"(
         return 5.7 << 2,
@@ -171,7 +174,7 @@ TEST_F(BitwiseTest, LeftShift_FloatOperands)
     EXPECT_EQ(behl::to_integer(S, -1), 5 << 2);
 }
 
-TEST_F(BitwiseTest, RightShift_FloatOperands)
+TEST_P(BitwiseTest, RightShift_FloatOperands)
 {
     constexpr std::string_view code = R"(
         return 127.9 >> 3,
@@ -185,7 +188,7 @@ TEST_F(BitwiseTest, RightShift_FloatOperands)
     EXPECT_EQ(behl::to_integer(S, -1), 127 >> 3);
 }
 
-TEST_F(BitwiseTest, BitwiseAnd_NegativeNumbers)
+TEST_P(BitwiseTest, BitwiseAnd_NegativeNumbers)
 {
     constexpr std::string_view code = R"(
         return -1 & 127,
@@ -199,7 +202,7 @@ TEST_F(BitwiseTest, BitwiseAnd_NegativeNumbers)
     EXPECT_EQ(behl::to_integer(S, -1), (-1) & (-1));
 }
 
-TEST_F(BitwiseTest, BitwiseOr_NegativeNumbers)
+TEST_P(BitwiseTest, BitwiseOr_NegativeNumbers)
 {
     constexpr std::string_view code = R"(
         return -1 | 0,
@@ -213,7 +216,7 @@ TEST_F(BitwiseTest, BitwiseOr_NegativeNumbers)
     EXPECT_EQ(behl::to_integer(S, -1), (-1) | (-2));
 }
 
-TEST_F(BitwiseTest, BitwiseXor_NegativeNumbers)
+TEST_P(BitwiseTest, BitwiseXor_NegativeNumbers)
 {
     constexpr std::string_view code = R"(
         return -1 ^ 0,
@@ -227,7 +230,7 @@ TEST_F(BitwiseTest, BitwiseXor_NegativeNumbers)
     EXPECT_EQ(behl::to_integer(S, -1), (-1) ^ (-1));
 }
 
-TEST_F(BitwiseTest, BitwiseNot_NegativeNumbers)
+TEST_P(BitwiseTest, BitwiseNot_NegativeNumbers)
 {
     constexpr std::string_view code = R"(
         return ~-1,
@@ -241,7 +244,7 @@ TEST_F(BitwiseTest, BitwiseNot_NegativeNumbers)
     EXPECT_EQ(behl::to_integer(S, -1), ~(-255));
 }
 
-TEST_F(BitwiseTest, BitwiseAnd_StringOperands_ThrowsError)
+TEST_P(BitwiseTest, BitwiseAnd_StringOperands_ThrowsError)
 {
     constexpr std::string_view code = R"(
         return "hello" & "world";
@@ -250,7 +253,7 @@ TEST_F(BitwiseTest, BitwiseAnd_StringOperands_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, BitwiseAnd_TableOperands_ThrowsError)
+TEST_P(BitwiseTest, BitwiseAnd_TableOperands_ThrowsError)
 {
     constexpr std::string_view code = R"(
         let t1 = {1, 2, 3};
@@ -261,7 +264,7 @@ TEST_F(BitwiseTest, BitwiseAnd_TableOperands_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, BitwiseOr_NilOperands_ThrowsError)
+TEST_P(BitwiseTest, BitwiseOr_NilOperands_ThrowsError)
 {
     constexpr std::string_view code = R"(
         return nil | 5;
@@ -270,7 +273,7 @@ TEST_F(BitwiseTest, BitwiseOr_NilOperands_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, BitwiseXor_BooleanOperands_ThrowsError)
+TEST_P(BitwiseTest, BitwiseXor_BooleanOperands_ThrowsError)
 {
     constexpr std::string_view code = R"(
         return true ^ false;
@@ -279,7 +282,7 @@ TEST_F(BitwiseTest, BitwiseXor_BooleanOperands_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, BitwiseNot_StringOperand_ThrowsError)
+TEST_P(BitwiseTest, BitwiseNot_StringOperand_ThrowsError)
 {
     constexpr std::string_view code = R"(
         return ~"test";
@@ -288,7 +291,7 @@ TEST_F(BitwiseTest, BitwiseNot_StringOperand_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, BitwiseNot_TableOperand_ThrowsError)
+TEST_P(BitwiseTest, BitwiseNot_TableOperand_ThrowsError)
 {
     constexpr std::string_view code = R"(
         let t = {1, 2, 3};
@@ -298,7 +301,7 @@ TEST_F(BitwiseTest, BitwiseNot_TableOperand_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, LeftShift_StringOperand_ThrowsError)
+TEST_P(BitwiseTest, LeftShift_StringOperand_ThrowsError)
 {
     constexpr std::string_view code = R"(
         return 5 << "two";
@@ -307,7 +310,7 @@ TEST_F(BitwiseTest, LeftShift_StringOperand_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, RightShift_FunctionOperand_ThrowsError)
+TEST_P(BitwiseTest, RightShift_FunctionOperand_ThrowsError)
 {
     constexpr std::string_view code = R"(
         function test() { return 42; }
@@ -317,7 +320,7 @@ TEST_F(BitwiseTest, RightShift_FunctionOperand_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, ComplexExpression_MixedOperations)
+TEST_P(BitwiseTest, ComplexExpression_MixedOperations)
 {
     constexpr std::string_view code = R"(
         return (5 & 3) | (2 ^ 6),
@@ -331,7 +334,7 @@ TEST_F(BitwiseTest, ComplexExpression_MixedOperations)
     EXPECT_EQ(behl::to_integer(S, -1), (1 << 4) | (16 >> 2));
 }
 
-TEST_F(BitwiseTest, ComplexExpression_Chained)
+TEST_P(BitwiseTest, ComplexExpression_Chained)
 {
     constexpr std::string_view code = R"(
         return 0xFF & 0xF0 & 0x30,
@@ -345,7 +348,7 @@ TEST_F(BitwiseTest, ComplexExpression_Chained)
     EXPECT_EQ(behl::to_integer(S, -1), 15 ^ 7 ^ 3);
 }
 
-TEST_F(BitwiseTest, ComplexExpression_WithArithmetic)
+TEST_P(BitwiseTest, ComplexExpression_WithArithmetic)
 {
     constexpr std::string_view code = R"(
         return (5 + 3) & (10 - 2),
@@ -359,7 +362,7 @@ TEST_F(BitwiseTest, ComplexExpression_WithArithmetic)
     EXPECT_EQ(behl::to_integer(S, -1), (10 % 3) ^ 5);
 }
 
-TEST_F(BitwiseTest, BitwiseAnd_RightOperandMetamethod)
+TEST_P(BitwiseTest, BitwiseAnd_RightOperandMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -378,7 +381,7 @@ TEST_F(BitwiseTest, BitwiseAnd_RightOperandMetamethod)
     EXPECT_EQ(behl::to_integer(S, -1), 999);
 }
 
-TEST_F(BitwiseTest, BitwiseOr_RightOperandMetamethod)
+TEST_P(BitwiseTest, BitwiseOr_RightOperandMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -397,7 +400,7 @@ TEST_F(BitwiseTest, BitwiseOr_RightOperandMetamethod)
     EXPECT_EQ(behl::to_integer(S, -1), 777);
 }
 
-TEST_F(BitwiseTest, BitwiseXor_RightOperandMetamethod)
+TEST_P(BitwiseTest, BitwiseXor_RightOperandMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -416,7 +419,7 @@ TEST_F(BitwiseTest, BitwiseXor_RightOperandMetamethod)
     EXPECT_EQ(behl::to_integer(S, -1), 555);
 }
 
-TEST_F(BitwiseTest, LeftShift_RightOperandMetamethod)
+TEST_P(BitwiseTest, LeftShift_RightOperandMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -435,7 +438,7 @@ TEST_F(BitwiseTest, LeftShift_RightOperandMetamethod)
     EXPECT_EQ(behl::to_integer(S, -1), 111);
 }
 
-TEST_F(BitwiseTest, RightShift_RightOperandMetamethod)
+TEST_P(BitwiseTest, RightShift_RightOperandMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -454,7 +457,7 @@ TEST_F(BitwiseTest, RightShift_RightOperandMetamethod)
     EXPECT_EQ(behl::to_integer(S, -1), 222);
 }
 
-TEST_F(BitwiseTest, BitwiseNot_Metamethod)
+TEST_P(BitwiseTest, BitwiseNot_Metamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {
@@ -473,7 +476,7 @@ TEST_F(BitwiseTest, BitwiseNot_Metamethod)
     EXPECT_EQ(behl::to_integer(S, -1), 333);
 }
 
-TEST_F(BitwiseTest, BitwiseAnd_ZeroValues)
+TEST_P(BitwiseTest, BitwiseAnd_ZeroValues)
 {
     constexpr std::string_view code = R"(
         return 0 & 0,
@@ -487,7 +490,7 @@ TEST_F(BitwiseTest, BitwiseAnd_ZeroValues)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(BitwiseTest, BitwiseOr_MaxValues)
+TEST_P(BitwiseTest, BitwiseOr_MaxValues)
 {
     constexpr std::string_view code = R"(
         return 0xFF | 0xFF,
@@ -501,7 +504,7 @@ TEST_F(BitwiseTest, BitwiseOr_MaxValues)
     EXPECT_EQ(behl::to_integer(S, -1), 0xFFFF);
 }
 
-TEST_F(BitwiseTest, Shifts_ZeroShift)
+TEST_P(BitwiseTest, Shifts_ZeroShift)
 {
     constexpr std::string_view code = R"(
         return 42 << 0,
@@ -513,7 +516,7 @@ TEST_F(BitwiseTest, Shifts_ZeroShift)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(BitwiseTest, FloatOperand_OutOfIntegerRange_ThrowsError)
+TEST_P(BitwiseTest, FloatOperand_OutOfIntegerRange_ThrowsError)
 {
     constexpr std::string_view code = R"(
         function band(a, b) { return a & b }
@@ -527,7 +530,7 @@ TEST_F(BitwiseTest, FloatOperand_OutOfIntegerRange_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, FloatOperand_NaN_ThrowsError)
+TEST_P(BitwiseTest, FloatOperand_NaN_ThrowsError)
 {
     constexpr std::string_view code = R"(
         function band(a, b) { return a & b }
@@ -537,7 +540,7 @@ TEST_F(BitwiseTest, FloatOperand_NaN_ThrowsError)
     EXPECT_ANY_THROW(behl::call(S, 0, 1));
 }
 
-TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Folded)
+TEST_P(BitwiseTest, Shifts_OutOfRangeCount_Folded)
 {
     constexpr std::string_view code = R"(
         return 1 << 64,
@@ -557,7 +560,7 @@ TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Folded)
     EXPECT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
 }
 
-TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Runtime)
+TEST_P(BitwiseTest, Shifts_OutOfRangeCount_Runtime)
 {
     constexpr std::string_view code = R"(
         function shl(a, b) { return a << b }
@@ -579,7 +582,7 @@ TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Runtime)
     EXPECT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
 }
 
-TEST_F(BitwiseTest, Shifts_NegativeCountReverses)
+TEST_P(BitwiseTest, Shifts_NegativeCountReverses)
 {
     constexpr std::string_view code = R"(
         function shl(a, b) { return a << b }
@@ -601,7 +604,7 @@ TEST_F(BitwiseTest, Shifts_NegativeCountReverses)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Compiled)
+TEST_P(BitwiseTest, Shifts_OutOfRangeCount_Compiled)
 {
     constexpr std::string_view code = R"(
         function shl(a, b) { return a << b }
@@ -625,7 +628,7 @@ TEST_F(BitwiseTest, Shifts_OutOfRangeCount_Compiled)
     EXPECT_EQ(behl::to_integer(S, -1), 4);
 }
 
-TEST_F(BitwiseTest, BitwiseNot_DoubleInversion)
+TEST_P(BitwiseTest, BitwiseNot_DoubleInversion)
 {
     constexpr std::string_view code = R"(
         return ~~42,
@@ -639,7 +642,7 @@ TEST_F(BitwiseTest, BitwiseNot_DoubleInversion)
     EXPECT_EQ(behl::to_integer(S, -1), -1);
 }
 
-TEST_F(BitwiseTest, Variables_BitwiseOperations)
+TEST_P(BitwiseTest, Variables_BitwiseOperations)
 {
     constexpr std::string_view code = R"(
         let a = 0xF0;
@@ -655,3 +658,6 @@ TEST_F(BitwiseTest, Variables_BitwiseOperations)
     EXPECT_EQ(behl::to_integer(S, -2), 0xF0 | 0x0F);
     EXPECT_EQ(behl::to_integer(S, -1), 0xF0 ^ 0x0F);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, BitwiseTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

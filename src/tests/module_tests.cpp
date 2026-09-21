@@ -1,12 +1,13 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
-#include <gtest/gtest.h>
-
 #include <filesystem>
 #include <fstream>
+#include <gtest/gtest.h>
 #include <string>
 
-class ModuleTest : public ::testing::Test
+class ModuleTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -14,6 +15,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_stdlib(S);
     }
@@ -27,7 +29,7 @@ protected:
     }
 };
 
-TEST_F(ModuleTest, Module_ExportConst)
+TEST_P(ModuleTest, Module_ExportConst)
 {
     constexpr std::string_view code = R"(
         module;
@@ -42,7 +44,7 @@ TEST_F(ModuleTest, Module_ExportConst)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ModuleTest, Module_ExportFunction)
+TEST_P(ModuleTest, Module_ExportFunction)
 {
     constexpr std::string_view code = R"(
         module;
@@ -63,7 +65,7 @@ TEST_F(ModuleTest, Module_ExportFunction)
     EXPECT_EQ(behl::to_integer(S, -1), 8);
 }
 
-TEST_F(ModuleTest, Module_PrivateVariables)
+TEST_P(ModuleTest, Module_PrivateVariables)
 {
     constexpr std::string_view code = R"(
         module;
@@ -93,7 +95,7 @@ TEST_F(ModuleTest, Module_PrivateVariables)
     EXPECT_EQ(behl::to_integer(S, -1), 579);
 }
 
-TEST_F(ModuleTest, Module_NoGlobalAccess)
+TEST_P(ModuleTest, Module_NoGlobalAccess)
 {
     behl::push_integer(S, 999);
     behl::set_global(S, "globalVar");
@@ -108,7 +110,7 @@ TEST_F(ModuleTest, Module_NoGlobalAccess)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-TEST_F(ModuleTest, Module_NoGlobalSet)
+TEST_P(ModuleTest, Module_NoGlobalSet)
 {
     constexpr std::string_view code = R"(
         module;
@@ -119,7 +121,7 @@ TEST_F(ModuleTest, Module_NoGlobalSet)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-TEST_F(ModuleTest, Module_CanUseBuiltins)
+TEST_P(ModuleTest, Module_CanUseBuiltins)
 {
     constexpr std::string_view code = R"(
         module;
@@ -155,7 +157,7 @@ TEST_F(ModuleTest, Module_CanUseBuiltins)
     EXPECT_EQ(behl::to_string(S, -1), "integer");
 }
 
-TEST_F(ModuleTest, Module_StatefulExports)
+TEST_P(ModuleTest, Module_StatefulExports)
 {
     constexpr std::string_view code = R"(
         module;
@@ -198,7 +200,7 @@ TEST_F(ModuleTest, Module_StatefulExports)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(ModuleTest, Module_Empty)
+TEST_P(ModuleTest, Module_Empty)
 {
     constexpr std::string_view code = R"(
         module;
@@ -211,7 +213,7 @@ TEST_F(ModuleTest, Module_Empty)
     EXPECT_FALSE(behl::table_next(S, -2));
 }
 
-TEST_F(ModuleTest, Module_UndefinedVariable)
+TEST_P(ModuleTest, Module_UndefinedVariable)
 {
     constexpr std::string_view code = R"(
         module;
@@ -223,7 +225,7 @@ TEST_F(ModuleTest, Module_UndefinedVariable)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-TEST_F(ModuleTest, Module_CanAccessStdLib)
+TEST_P(ModuleTest, Module_CanAccessStdLib)
 {
     constexpr std::string_view code = R"(
         module;
@@ -252,7 +254,7 @@ TEST_F(ModuleTest, Module_CanAccessStdLib)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ModuleTest, Module_CannotAccessStdLibWithoutImport)
+TEST_P(ModuleTest, Module_CannotAccessStdLibWithoutImport)
 {
     constexpr std::string_view code = R"(
         module;
@@ -264,7 +266,7 @@ TEST_F(ModuleTest, Module_CannotAccessStdLibWithoutImport)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-class ModuleFileTest : public ::testing::Test
+class ModuleFileTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -273,6 +275,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_stdlib(S);
 
@@ -307,7 +310,7 @@ protected:
     }
 };
 
-TEST_F(ModuleFileTest, ImportResolvesSiblingOfImporter)
+TEST_P(ModuleFileTest, ImportResolvesSiblingOfImporter)
 {
     write_file("helper.behl", "module;\nexport const VALUE = 99;\n");
 
@@ -320,7 +323,7 @@ TEST_F(ModuleFileTest, ImportResolvesSiblingOfImporter)
     EXPECT_EQ(behl::to_integer(S, -1), 99);
 }
 
-TEST_F(ModuleFileTest, ImportResolvesModulesSubdirectoryOfImporter)
+TEST_P(ModuleFileTest, ImportResolvesModulesSubdirectoryOfImporter)
 {
     write_file("modules/helper.behl", "module;\nexport const VALUE = 7;\n");
 
@@ -333,7 +336,7 @@ TEST_F(ModuleFileTest, ImportResolvesModulesSubdirectoryOfImporter)
     EXPECT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(ModuleFileTest, ImportResolvesExplicitRelativePath)
+TEST_P(ModuleFileTest, ImportResolvesExplicitRelativePath)
 {
     write_file("helper.behl", "module;\nexport const VALUE = 11;\n");
 
@@ -346,7 +349,7 @@ TEST_F(ModuleFileTest, ImportResolvesExplicitRelativePath)
     EXPECT_EQ(behl::to_integer(S, -1), 11);
 }
 
-TEST_F(ModuleFileTest, ImportResolvesFromNestedImporter)
+TEST_P(ModuleFileTest, ImportResolvesFromNestedImporter)
 {
     write_file("nested/helper.behl", "module;\nexport const VALUE = 5;\n");
     write_file("nested/mid.behl", "module;\nconst h = import(\"helper\");\nexport const DOUBLED = h.VALUE * 2;\n");
@@ -360,7 +363,7 @@ TEST_F(ModuleFileTest, ImportResolvesFromNestedImporter)
     EXPECT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(ModuleFileTest, ImportFailureNamesTheModule)
+TEST_P(ModuleFileTest, ImportFailureNamesTheModule)
 {
     constexpr std::string_view code = R"(
         const h = import("definitely_absent_module");
@@ -382,3 +385,9 @@ TEST_F(ModuleFileTest, ImportFailureNamesTheModule)
     EXPECT_NE(message.find("definitely_absent_module"), std::string::npos)
         << "error message should name the module, got: " << message;
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, ModuleTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+
+INSTANTIATE_TEST_SUITE_P(Mode, ModuleFileTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

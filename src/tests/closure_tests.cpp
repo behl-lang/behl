@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class ClosureTest : public ::testing::Test
+class ClosureTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(ClosureTest, SimpleClosureCapture)
+TEST_P(ClosureTest, SimpleClosureCapture)
 {
     constexpr std::string_view code = R"(
         let captured = 42
@@ -31,7 +34,7 @@ TEST_F(ClosureTest, SimpleClosureCapture)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ClosureTest, ClosureModification)
+TEST_P(ClosureTest, ClosureModification)
 {
     constexpr std::string_view code = R"(
         let counter = 0
@@ -49,7 +52,7 @@ TEST_F(ClosureTest, ClosureModification)
     ASSERT_EQ(behl::to_integer(S, -1), 6); // 1 + 2 + 3
 }
 
-TEST_F(ClosureTest, MultipleClosuresSameVariable)
+TEST_P(ClosureTest, MultipleClosuresSameVariable)
 {
     constexpr std::string_view code = R"(
         let shared = 100
@@ -67,7 +70,7 @@ TEST_F(ClosureTest, MultipleClosuresSameVariable)
     ASSERT_EQ(behl::to_integer(S, -1), 200);
 }
 
-TEST_F(ClosureTest, NestedClosures)
+TEST_P(ClosureTest, NestedClosures)
 {
     constexpr std::string_view code = R"(
         function outer(x) {
@@ -88,7 +91,7 @@ TEST_F(ClosureTest, NestedClosures)
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(ClosureTest, FunctionAsArgument)
+TEST_P(ClosureTest, FunctionAsArgument)
 {
     constexpr std::string_view code = R"(
         function apply(f, x) {
@@ -104,7 +107,7 @@ TEST_F(ClosureTest, FunctionAsArgument)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ClosureTest, FunctionReturningFunction)
+TEST_P(ClosureTest, FunctionReturningFunction)
 {
     constexpr std::string_view code = R"(
         function makeAdder(x) {
@@ -121,7 +124,7 @@ TEST_F(ClosureTest, FunctionReturningFunction)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ClosureTest, NestedFunctionCalls)
+TEST_P(ClosureTest, NestedFunctionCalls)
 {
     constexpr std::string_view code = R"(
         function inner(a, b, c) {
@@ -138,7 +141,7 @@ TEST_F(ClosureTest, NestedFunctionCalls)
     ASSERT_EQ(behl::to_integer(S, -1), 234); // 2*3*4 + 5*6*7 = 24 + 210 = 234
 }
 
-TEST_F(ClosureTest, RecursiveFactorial)
+TEST_P(ClosureTest, RecursiveFactorial)
 {
     constexpr std::string_view code = R"(
         function fact(n) {
@@ -154,7 +157,7 @@ TEST_F(ClosureTest, RecursiveFactorial)
     ASSERT_EQ(behl::to_integer(S, -1), 720);
 }
 
-TEST_F(ClosureTest, NestedFunctionWithIncrement)
+TEST_P(ClosureTest, NestedFunctionWithIncrement)
 {
     constexpr std::string_view code = R"(
         function makeCounter() {
@@ -175,7 +178,7 @@ TEST_F(ClosureTest, NestedFunctionWithIncrement)
     ASSERT_EQ(behl::to_integer(S, -1), 6); // 1 + 2 + 3
 }
 
-TEST_F(ClosureTest, NestedFunctionWithDecrement)
+TEST_P(ClosureTest, NestedFunctionWithDecrement)
 {
     constexpr std::string_view code = R"(
         function makeCountdown() {
@@ -195,3 +198,6 @@ TEST_F(ClosureTest, NestedFunctionWithDecrement)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 24); // 9 + 8 + 7
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, ClosureTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

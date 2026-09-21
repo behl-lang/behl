@@ -1,15 +1,18 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
 namespace behl
 {
-    class ConstTest : public ::testing::Test
+    class ConstTest : public ::testing::TestWithParam<bool>
     {
     protected:
         State* S;
         void SetUp() override
         {
             S = new_state();
+            S->jit_enabled = GetParam();
             load_stdlib(S);
         }
         void TearDown() override
@@ -18,7 +21,7 @@ namespace behl
         }
     };
 
-    TEST_F(ConstTest, BasicConstDeclaration)
+    TEST_P(ConstTest, BasicConstDeclaration)
     {
         constexpr std::string_view code = R"(
             const x = 42;
@@ -30,7 +33,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstAssignmentFails)
+    TEST_P(ConstTest, ConstAssignmentFails)
     {
         constexpr std::string_view code = R"(
             const x = 10;
@@ -40,7 +43,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstReassignmentFails)
+    TEST_P(ConstTest, ConstReassignmentFails)
     {
         constexpr std::string_view code = R"(
             const value = 100;
@@ -51,7 +54,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstInFunction)
+    TEST_P(ConstTest, ConstInFunction)
     {
         constexpr std::string_view code = R"(
             function test() {
@@ -66,7 +69,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstInFunctionReassignmentFails)
+    TEST_P(ConstTest, ConstInFunctionReassignmentFails)
     {
         constexpr std::string_view code = R"(
             function test() {
@@ -80,7 +83,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, MultipleConstDeclarations)
+    TEST_P(ConstTest, MultipleConstDeclarations)
     {
         constexpr std::string_view code = R"(
             const a = 1;
@@ -94,7 +97,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstWithExpression)
+    TEST_P(ConstTest, ConstWithExpression)
     {
         constexpr std::string_view code = R"(
             let x = 5;
@@ -107,7 +110,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstWithFunctionCall)
+    TEST_P(ConstTest, ConstWithFunctionCall)
     {
         constexpr std::string_view code = R"(
             function getValue() {
@@ -122,7 +125,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstTableReference)
+    TEST_P(ConstTest, ConstTableReference)
     {
         constexpr std::string_view code = R"(
             const t = {x = 10, y = 20};
@@ -134,7 +137,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstTableMutationAllowed)
+    TEST_P(ConstTest, ConstTableMutationAllowed)
     {
         constexpr std::string_view code = R"(
             const t = {x = 10};
@@ -148,7 +151,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstTableReassignmentFails)
+    TEST_P(ConstTest, ConstTableReassignmentFails)
     {
         constexpr std::string_view code = R"(
             const t = {x = 10};
@@ -158,7 +161,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstInLoop)
+    TEST_P(ConstTest, ConstInLoop)
     {
         constexpr std::string_view code = R"(
             let sum = 0;
@@ -174,7 +177,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstInLoopReassignmentFails)
+    TEST_P(ConstTest, ConstInLoopReassignmentFails)
     {
         constexpr std::string_view code = R"(
             for (let i = 0; i < 5; i++) {
@@ -186,7 +189,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstInNestedScopes)
+    TEST_P(ConstTest, ConstInNestedScopes)
     {
         constexpr std::string_view code = R"(
             const outer = 10;
@@ -207,7 +210,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstShadowing)
+    TEST_P(ConstTest, ConstShadowing)
     {
         constexpr std::string_view code = R"(
             const x = 10;
@@ -225,7 +228,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstInConditional)
+    TEST_P(ConstTest, ConstInConditional)
     {
         constexpr std::string_view code = R"(
             if (true) {
@@ -242,7 +245,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstInConditionalReassignmentFails)
+    TEST_P(ConstTest, ConstInConditionalReassignmentFails)
     {
         constexpr std::string_view code = R"(
             if (true) {
@@ -254,7 +257,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstWithString)
+    TEST_P(ConstTest, ConstWithString)
     {
         constexpr std::string_view code = R"(
             const message = "hello";
@@ -266,7 +269,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstStringReassignmentFails)
+    TEST_P(ConstTest, ConstStringReassignmentFails)
     {
         constexpr std::string_view code = R"(
             const message = "hello";
@@ -276,7 +279,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstWithNil)
+    TEST_P(ConstTest, ConstWithNil)
     {
         constexpr std::string_view code = R"(
             const value = nil;
@@ -288,7 +291,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstWithBoolean)
+    TEST_P(ConstTest, ConstWithBoolean)
     {
         constexpr std::string_view code = R"(
             const flag = true;
@@ -300,7 +303,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstCapturedByClosure)
+    TEST_P(ConstTest, ConstCapturedByClosure)
     {
         constexpr std::string_view code = R"(
             const captured = 42;
@@ -315,7 +318,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstCapturedByClosureReassignmentFails)
+    TEST_P(ConstTest, ConstCapturedByClosureReassignmentFails)
     {
         constexpr std::string_view code = R"(
             const captured = 42;
@@ -328,7 +331,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstFunctionParameter)
+    TEST_P(ConstTest, ConstFunctionParameter)
     {
         constexpr std::string_view code = R"(
             function test(const param) {
@@ -348,7 +351,7 @@ namespace behl
         }
     }
 
-    TEST_F(ConstTest, ConstInWhileLoop)
+    TEST_P(ConstTest, ConstInWhileLoop)
     {
         constexpr std::string_view code = R"(
             let count = 0;
@@ -366,7 +369,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstCompoundAssignmentFails)
+    TEST_P(ConstTest, ConstCompoundAssignmentFails)
     {
         constexpr std::string_view code = R"(
             const x = 10;
@@ -376,7 +379,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstIncrementFails)
+    TEST_P(ConstTest, ConstIncrementFails)
     {
         constexpr std::string_view code = R"(
             const counter = 0;
@@ -386,7 +389,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstDecrementFails)
+    TEST_P(ConstTest, ConstDecrementFails)
     {
         constexpr std::string_view code = R"(
             const value = 10;
@@ -396,7 +399,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstArray)
+    TEST_P(ConstTest, ConstArray)
     {
         constexpr std::string_view code = R"(
             const arr = {1, 2, 3, 4, 5};
@@ -408,7 +411,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstArrayMutationAllowed)
+    TEST_P(ConstTest, ConstArrayMutationAllowed)
     {
         constexpr std::string_view code = R"(
             const arr = {1, 2, 3};
@@ -422,7 +425,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstArrayReassignmentFails)
+    TEST_P(ConstTest, ConstArrayReassignmentFails)
     {
         constexpr std::string_view code = R"(
             const arr = {1, 2, 3};
@@ -432,7 +435,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstNestedTables)
+    TEST_P(ConstTest, ConstNestedTables)
     {
         constexpr std::string_view code = R"(
             const data = {
@@ -448,7 +451,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstNestedTableMutationAllowed)
+    TEST_P(ConstTest, ConstNestedTableMutationAllowed)
     {
         constexpr std::string_view code = R"(
             const data = {
@@ -465,7 +468,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstInForLoop)
+    TEST_P(ConstTest, ConstInForLoop)
     {
         constexpr std::string_view code = R"(
             let result = 0;
@@ -485,7 +488,7 @@ namespace behl
         }
     }
 
-    TEST_F(ConstTest, ConstGlobalVariable)
+    TEST_P(ConstTest, ConstGlobalVariable)
     {
         constexpr std::string_view code = R"(
             const GLOBAL_CONST = 1000;
@@ -502,7 +505,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstGlobalReassignmentFails)
+    TEST_P(ConstTest, ConstGlobalReassignmentFails)
     {
         constexpr std::string_view code = R"(
             const GLOBAL_CONST = 1000;
@@ -512,7 +515,7 @@ namespace behl
         EXPECT_ANY_THROW(load_string(S, code));
     }
 
-    TEST_F(ConstTest, ConstWithComplexExpression)
+    TEST_P(ConstTest, ConstWithComplexExpression)
     {
         constexpr std::string_view code = R"(
             let a = 10;
@@ -526,7 +529,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstInRecursiveFunction)
+    TEST_P(ConstTest, ConstInRecursiveFunction)
     {
         constexpr std::string_view code = R"(
             function factorial(n) {
@@ -544,7 +547,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, MultipleConstInSameScope)
+    TEST_P(ConstTest, MultipleConstInSameScope)
     {
         constexpr std::string_view code = R"(
             const a = 1;
@@ -559,7 +562,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstAfterLetInSameScope)
+    TEST_P(ConstTest, ConstAfterLetInSameScope)
     {
         constexpr std::string_view code = R"(
             let x = 10;
@@ -573,7 +576,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, LetAfterConstInSameScope)
+    TEST_P(ConstTest, LetAfterConstInSameScope)
     {
         constexpr std::string_view code = R"(
             const x = 10;
@@ -587,7 +590,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstTableWithMethods)
+    TEST_P(ConstTest, ConstTableWithMethods)
     {
         constexpr std::string_view code = R"(
             const obj = {
@@ -604,7 +607,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstWithTernaryLikeExpression)
+    TEST_P(ConstTest, ConstWithTernaryLikeExpression)
     {
         constexpr std::string_view code = R"(
             let condition = true;
@@ -617,7 +620,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(ConstTest, ConstMixedWithGlobals)
+    TEST_P(ConstTest, ConstMixedWithGlobals)
     {
         constexpr std::string_view code = R"(
             global_var = 50;
@@ -630,5 +633,8 @@ namespace behl
         ASSERT_NO_THROW(call(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
+
+    INSTANTIATE_TEST_SUITE_P(Mode, ConstTest, ::testing::Bool(),
+        [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
 
 } // namespace behl

@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class LogicalOperatorTest : public ::testing::Test
+class LogicalOperatorTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(LogicalOperatorTest, AndTrueTrue)
+TEST_P(LogicalOperatorTest, AndTrueTrue)
 {
     constexpr std::string_view code = R"(
         return true && true
@@ -28,7 +31,7 @@ TEST_F(LogicalOperatorTest, AndTrueTrue)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndTrueFalse)
+TEST_P(LogicalOperatorTest, AndTrueFalse)
 {
     constexpr std::string_view code = R"(
         return true && false
@@ -39,7 +42,7 @@ TEST_F(LogicalOperatorTest, AndTrueFalse)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndFalseTrue)
+TEST_P(LogicalOperatorTest, AndFalseTrue)
 {
     constexpr std::string_view code = R"(
         return false && true
@@ -50,7 +53,7 @@ TEST_F(LogicalOperatorTest, AndFalseTrue)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndFalseFalse)
+TEST_P(LogicalOperatorTest, AndFalseFalse)
 {
     constexpr std::string_view code = R"(
         return false && false
@@ -61,7 +64,7 @@ TEST_F(LogicalOperatorTest, AndFalseFalse)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrTrueTrue)
+TEST_P(LogicalOperatorTest, OrTrueTrue)
 {
     constexpr std::string_view code = R"(
         return true || true
@@ -72,7 +75,7 @@ TEST_F(LogicalOperatorTest, OrTrueTrue)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrTrueFalse)
+TEST_P(LogicalOperatorTest, OrTrueFalse)
 {
     constexpr std::string_view code = R"(
         return true || false
@@ -83,7 +86,7 @@ TEST_F(LogicalOperatorTest, OrTrueFalse)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrFalseTrue)
+TEST_P(LogicalOperatorTest, OrFalseTrue)
 {
     constexpr std::string_view code = R"(
         return false || true
@@ -94,7 +97,7 @@ TEST_F(LogicalOperatorTest, OrFalseTrue)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrFalseFalse)
+TEST_P(LogicalOperatorTest, OrFalseFalse)
 {
     constexpr std::string_view code = R"(
         return false || false
@@ -105,7 +108,7 @@ TEST_F(LogicalOperatorTest, OrFalseFalse)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndWithNil)
+TEST_P(LogicalOperatorTest, AndWithNil)
 {
     constexpr std::string_view code = R"(
         return true && nil
@@ -116,7 +119,7 @@ TEST_F(LogicalOperatorTest, AndWithNil)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrWithNil)
+TEST_P(LogicalOperatorTest, OrWithNil)
 {
     constexpr std::string_view code = R"(
         return nil || true
@@ -127,7 +130,7 @@ TEST_F(LogicalOperatorTest, OrWithNil)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndWithNumbers)
+TEST_P(LogicalOperatorTest, AndWithNumbers)
 {
     constexpr std::string_view code = R"(
         return 5 && 10
@@ -139,7 +142,7 @@ TEST_F(LogicalOperatorTest, AndWithNumbers)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrWithNumbers)
+TEST_P(LogicalOperatorTest, OrWithNumbers)
 {
     constexpr std::string_view code = R"(
         return 0 || 1
@@ -151,7 +154,7 @@ TEST_F(LogicalOperatorTest, OrWithNumbers)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndWithZero)
+TEST_P(LogicalOperatorTest, AndWithZero)
 {
     constexpr std::string_view code = R"(
         return 0 && false
@@ -162,7 +165,7 @@ TEST_F(LogicalOperatorTest, AndWithZero)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndShortCircuitLeft)
+TEST_P(LogicalOperatorTest, AndShortCircuitLeft)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -179,7 +182,7 @@ TEST_F(LogicalOperatorTest, AndShortCircuitLeft)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LogicalOperatorTest, AndNoShortCircuit)
+TEST_P(LogicalOperatorTest, AndNoShortCircuit)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -196,7 +199,7 @@ TEST_F(LogicalOperatorTest, AndNoShortCircuit)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, OrShortCircuitLeft)
+TEST_P(LogicalOperatorTest, OrShortCircuitLeft)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -213,7 +216,7 @@ TEST_F(LogicalOperatorTest, OrShortCircuitLeft)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LogicalOperatorTest, OrNoShortCircuit)
+TEST_P(LogicalOperatorTest, OrNoShortCircuit)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -230,7 +233,7 @@ TEST_F(LogicalOperatorTest, OrNoShortCircuit)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, NilShortCircuitAnd)
+TEST_P(LogicalOperatorTest, NilShortCircuitAnd)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -247,7 +250,7 @@ TEST_F(LogicalOperatorTest, NilShortCircuitAnd)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LogicalOperatorTest, ChainedAnd)
+TEST_P(LogicalOperatorTest, ChainedAnd)
 {
     constexpr std::string_view code = R"(
         return true && true && true
@@ -258,7 +261,7 @@ TEST_F(LogicalOperatorTest, ChainedAnd)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, ChainedAndWithFalse)
+TEST_P(LogicalOperatorTest, ChainedAndWithFalse)
 {
     constexpr std::string_view code = R"(
         return true && false && true
@@ -269,7 +272,7 @@ TEST_F(LogicalOperatorTest, ChainedAndWithFalse)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, ChainedOr)
+TEST_P(LogicalOperatorTest, ChainedOr)
 {
     constexpr std::string_view code = R"(
         return false || false || true
@@ -280,7 +283,7 @@ TEST_F(LogicalOperatorTest, ChainedOr)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, ChainedOrAllFalse)
+TEST_P(LogicalOperatorTest, ChainedOrAllFalse)
 {
     constexpr std::string_view code = R"(
         return false || false || false
@@ -291,7 +294,7 @@ TEST_F(LogicalOperatorTest, ChainedOrAllFalse)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, MixedAndOr)
+TEST_P(LogicalOperatorTest, MixedAndOr)
 {
     constexpr std::string_view code = R"(
         return true || false && false
@@ -303,7 +306,7 @@ TEST_F(LogicalOperatorTest, MixedAndOr)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, MixedOrAnd)
+TEST_P(LogicalOperatorTest, MixedOrAnd)
 {
     constexpr std::string_view code = R"(
         return false && true || true
@@ -315,7 +318,7 @@ TEST_F(LogicalOperatorTest, MixedOrAnd)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndInIfCondition)
+TEST_P(LogicalOperatorTest, AndInIfCondition)
 {
     constexpr std::string_view code = R"(
         let x = 5;
@@ -331,7 +334,7 @@ TEST_F(LogicalOperatorTest, AndInIfCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, OrInIfCondition)
+TEST_P(LogicalOperatorTest, OrInIfCondition)
 {
     constexpr std::string_view code = R"(
         let x = 5;
@@ -347,7 +350,7 @@ TEST_F(LogicalOperatorTest, OrInIfCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, ComplexCondition)
+TEST_P(LogicalOperatorTest, ComplexCondition)
 {
     constexpr std::string_view code = R"(
         let a = 10;
@@ -364,7 +367,7 @@ TEST_F(LogicalOperatorTest, ComplexCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, AndInWhileLoop)
+TEST_P(LogicalOperatorTest, AndInWhileLoop)
 {
     constexpr std::string_view code = R"(
         let i = 0;
@@ -382,7 +385,7 @@ TEST_F(LogicalOperatorTest, AndInWhileLoop)
     ASSERT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(LogicalOperatorTest, NotAndCombination)
+TEST_P(LogicalOperatorTest, NotAndCombination)
 {
     constexpr std::string_view code = R"(
         return !(true && false)
@@ -393,7 +396,7 @@ TEST_F(LogicalOperatorTest, NotAndCombination)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, NotOrCombination)
+TEST_P(LogicalOperatorTest, NotOrCombination)
 {
     constexpr std::string_view code = R"(
         return !(false || false)
@@ -404,7 +407,7 @@ TEST_F(LogicalOperatorTest, NotOrCombination)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, DeMorgansLaw1)
+TEST_P(LogicalOperatorTest, DeMorgansLaw1)
 {
     constexpr std::string_view code = R"(
         return !(true && false) == (!true || !false)
@@ -415,7 +418,7 @@ TEST_F(LogicalOperatorTest, DeMorgansLaw1)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, DeMorgansLaw2)
+TEST_P(LogicalOperatorTest, DeMorgansLaw2)
 {
     constexpr std::string_view code = R"(
         return !(true || false) == (!true && !false)
@@ -426,7 +429,7 @@ TEST_F(LogicalOperatorTest, DeMorgansLaw2)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AssignAndResult)
+TEST_P(LogicalOperatorTest, AssignAndResult)
 {
     constexpr std::string_view code = R"(
         let x = true && false;
@@ -438,7 +441,7 @@ TEST_F(LogicalOperatorTest, AssignAndResult)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AssignOrResult)
+TEST_P(LogicalOperatorTest, AssignOrResult)
 {
     constexpr std::string_view code = R"(
         let x = false || true;
@@ -450,7 +453,7 @@ TEST_F(LogicalOperatorTest, AssignOrResult)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndReturnsLastValue)
+TEST_P(LogicalOperatorTest, AndReturnsLastValue)
 {
     constexpr std::string_view code = R"(
         return 5 && 10
@@ -462,7 +465,7 @@ TEST_F(LogicalOperatorTest, AndReturnsLastValue)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(LogicalOperatorTest, AndReturnsFirstFalsy)
+TEST_P(LogicalOperatorTest, AndReturnsFirstFalsy)
 {
     constexpr std::string_view code = R"(
         return 5 && false
@@ -473,7 +476,7 @@ TEST_F(LogicalOperatorTest, AndReturnsFirstFalsy)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrReturnsFirstTruthy)
+TEST_P(LogicalOperatorTest, OrReturnsFirstTruthy)
 {
     constexpr std::string_view code = R"(
         return false || 5
@@ -484,7 +487,7 @@ TEST_F(LogicalOperatorTest, OrReturnsFirstTruthy)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(LogicalOperatorTest, OrReturnsLastValue)
+TEST_P(LogicalOperatorTest, OrReturnsLastValue)
 {
     constexpr std::string_view code = R"(
         return false || nil
@@ -494,3 +497,6 @@ TEST_F(LogicalOperatorTest, OrReturnsLastValue)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, LogicalOperatorTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

@@ -1,13 +1,16 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class ControflowTest : public ::testing::Test
+class ControflowTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
     void TearDown() override
     {
@@ -15,7 +18,7 @@ protected:
     }
 };
 
-TEST_F(ControflowTest, ExecuteIfStatement)
+TEST_P(ControflowTest, ExecuteIfStatement)
 {
     constexpr std::string_view code = R"(
         if (true) {
@@ -30,7 +33,7 @@ TEST_F(ControflowTest, ExecuteIfStatement)
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(ControflowTest, ExecuteCStyleForLoop)
+TEST_P(ControflowTest, ExecuteCStyleForLoop)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -45,7 +48,7 @@ TEST_F(ControflowTest, ExecuteCStyleForLoop)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(ControflowTest, CStyleForLoopWithTable)
+TEST_P(ControflowTest, CStyleForLoopWithTable)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30, 40}
@@ -61,7 +64,7 @@ TEST_F(ControflowTest, CStyleForLoopWithTable)
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
-TEST_F(ControflowTest, CStyleForLoopNested)
+TEST_P(ControflowTest, CStyleForLoopNested)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -77,3 +80,6 @@ TEST_F(ControflowTest, CStyleForLoopNested)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, ControflowTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

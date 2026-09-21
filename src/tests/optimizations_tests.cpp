@@ -8,7 +8,7 @@
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class OptimizationsTest : public ::testing::Test
+class OptimizationsTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -16,6 +16,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -34,7 +35,7 @@ protected:
     }
 };
 
-TEST_F(OptimizationsTest, NumericForLoopOptimized)
+TEST_P(OptimizationsTest, NumericForLoopOptimized)
 {
     constexpr std::string_view code = R"(
         for (let i = 0; i < 10; i++) {
@@ -66,7 +67,7 @@ TEST_F(OptimizationsTest, NumericForLoopOptimized)
     EXPECT_TRUE(has_forloop) << "Optimized for loop should have FORLOOP";
 }
 
-TEST_F(OptimizationsTest, ComplexConditionNotOptimized)
+TEST_P(OptimizationsTest, ComplexConditionNotOptimized)
 {
     constexpr std::string_view code = R"(
         function check(x) {
@@ -101,7 +102,7 @@ TEST_F(OptimizationsTest, ComplexConditionNotOptimized)
     EXPECT_FALSE(has_forloop) << "Complex condition for loop should not have FORLOOP";
 }
 
-TEST_F(OptimizationsTest, DecrementingForLoopOptimized)
+TEST_P(OptimizationsTest, DecrementingForLoopOptimized)
 {
     constexpr std::string_view code = R"(
         for (let i = 10; i > 0; i--) {
@@ -133,7 +134,7 @@ TEST_F(OptimizationsTest, DecrementingForLoopOptimized)
     EXPECT_TRUE(has_forloop);
 }
 
-TEST_F(OptimizationsTest, ForLoopWithStepOptimized)
+TEST_P(OptimizationsTest, ForLoopWithStepOptimized)
 {
     constexpr std::string_view code = R"(
         for (let i = 0; i < 100; i += 5) {
@@ -165,7 +166,7 @@ TEST_F(OptimizationsTest, ForLoopWithStepOptimized)
     EXPECT_TRUE(has_forloop);
 }
 
-TEST_F(OptimizationsTest, ConstLoopVariableNotOptimized)
+TEST_P(OptimizationsTest, ConstLoopVariableNotOptimized)
 {
     constexpr std::string_view code = R"(
         for (const i = 0; i < 10; i++) {
@@ -175,7 +176,7 @@ TEST_F(OptimizationsTest, ConstLoopVariableNotOptimized)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-TEST_F(OptimizationsTest, ForLoopWithoutLetNotOptimized)
+TEST_P(OptimizationsTest, ForLoopWithoutLetNotOptimized)
 {
     constexpr std::string_view code = R"(
         let i = 999
@@ -208,7 +209,7 @@ TEST_F(OptimizationsTest, ForLoopWithoutLetNotOptimized)
     EXPECT_FALSE(has_forloop) << "For loop without let should not have FORLOOP";
 }
 
-TEST_F(OptimizationsTest, InclusiveLoopOptimized)
+TEST_P(OptimizationsTest, InclusiveLoopOptimized)
 {
     constexpr std::string_view code = R"(
         for (let i = 0; i <= 10; i++) {
@@ -240,7 +241,7 @@ TEST_F(OptimizationsTest, InclusiveLoopOptimized)
     EXPECT_TRUE(has_forloop);
 }
 
-TEST_F(OptimizationsTest, MismatchedDirectionNotOptimized)
+TEST_P(OptimizationsTest, MismatchedDirectionNotOptimized)
 {
     constexpr std::string_view code = R"(
         for (let i = 0; i < 10; i--) {
@@ -271,3 +272,6 @@ TEST_F(OptimizationsTest, MismatchedDirectionNotOptimized)
     EXPECT_FALSE(has_forprep);
     EXPECT_FALSE(has_forloop);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, OptimizationsTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

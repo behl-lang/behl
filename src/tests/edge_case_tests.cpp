@@ -1,9 +1,9 @@
 #include "config_internal.hpp"
+#include "state.hpp"
 
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
-
 #include <string>
 
 namespace
@@ -34,15 +34,16 @@ namespace
         }
         return out;
     }
-}
+} // namespace
 
-class EdgeCaseTest : public ::testing::Test
+class EdgeCaseTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
     void TearDown() override
     {
@@ -50,7 +51,7 @@ protected:
     }
 };
 
-TEST_F(EdgeCaseTest, EmptyFunctionCall)
+TEST_P(EdgeCaseTest, EmptyFunctionCall)
 {
     constexpr std::string_view code = R"(
         function noArgs() {
@@ -63,7 +64,7 @@ TEST_F(EdgeCaseTest, EmptyFunctionCall)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(EdgeCaseTest, FunctionReturningFunction)
+TEST_P(EdgeCaseTest, FunctionReturningFunction)
 {
     constexpr std::string_view code = R"(
         function outer() {
@@ -80,7 +81,7 @@ TEST_F(EdgeCaseTest, FunctionReturningFunction)
     ASSERT_EQ(behl::to_integer(S, -1), 99);
 }
 
-TEST_F(EdgeCaseTest, ImmediatelyInvokedFunction)
+TEST_P(EdgeCaseTest, ImmediatelyInvokedFunction)
 {
     constexpr std::string_view code = R"(
         let result = (function(x) { return x * 2 })(21)
@@ -91,7 +92,7 @@ TEST_F(EdgeCaseTest, ImmediatelyInvokedFunction)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(EdgeCaseTest, ChainedPropertyAccess)
+TEST_P(EdgeCaseTest, ChainedPropertyAccess)
 {
     constexpr std::string_view code = R"(
         let t1 = {inner = {value = 123}}
@@ -102,7 +103,7 @@ TEST_F(EdgeCaseTest, ChainedPropertyAccess)
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(EdgeCaseTest, FunctionCallInTableConstructor)
+TEST_P(EdgeCaseTest, FunctionCallInTableConstructor)
 {
     constexpr std::string_view code = R"(
         function getValue() {
@@ -116,7 +117,7 @@ TEST_F(EdgeCaseTest, FunctionCallInTableConstructor)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(EdgeCaseTest, NestedTableAccess)
+TEST_P(EdgeCaseTest, NestedTableAccess)
 {
     constexpr std::string_view code = R"(
         let matrix = {{1, 2}, {3, 4}, {5, 6}}
@@ -127,7 +128,7 @@ TEST_F(EdgeCaseTest, NestedTableAccess)
     ASSERT_EQ(behl::to_integer(S, -1), 4);
 }
 
-TEST_F(EdgeCaseTest, MultipleAssignmentsInLoop)
+TEST_P(EdgeCaseTest, MultipleAssignmentsInLoop)
 {
     constexpr std::string_view code = R"(
         function getValue(n) {
@@ -146,7 +147,7 @@ TEST_F(EdgeCaseTest, MultipleAssignmentsInLoop)
     ASSERT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(EdgeCaseTest, FunctionAsTableValue)
+TEST_P(EdgeCaseTest, FunctionAsTableValue)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -160,7 +161,7 @@ TEST_F(EdgeCaseTest, FunctionAsTableValue)
     ASSERT_EQ(behl::to_integer(S, -1), 30);
 }
 
-TEST_F(EdgeCaseTest, ConditionalFunctionSelection)
+TEST_P(EdgeCaseTest, ConditionalFunctionSelection)
 {
     constexpr std::string_view code = R"(
         function double(n) { return n * 2 }
@@ -180,7 +181,7 @@ TEST_F(EdgeCaseTest, ConditionalFunctionSelection)
     ASSERT_EQ(behl::to_integer(S, -1), 14);
 }
 
-TEST_F(EdgeCaseTest, LoopWithComplexUpdate)
+TEST_P(EdgeCaseTest, LoopWithComplexUpdate)
 {
     constexpr std::string_view code = R"(
         function next(n) {
@@ -197,7 +198,7 @@ TEST_F(EdgeCaseTest, LoopWithComplexUpdate)
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
 
-TEST_F(EdgeCaseTest, ComplexBooleanExpression)
+TEST_P(EdgeCaseTest, ComplexBooleanExpression)
 {
     constexpr std::string_view code = R"(
         function check(a, b, c) {
@@ -218,7 +219,7 @@ TEST_F(EdgeCaseTest, ComplexBooleanExpression)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(EdgeCaseTest, MethodCallSyntax)
+TEST_P(EdgeCaseTest, MethodCallSyntax)
 {
     constexpr std::string_view code = R"(
         let obj = {
@@ -232,7 +233,7 @@ TEST_F(EdgeCaseTest, MethodCallSyntax)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(EdgeCaseTest, FloatConstantIndexBeyondNarrowField)
+TEST_P(EdgeCaseTest, FloatConstantIndexBeyondNarrowField)
 {
     double expected = 0.0;
     std::string code = "function f() {\n    let acc = 0.0\n";
@@ -249,7 +250,7 @@ TEST_F(EdgeCaseTest, FloatConstantIndexBeyondNarrowField)
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }
 
-TEST_F(EdgeCaseTest, IntegerConstantIndexBeyondNarrowField)
+TEST_P(EdgeCaseTest, IntegerConstantIndexBeyondNarrowField)
 {
     int64_t expected = 0;
     std::string code = "function f() {\n    let acc = 0\n";
@@ -266,7 +267,7 @@ TEST_F(EdgeCaseTest, IntegerConstantIndexBeyondNarrowField)
     EXPECT_EQ(behl::to_integer(S, -1), expected);
 }
 
-TEST_F(EdgeCaseTest, StringConstantIndexBeyondNarrowField)
+TEST_P(EdgeCaseTest, StringConstantIndexBeyondNarrowField)
 {
     std::string code = "function f() {\n    let acc = \"\"\n";
     std::string expected;
@@ -288,7 +289,7 @@ TEST_F(EdgeCaseTest, StringConstantIndexBeyondNarrowField)
     EXPECT_EQ(behl::to_string(S, -1), expected);
 }
 
-TEST_F(EdgeCaseTest, FloatCompareConstantIndexBeyondNarrowField)
+TEST_P(EdgeCaseTest, FloatCompareConstantIndexBeyondNarrowField)
 {
     double expected = 0.0;
     std::string code = "function f() {\n    let acc = 0.0\n";
@@ -301,7 +302,7 @@ TEST_F(EdgeCaseTest, FloatCompareConstantIndexBeyondNarrowField)
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(EdgeCaseTest, IntegerCompareConstantIndexBeyondNarrowField)
+TEST_P(EdgeCaseTest, IntegerCompareConstantIndexBeyondNarrowField)
 {
     int64_t expected = 0;
     std::string code = "function f() {\n    let acc = 0\n";
@@ -315,7 +316,7 @@ TEST_F(EdgeCaseTest, IntegerCompareConstantIndexBeyondNarrowField)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(EdgeCaseTest, CompareInValueContextConstantIndexBeyondNarrowField)
+TEST_P(EdgeCaseTest, CompareInValueContextConstantIndexBeyondNarrowField)
 {
     double expected = 0.0;
     std::string code = "function id(v) { return v }\nfunction f() {\n    let acc = 0.0\n";
@@ -328,7 +329,7 @@ TEST_F(EdgeCaseTest, CompareInValueContextConstantIndexBeyondNarrowField)
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(EdgeCaseTest, CompoundAssignConstantIndexBeyondNarrowField)
+TEST_P(EdgeCaseTest, CompoundAssignConstantIndexBeyondNarrowField)
 {
     double expected = 0.0;
     std::string code = "function f() {\n    let acc = 0.0\n";
@@ -341,7 +342,7 @@ TEST_F(EdgeCaseTest, CompoundAssignConstantIndexBeyondNarrowField)
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }
 
-TEST_F(EdgeCaseTest, MetamethodSurvivesConstantIndexFallback)
+TEST_P(EdgeCaseTest, MetamethodSurvivesConstantIndexFallback)
 {
     behl::load_stdlib(S);
     double expected = 0.0;
@@ -357,7 +358,7 @@ TEST_F(EdgeCaseTest, MetamethodSurvivesConstantIndexFallback)
     EXPECT_EQ(behl::to_integer(S, -1), 4242);
 }
 
-TEST_F(EdgeCaseTest, ConstantLimitExceededThrows)
+TEST_P(EdgeCaseTest, ConstantLimitExceededThrows)
 {
     std::string code;
     code.reserve(4u << 20);
@@ -371,7 +372,7 @@ TEST_F(EdgeCaseTest, ConstantLimitExceededThrows)
     ASSERT_THROW(behl::load_string(S, code), behl::SyntaxError);
 }
 
-TEST_F(EdgeCaseTest, ConstantLimitBoundaryCompiles)
+TEST_P(EdgeCaseTest, ConstantLimitBoundaryCompiles)
 {
     double expected = 0.0;
     std::string code;
@@ -388,3 +389,6 @@ TEST_F(EdgeCaseTest, ConstantLimitBoundaryCompiles)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, EdgeCaseTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

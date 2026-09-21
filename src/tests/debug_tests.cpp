@@ -1,3 +1,5 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/debug.hpp>
 #include <gtest/gtest.h>
@@ -95,7 +97,7 @@ struct DebugTestHarness
 
 DebugTestHarness* DebugTestHarness::current_instance = nullptr;
 
-class DebugTest : public ::testing::Test
+class DebugTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S = nullptr;
@@ -104,6 +106,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         load_stdlib(S);
         harness.setup(S);
     }
@@ -119,7 +122,7 @@ protected:
     }
 };
 
-TEST_F(DebugTest, BasicBreakpoint)
+TEST_P(DebugTest, BasicBreakpoint)
 {
     harness.commands.push("continue");
 
@@ -139,7 +142,7 @@ TEST_F(DebugTest, BasicBreakpoint)
     EXPECT_EQ(harness.breakpoint_hits[0], 2);
 }
 
-TEST_F(DebugTest, MultipleBreakpoints)
+TEST_P(DebugTest, MultipleBreakpoints)
 {
     harness.commands.push("c");
     harness.commands.push("c");
@@ -166,7 +169,7 @@ TEST_F(DebugTest, MultipleBreakpoints)
     EXPECT_EQ(harness.breakpoint_hits[2], 6);
 }
 
-TEST_F(DebugTest, StepInto)
+TEST_P(DebugTest, StepInto)
 {
     harness.commands.push("s");
     harness.commands.push("s");
@@ -189,7 +192,7 @@ TEST_F(DebugTest, StepInto)
     EXPECT_EQ(harness.breakpoint_hits[0], 3);
 }
 
-TEST_F(DebugTest, StepOver)
+TEST_P(DebugTest, StepOver)
 {
     harness.commands.push("n");
     harness.commands.push("n");
@@ -212,7 +215,7 @@ TEST_F(DebugTest, StepOver)
     EXPECT_EQ(harness.breakpoint_hits[0], 6);
 }
 
-TEST_F(DebugTest, BreakpointInLoop)
+TEST_P(DebugTest, BreakpointInLoop)
 {
     harness.commands.push("c");
     harness.commands.push("c");
@@ -240,7 +243,7 @@ TEST_F(DebugTest, BreakpointInLoop)
     }
 }
 
-TEST_F(DebugTest, RemoveBreakpoint)
+TEST_P(DebugTest, RemoveBreakpoint)
 {
     harness.commands.push("c");
 
@@ -259,7 +262,7 @@ TEST_F(DebugTest, RemoveBreakpoint)
     EXPECT_EQ(harness.breakpoint_hits.size(), 0);
 }
 
-TEST_F(DebugTest, PauseExecution)
+TEST_P(DebugTest, PauseExecution)
 {
     harness.commands.push("c");
 
@@ -276,7 +279,7 @@ TEST_F(DebugTest, PauseExecution)
     ASSERT_GE(harness.breakpoint_hits.size(), 1);
 }
 
-TEST_F(DebugTest, ClearAllBreakpoints)
+TEST_P(DebugTest, ClearAllBreakpoints)
 {
     debug_set_breakpoint(S, nullptr, 3);
     debug_set_breakpoint(S, nullptr, 4);
@@ -346,3 +349,6 @@ TEST(DebugStandaloneTest, IsEnabled)
 
     close(S);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, DebugTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

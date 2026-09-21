@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class IntegerWrappingTest : public ::testing::Test
+class IntegerWrappingTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -18,7 +21,7 @@ protected:
     }
 };
 
-TEST_F(IntegerWrappingTest, AdditionOverflow)
+TEST_P(IntegerWrappingTest, AdditionOverflow)
 {
     constexpr std::string_view code = R"(
         let max = 9223372036854775807  // INT64_MAX
@@ -33,7 +36,7 @@ TEST_F(IntegerWrappingTest, AdditionOverflow)
     ASSERT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
 }
 
-TEST_F(IntegerWrappingTest, SubtractionUnderflow)
+TEST_P(IntegerWrappingTest, SubtractionUnderflow)
 {
     constexpr std::string_view code = R"(
         let min = -9223372036854775807 - 1  // Compute INT64_MIN at runtime
@@ -48,7 +51,7 @@ TEST_F(IntegerWrappingTest, SubtractionUnderflow)
     ASSERT_EQ(behl::to_integer(S, -1), 9223372036854775807LL);
 }
 
-TEST_F(IntegerWrappingTest, MultiplicationOverflow)
+TEST_P(IntegerWrappingTest, MultiplicationOverflow)
 {
     constexpr std::string_view code = R"(
         let a = 9223372036854775807  // INT64_MAX
@@ -63,7 +66,7 @@ TEST_F(IntegerWrappingTest, MultiplicationOverflow)
     ASSERT_EQ(behl::to_integer(S, -1), -2);
 }
 
-TEST_F(IntegerWrappingTest, ConstantFoldedOverflowMatchesRuntime)
+TEST_P(IntegerWrappingTest, ConstantFoldedOverflowMatchesRuntime)
 {
     constexpr std::string_view code = R"(
         function add(a, b) { return a + b }
@@ -98,7 +101,7 @@ TEST_F(IntegerWrappingTest, ConstantFoldedOverflowMatchesRuntime)
     ASSERT_EQ(behl::to_integer(S, -1), behl::to_integer(S, -2));
 }
 
-TEST_F(IntegerWrappingTest, ModuloOfMinByMinusOne)
+TEST_P(IntegerWrappingTest, ModuloOfMinByMinusOne)
 {
     constexpr std::string_view code = R"(
         function imod(a, b) { return a % b }
@@ -119,7 +122,7 @@ TEST_F(IntegerWrappingTest, ModuloOfMinByMinusOne)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(IntegerWrappingTest, PowerOverflow)
+TEST_P(IntegerWrappingTest, PowerOverflow)
 {
     constexpr std::string_view code = R"(
         let a = 2 ** 64
@@ -137,7 +140,7 @@ TEST_F(IntegerWrappingTest, PowerOverflow)
     ASSERT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
 }
 
-TEST_F(IntegerWrappingTest, NegationOfMin)
+TEST_P(IntegerWrappingTest, NegationOfMin)
 {
     constexpr std::string_view code = R"(
         let min = -9223372036854775807 - 1  // Compute INT64_MIN at runtime
@@ -152,7 +155,7 @@ TEST_F(IntegerWrappingTest, NegationOfMin)
     ASSERT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
 }
 
-TEST_F(IntegerWrappingTest, ComplexWrapping)
+TEST_P(IntegerWrappingTest, ComplexWrapping)
 {
     constexpr std::string_view code = R"(
         let a = 9223372036854775807  // INT64_MAX
@@ -169,7 +172,7 @@ TEST_F(IntegerWrappingTest, ComplexWrapping)
     ASSERT_EQ(behl::to_integer(S, -1), expected);
 }
 
-TEST_F(IntegerWrappingTest, IncrementDecrement)
+TEST_P(IntegerWrappingTest, IncrementDecrement)
 {
     constexpr std::string_view code = R"(
         let max = 9223372036854775807
@@ -187,3 +190,6 @@ TEST_F(IntegerWrappingTest, IncrementDecrement)
     ASSERT_EQ(behl::to_integer(S, -2), static_cast<int64_t>(0x8000000000000000ULL));
     ASSERT_EQ(behl::to_integer(S, -1), 9223372036854775807LL);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, IntegerWrappingTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

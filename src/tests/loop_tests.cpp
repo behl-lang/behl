@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class LoopTest : public ::testing::Test
+class LoopTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
     }
 
@@ -18,7 +21,7 @@ protected:
     }
 };
 
-TEST_F(LoopTest, WhileLoopBasic)
+TEST_P(LoopTest, WhileLoopBasic)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -34,7 +37,7 @@ TEST_F(LoopTest, WhileLoopBasic)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(LoopTest, ForLoopBasic)
+TEST_P(LoopTest, ForLoopBasic)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -48,7 +51,7 @@ TEST_F(LoopTest, ForLoopBasic)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(LoopTest, ForLoopTwoCallsInBody_Discarded)
+TEST_P(LoopTest, ForLoopTwoCallsInBody_Discarded)
 {
     constexpr std::string_view code = R"(
         function f(a) { return a }
@@ -65,7 +68,7 @@ TEST_F(LoopTest, ForLoopTwoCallsInBody_Discarded)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(LoopTest, ForLoopTwoCallsInBody_Assigned)
+TEST_P(LoopTest, ForLoopTwoCallsInBody_Assigned)
 {
     constexpr std::string_view code = R"(
         function f(a, b) { return a + b }
@@ -86,7 +89,7 @@ TEST_F(LoopTest, ForLoopTwoCallsInBody_Assigned)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(LoopTest, ForLoopManyCallsInBody_IndexSurvives)
+TEST_P(LoopTest, ForLoopManyCallsInBody_IndexSurvives)
 {
     constexpr std::string_view code = R"(
         function f(a) { return a }
@@ -104,7 +107,7 @@ TEST_F(LoopTest, ForLoopManyCallsInBody_IndexSurvives)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(LoopTest, NestedForLoopsWithCallsInBody)
+TEST_P(LoopTest, NestedForLoopsWithCallsInBody)
 {
     constexpr std::string_view code = R"(
         function f(a) { return a }
@@ -123,7 +126,7 @@ TEST_F(LoopTest, NestedForLoopsWithCallsInBody)
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
 
-TEST_F(LoopTest, ForEachLoopTwoCallsInBody)
+TEST_P(LoopTest, ForEachLoopTwoCallsInBody)
 {
     constexpr std::string_view code = R"(
         function f(a) { return a }
@@ -141,7 +144,7 @@ TEST_F(LoopTest, ForEachLoopTwoCallsInBody)
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(LoopTest, NestedLoops)
+TEST_P(LoopTest, NestedLoops)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -157,7 +160,7 @@ TEST_F(LoopTest, NestedLoops)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(LoopTest, ForLoopWithContinue)
+TEST_P(LoopTest, ForLoopWithContinue)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -177,7 +180,7 @@ TEST_F(LoopTest, ForLoopWithContinue)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(LoopTest, ForLoopWithBreak)
+TEST_P(LoopTest, ForLoopWithBreak)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -197,7 +200,7 @@ TEST_F(LoopTest, ForLoopWithBreak)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(LoopTest, ForLoopWithBreakAndContinue)
+TEST_P(LoopTest, ForLoopWithBreakAndContinue)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -220,7 +223,7 @@ TEST_F(LoopTest, ForLoopWithBreakAndContinue)
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
 
-TEST_F(LoopTest, ForEachLoopWithLet)
+TEST_P(LoopTest, ForEachLoopWithLet)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30}
@@ -235,7 +238,7 @@ TEST_F(LoopTest, ForEachLoopWithLet)
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(LoopTest, ForEachLoopWithExistingVariable)
+TEST_P(LoopTest, ForEachLoopWithExistingVariable)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30}
@@ -251,7 +254,7 @@ TEST_F(LoopTest, ForEachLoopWithExistingVariable)
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(LoopTest, ForEachLoopTwoVariablesWithLet)
+TEST_P(LoopTest, ForEachLoopTwoVariablesWithLet)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30}
@@ -268,7 +271,7 @@ TEST_F(LoopTest, ForEachLoopTwoVariablesWithLet)
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
-TEST_F(LoopTest, ForEachLoopTwoVariablesExisting)
+TEST_P(LoopTest, ForEachLoopTwoVariablesExisting)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30}
@@ -287,7 +290,7 @@ TEST_F(LoopTest, ForEachLoopTwoVariablesExisting)
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
-TEST_F(LoopTest, ForEachLoopZeroIndexed)
+TEST_P(LoopTest, ForEachLoopZeroIndexed)
 {
     constexpr std::string_view code = R"(
         let tab = {100, 200, 300}
@@ -305,7 +308,7 @@ TEST_F(LoopTest, ForEachLoopZeroIndexed)
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
-TEST_F(LoopTest, ForInLoopWithExplicitPairs)
+TEST_P(LoopTest, ForInLoopWithExplicitPairs)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30}
@@ -320,7 +323,7 @@ TEST_F(LoopTest, ForInLoopWithExplicitPairs)
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(LoopTest, ForInLoopWithTwoVariablesPairs)
+TEST_P(LoopTest, ForInLoopWithTwoVariablesPairs)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30}
@@ -337,7 +340,7 @@ TEST_F(LoopTest, ForInLoopWithTwoVariablesPairs)
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
-TEST_F(LoopTest, CustomIteratorReverseIteration)
+TEST_P(LoopTest, CustomIteratorReverseIteration)
 {
     constexpr std::string_view code = R"(
         function reverse_pairs(t) {
@@ -371,7 +374,7 @@ TEST_F(LoopTest, CustomIteratorReverseIteration)
     ASSERT_EQ(behl::to_integer(S, -1), 30020010);
 }
 
-TEST_F(LoopTest, ForEachLoopEmptyTable)
+TEST_P(LoopTest, ForEachLoopEmptyTable)
 {
     constexpr std::string_view code = R"(
         let tab = {}
@@ -386,7 +389,7 @@ TEST_F(LoopTest, ForEachLoopEmptyTable)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LoopTest, NestedForEachLoops)
+TEST_P(LoopTest, NestedForEachLoops)
 {
     constexpr std::string_view code = R"(
         let tab1 = {1, 2}
@@ -404,7 +407,7 @@ TEST_F(LoopTest, NestedForEachLoops)
     ASSERT_EQ(behl::to_integer(S, -1), 90);
 }
 
-TEST_F(LoopTest, ForInLoopWithPreDeclaredVariables)
+TEST_P(LoopTest, ForInLoopWithPreDeclaredVariables)
 {
     constexpr std::string_view code = R"(
         let tab = {10, 20, 30}
@@ -423,7 +426,7 @@ TEST_F(LoopTest, ForInLoopWithPreDeclaredVariables)
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
-TEST_F(LoopTest, ForEachMixedArrayAndHashParts)
+TEST_P(LoopTest, ForEachMixedArrayAndHashParts)
 {
     constexpr std::string_view code = R"(
         let t = {10, 20, 30}
@@ -451,7 +454,7 @@ TEST_F(LoopTest, ForEachMixedArrayAndHashParts)
     ASSERT_EQ(behl::to_integer(S, -1), 6303);
 }
 
-TEST_F(LoopTest, OptimizedForLoopIncrement)
+TEST_P(LoopTest, OptimizedForLoopIncrement)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -465,7 +468,7 @@ TEST_F(LoopTest, OptimizedForLoopIncrement)
     ASSERT_EQ(behl::to_integer(S, -1), 45);
 }
 
-TEST_F(LoopTest, OptimizedForLoopDecrement)
+TEST_P(LoopTest, OptimizedForLoopDecrement)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -479,7 +482,7 @@ TEST_F(LoopTest, OptimizedForLoopDecrement)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(LoopTest, OptimizedForLoopWithStep)
+TEST_P(LoopTest, OptimizedForLoopWithStep)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -493,7 +496,7 @@ TEST_F(LoopTest, OptimizedForLoopWithStep)
     ASSERT_EQ(behl::to_integer(S, -1), 63);
 }
 
-TEST_F(LoopTest, OptimizedForLoopInclusiveLessOrEqual)
+TEST_P(LoopTest, OptimizedForLoopInclusiveLessOrEqual)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -507,7 +510,7 @@ TEST_F(LoopTest, OptimizedForLoopInclusiveLessOrEqual)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(LoopTest, OptimizedForLoopInclusiveGreaterOrEqual)
+TEST_P(LoopTest, OptimizedForLoopInclusiveGreaterOrEqual)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -521,7 +524,7 @@ TEST_F(LoopTest, OptimizedForLoopInclusiveGreaterOrEqual)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(LoopTest, ForLoopWithComplexCondition)
+TEST_P(LoopTest, ForLoopWithComplexCondition)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -536,7 +539,7 @@ TEST_F(LoopTest, ForLoopWithComplexCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 105);
 }
 
-TEST_F(LoopTest, ForLoopWithFunctionCallInCondition)
+TEST_P(LoopTest, ForLoopWithFunctionCallInCondition)
 {
     constexpr std::string_view code = R"(
         function getLimit() {
@@ -553,7 +556,7 @@ TEST_F(LoopTest, ForLoopWithFunctionCallInCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(LoopTest, ForLoopWithTableAccessInCondition)
+TEST_P(LoopTest, ForLoopWithTableAccessInCondition)
 {
     constexpr std::string_view code = R"(
         let config = { limit = 8 }
@@ -568,7 +571,7 @@ TEST_F(LoopTest, ForLoopWithTableAccessInCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 28); // 0+1+...+7
 }
 
-TEST_F(LoopTest, ForLoopWithArithmeticInCondition)
+TEST_P(LoopTest, ForLoopWithArithmeticInCondition)
 {
     constexpr std::string_view code = R"(
         let base = 5
@@ -583,7 +586,7 @@ TEST_F(LoopTest, ForLoopWithArithmeticInCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 45);
 }
 
-TEST_F(LoopTest, ForLoopWithLogicalOrCondition)
+TEST_P(LoopTest, ForLoopWithLogicalOrCondition)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -603,7 +606,7 @@ TEST_F(LoopTest, ForLoopWithLogicalOrCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(LoopTest, ForLoopWithBooleanCondition)
+TEST_P(LoopTest, ForLoopWithBooleanCondition)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -623,7 +626,7 @@ TEST_F(LoopTest, ForLoopWithBooleanCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(LoopTest, ForLoopWithComplexUpdate)
+TEST_P(LoopTest, ForLoopWithComplexUpdate)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -640,7 +643,7 @@ TEST_F(LoopTest, ForLoopWithComplexUpdate)
     ASSERT_EQ(behl::to_integer(S, -1), 26);
 }
 
-TEST_F(LoopTest, ForLoopWithMultipleUpdates)
+TEST_P(LoopTest, ForLoopWithMultipleUpdates)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -656,7 +659,7 @@ TEST_F(LoopTest, ForLoopWithMultipleUpdates)
     ASSERT_EQ(behl::to_integer(S, -1), 50);
 }
 
-TEST_F(LoopTest, ForLoopVariableBounds)
+TEST_P(LoopTest, ForLoopVariableBounds)
 {
     constexpr std::string_view code = R"(
         let start = 5
@@ -672,7 +675,7 @@ TEST_F(LoopTest, ForLoopVariableBounds)
     ASSERT_EQ(behl::to_integer(S, -1), 95);
 }
 
-TEST_F(LoopTest, ForLoopWithFloatBounds)
+TEST_P(LoopTest, ForLoopWithFloatBounds)
 {
     constexpr std::string_view code = R"(
         let sum = 0.0
@@ -686,7 +689,7 @@ TEST_F(LoopTest, ForLoopWithFloatBounds)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 12.5);
 }
 
-TEST_F(LoopTest, ForLoopWithExistingVariable)
+TEST_P(LoopTest, ForLoopWithExistingVariable)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -702,7 +705,7 @@ TEST_F(LoopTest, ForLoopWithExistingVariable)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(LoopTest, ForLoopExistingVariableComplex)
+TEST_P(LoopTest, ForLoopExistingVariableComplex)
 {
     constexpr std::string_view code = R"(
         let results = {}
@@ -720,7 +723,7 @@ TEST_F(LoopTest, ForLoopExistingVariableComplex)
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
 
-TEST_F(LoopTest, ForLoopExistingVariableNestedScope)
+TEST_P(LoopTest, ForLoopExistingVariableNestedScope)
 {
     constexpr std::string_view code = R"(
         let outer = 0
@@ -738,7 +741,7 @@ TEST_F(LoopTest, ForLoopExistingVariableNestedScope)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(LoopTest, ForLoopMultipleVariableDeclarations)
+TEST_P(LoopTest, ForLoopMultipleVariableDeclarations)
 {
     constexpr std::string_view code = R"(
         let result = 0
@@ -752,7 +755,7 @@ TEST_F(LoopTest, ForLoopMultipleVariableDeclarations)
     ASSERT_EQ(behl::to_integer(S, -1), 50);
 }
 
-TEST_F(LoopTest, ForLoopMultipleVariableDeclarationsComplex)
+TEST_P(LoopTest, ForLoopMultipleVariableDeclarationsComplex)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -766,7 +769,7 @@ TEST_F(LoopTest, ForLoopMultipleVariableDeclarationsComplex)
     ASSERT_EQ(behl::to_integer(S, -1), 1607);
 }
 
-TEST_F(LoopTest, ForLoopZeroIterationsAscending)
+TEST_P(LoopTest, ForLoopZeroIterationsAscending)
 {
     constexpr std::string_view code = R"(
         let count = 0
@@ -780,7 +783,7 @@ TEST_F(LoopTest, ForLoopZeroIterationsAscending)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LoopTest, ForLoopZeroIterationsDescending)
+TEST_P(LoopTest, ForLoopZeroIterationsDescending)
 {
     constexpr std::string_view code = R"(
         let count = 0
@@ -794,7 +797,7 @@ TEST_F(LoopTest, ForLoopZeroIterationsDescending)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LoopTest, ForLoopStepOvershootsLimit)
+TEST_P(LoopTest, ForLoopStepOvershootsLimit)
 {
     constexpr std::string_view code = R"(
         let count = 0
@@ -808,7 +811,7 @@ TEST_F(LoopTest, ForLoopStepOvershootsLimit)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LoopTest, ForLoopDescendingNonUnitStep)
+TEST_P(LoopTest, ForLoopDescendingNonUnitStep)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -823,7 +826,7 @@ TEST_F(LoopTest, ForLoopDescendingNonUnitStep)
     ASSERT_EQ(behl::to_integer(S, -1), 22);
 }
 
-TEST_F(LoopTest, ForLoopBodyWritesLoopVariable)
+TEST_P(LoopTest, ForLoopBodyWritesLoopVariable)
 {
     // Writing the loop variable in the body keeps C semantics: the loop must
     // not be rewritten into the counted numeric form
@@ -841,7 +844,7 @@ TEST_F(LoopTest, ForLoopBodyWritesLoopVariable)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(LoopTest, ForLoopBodyShadowsLoopVariable)
+TEST_P(LoopTest, ForLoopBodyShadowsLoopVariable)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -856,7 +859,7 @@ TEST_F(LoopTest, ForLoopBodyShadowsLoopVariable)
     ASSERT_EQ(behl::to_integer(S, -1), 300);
 }
 
-TEST_F(LoopTest, ForLoopClosureWritesLoopVariable)
+TEST_P(LoopTest, ForLoopClosureWritesLoopVariable)
 {
     // A closure inside the body writing the loop variable must also keep the
     // loop on the generic C-semantics path
@@ -877,7 +880,7 @@ TEST_F(LoopTest, ForLoopClosureWritesLoopVariable)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(LoopTest, ForLoopNearIntegerMaxInclusive)
+TEST_P(LoopTest, ForLoopNearIntegerMaxInclusive)
 {
     // The index reaching the maximum integer must terminate the loop instead
     // of wrapping around and looping forever
@@ -893,7 +896,7 @@ TEST_F(LoopTest, ForLoopNearIntegerMaxInclusive)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(LoopTest, ForLoopNearIntegerMaxOvershootStep)
+TEST_P(LoopTest, ForLoopNearIntegerMaxOvershootStep)
 {
     // The final step overshooting the maximum integer must terminate the loop
     constexpr std::string_view code = R"(
@@ -909,7 +912,7 @@ TEST_F(LoopTest, ForLoopNearIntegerMaxOvershootStep)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(LoopTest, ForLoopIntBoundsFloatStep)
+TEST_P(LoopTest, ForLoopIntBoundsFloatStep)
 {
     constexpr std::string_view code = R"(
         let sum = 0.0
@@ -922,3 +925,6 @@ TEST_F(LoopTest, ForLoopIntBoundsFloatStep)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 10.0);
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    Mode, LoopTest, ::testing::Bool(), [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class ScopingTest : public ::testing::Test
+class ScopingTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(ScopingTest, LocalShadowingInConditionals)
+TEST_P(ScopingTest, LocalShadowingInConditionals)
 {
     constexpr std::string_view code = R"(
         let i = 10
@@ -40,7 +43,7 @@ TEST_F(ScopingTest, LocalShadowingInConditionals)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(ScopingTest, LocalShadowingInBranches)
+TEST_P(ScopingTest, LocalShadowingInBranches)
 {
     constexpr std::string_view code = R"(
         let i = 10
@@ -60,7 +63,7 @@ TEST_F(ScopingTest, LocalShadowingInBranches)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(ScopingTest, LocalInNestedBlocks)
+TEST_P(ScopingTest, LocalInNestedBlocks)
 {
     constexpr std::string_view code = R"(
         function f(a) {
@@ -82,3 +85,6 @@ TEST_F(ScopingTest, LocalInNestedBlocks)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, ScopingTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

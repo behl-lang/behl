@@ -1,15 +1,18 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <cmath>
 #include <gtest/gtest.h>
 
-class NumericTest : public ::testing::Test
+class NumericTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
 
         ASSERT_NE(S, nullptr);
@@ -21,7 +24,7 @@ protected:
     }
 };
 
-TEST_F(NumericTest, Arithmetic_AddSubMul)
+TEST_P(NumericTest, Arithmetic_AddSubMul)
 {
     constexpr std::string_view code = R"(
         let a = 10 + 20 - 5
@@ -37,7 +40,7 @@ TEST_F(NumericTest, Arithmetic_AddSubMul)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(NumericTest, Arithmetic_DivMod)
+TEST_P(NumericTest, Arithmetic_DivMod)
 {
     constexpr std::string_view code = R"(
         let a = 7 / 2
@@ -51,7 +54,7 @@ TEST_F(NumericTest, Arithmetic_DivMod)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(NumericTest, Bitwise_AndOrXor)
+TEST_P(NumericTest, Bitwise_AndOrXor)
 {
     constexpr std::string_view code = R"(
         let a = 5
@@ -70,7 +73,7 @@ TEST_F(NumericTest, Bitwise_AndOrXor)
     ASSERT_EQ(behl::to_integer(S, -1), 11);
 }
 
-TEST_F(NumericTest, Bitwise_ShiftsAndNot)
+TEST_P(NumericTest, Bitwise_ShiftsAndNot)
 {
     constexpr std::string_view code = R"(
         let a = 1
@@ -88,7 +91,7 @@ TEST_F(NumericTest, Bitwise_ShiftsAndNot)
     ASSERT_EQ(behl::to_integer(S, -1), -4);
 }
 
-TEST_F(NumericTest, MixedFloatIntegerArithmetic)
+TEST_P(NumericTest, MixedFloatIntegerArithmetic)
 {
     constexpr std::string_view code = R"(
         let a = 1 + 2.5
@@ -106,7 +109,7 @@ TEST_F(NumericTest, MixedFloatIntegerArithmetic)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 4.5);
 }
 
-TEST_F(NumericTest, FloatArithmetic)
+TEST_P(NumericTest, FloatArithmetic)
 {
     constexpr std::string_view code = R"(
         let a = 3.14 + 2.86
@@ -126,7 +129,7 @@ TEST_F(NumericTest, FloatArithmetic)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 1.5);
 }
 
-TEST_F(NumericTest, UnaryMinus)
+TEST_P(NumericTest, UnaryMinus)
 {
     constexpr std::string_view code = R"(
         let a = -5
@@ -144,7 +147,7 @@ TEST_F(NumericTest, UnaryMinus)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 2.5);
 }
 
-TEST_F(NumericTest, NumericComparisons)
+TEST_P(NumericTest, NumericComparisons)
 {
     constexpr std::string_view code = R"(
         let a = 1 < 2.0
@@ -166,7 +169,7 @@ TEST_F(NumericTest, NumericComparisons)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(NumericTest, TypeOfNumbers)
+TEST_P(NumericTest, TypeOfNumbers)
 {
     constexpr std::string_view code = R"(
         let a = typeof(5)
@@ -182,7 +185,7 @@ TEST_F(NumericTest, TypeOfNumbers)
     ASSERT_EQ(behl::to_string(S, -1), "number");
 }
 
-TEST_F(NumericTest, ImmediateOpcodeBoundaries_SmallIntegers)
+TEST_P(NumericTest, ImmediateOpcodeBoundaries_SmallIntegers)
 {
     constexpr std::string_view code = R"(
         let a = 65535          // Max positive for immediate
@@ -206,7 +209,7 @@ TEST_F(NumericTest, ImmediateOpcodeBoundaries_SmallIntegers)
     ASSERT_EQ(behl::to_integer(S, -1), -65536);
 }
 
-TEST_F(NumericTest, ImmediateOpcodeBoundaries_LargeIntegers)
+TEST_P(NumericTest, ImmediateOpcodeBoundaries_LargeIntegers)
 {
     constexpr std::string_view code = R"(
         let a = 65536          // Just above max immediate
@@ -228,7 +231,7 @@ TEST_F(NumericTest, ImmediateOpcodeBoundaries_LargeIntegers)
     ASSERT_EQ(behl::to_integer(S, -1), 99950);
 }
 
-TEST_F(NumericTest, ImmediateOpcodeBoundaries_MixedOperations)
+TEST_P(NumericTest, ImmediateOpcodeBoundaries_MixedOperations)
 {
     constexpr std::string_view code = R"(
         let small = 100
@@ -252,7 +255,7 @@ TEST_F(NumericTest, ImmediateOpcodeBoundaries_MixedOperations)
     ASSERT_EQ(behl::to_integer(S, -1), -65537);
 }
 
-TEST_F(NumericTest, ImmediateOpcodeBoundaries_LoopCounters)
+TEST_P(NumericTest, ImmediateOpcodeBoundaries_LoopCounters)
 {
     constexpr std::string_view code = R"(
         let sum1 = 0
@@ -272,7 +275,7 @@ TEST_F(NumericTest, ImmediateOpcodeBoundaries_LoopCounters)
     ASSERT_EQ(behl::to_integer(S, -1), 9000);
 }
 
-TEST_F(NumericTest, DivisionByZero_ReturnsInfinity)
+TEST_P(NumericTest, DivisionByZero_ReturnsInfinity)
 {
     constexpr std::string_view code = R"(
         let a = 5 / 0
@@ -297,7 +300,7 @@ TEST_F(NumericTest, DivisionByZero_ReturnsInfinity)
     ASSERT_GT(behl::to_number(S, -1), 0); // positive infinity
 }
 
-TEST_F(NumericTest, ModuloByZero_ThrowsError)
+TEST_P(NumericTest, ModuloByZero_ThrowsError)
 {
     constexpr std::string_view code = R"(
         let a = 5 % 0
@@ -307,7 +310,7 @@ TEST_F(NumericTest, ModuloByZero_ThrowsError)
     EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
 }
 
-TEST_F(NumericTest, FloatModuloByZero_ReturnsNaN)
+TEST_P(NumericTest, FloatModuloByZero_ReturnsNaN)
 {
     constexpr std::string_view code = R"(
         let a = 5.0 % 0.0
@@ -320,7 +323,7 @@ TEST_F(NumericTest, FloatModuloByZero_ReturnsNaN)
     ASSERT_TRUE(std::isnan(behl::to_number(S, -1)));
 }
 
-TEST_F(NumericTest, ToNumberDirectCall)
+TEST_P(NumericTest, ToNumberDirectCall)
 {
     constexpr std::string_view code = R"(
         return tonumber("42")
@@ -332,7 +335,7 @@ TEST_F(NumericTest, ToNumberDirectCall)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(NumericTest, ToNumberAsArgument)
+TEST_P(NumericTest, ToNumberAsArgument)
 {
     constexpr std::string_view code = R"(
         function identity(x) {
@@ -347,7 +350,7 @@ TEST_F(NumericTest, ToNumberAsArgument)
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(NumericTest, ToNumberWithAssignment)
+TEST_P(NumericTest, ToNumberWithAssignment)
 {
     constexpr std::string_view code = R"(
         let n = tonumber("999");
@@ -360,7 +363,7 @@ TEST_F(NumericTest, ToNumberWithAssignment)
     ASSERT_EQ(behl::to_integer(S, -1), 999);
 }
 
-TEST_F(NumericTest, ToNumberFloat)
+TEST_P(NumericTest, ToNumberFloat)
 {
     constexpr std::string_view code = R"(
         return tonumber("3.14159");
@@ -372,7 +375,7 @@ TEST_F(NumericTest, ToNumberFloat)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 3.14159);
 }
 
-TEST_F(NumericTest, ToNumberInvalidString)
+TEST_P(NumericTest, ToNumberInvalidString)
 {
     constexpr std::string_view code = R"(
         return tonumber("not a number");
@@ -383,7 +386,7 @@ TEST_F(NumericTest, ToNumberInvalidString)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(NumericTest, ToNumberAlreadyNumber)
+TEST_P(NumericTest, ToNumberAlreadyNumber)
 {
     constexpr std::string_view code = R"(
         return tonumber(42), tonumber(3.14);
@@ -397,7 +400,7 @@ TEST_F(NumericTest, ToNumberAlreadyNumber)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 3.14);
 }
 
-TEST_F(NumericTest, ToNumberMultipleCalls)
+TEST_P(NumericTest, ToNumberMultipleCalls)
 {
     constexpr std::string_view code = R"(
         let result = tonumber("10") + tonumber("20") + tonumber("5");
@@ -410,7 +413,7 @@ TEST_F(NumericTest, ToNumberMultipleCalls)
     ASSERT_EQ(behl::to_integer(S, -1), 35);
 }
 
-TEST_F(NumericTest, ToNumberHexString)
+TEST_P(NumericTest, ToNumberHexString)
 {
     constexpr std::string_view code = R"(
         return tonumber("0xFF");
@@ -421,7 +424,7 @@ TEST_F(NumericTest, ToNumberHexString)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(NumericTest, ToNumberNegativeString)
+TEST_P(NumericTest, ToNumberNegativeString)
 {
     constexpr std::string_view code = R"(
         return tonumber("-42");
@@ -433,7 +436,7 @@ TEST_F(NumericTest, ToNumberNegativeString)
     ASSERT_EQ(behl::to_integer(S, -1), -42);
 }
 
-TEST_F(NumericTest, Arithmetic_LargeIntegerConstants)
+TEST_P(NumericTest, Arithmetic_LargeIntegerConstants)
 {
     constexpr std::string_view code = R"(
         let a = 10 + 1000;
@@ -451,7 +454,7 @@ TEST_F(NumericTest, Arithmetic_LargeIntegerConstants)
     ASSERT_EQ(behl::to_integer(S, -1), 999);
 }
 
-TEST_F(NumericTest, Power_IntegerBasics)
+TEST_P(NumericTest, Power_IntegerBasics)
 {
     constexpr std::string_view code = R"(
         let a = 2 ** 10
@@ -474,7 +477,7 @@ TEST_F(NumericTest, Power_IntegerBasics)
     ASSERT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(NumericTest, Power_NegativeBase)
+TEST_P(NumericTest, Power_NegativeBase)
 {
     constexpr std::string_view code = R"(
         let a = (0 - 2) ** 3
@@ -490,7 +493,7 @@ TEST_F(NumericTest, Power_NegativeBase)
     ASSERT_EQ(behl::to_integer(S, -1), -1);
 }
 
-TEST_F(NumericTest, Power_ExactAboveDoublePrecision)
+TEST_P(NumericTest, Power_ExactAboveDoublePrecision)
 {
     constexpr std::string_view code = R"(
         let a = 3 ** 39
@@ -507,7 +510,7 @@ TEST_F(NumericTest, Power_ExactAboveDoublePrecision)
     ASSERT_EQ(behl::to_integer(S, -1), 3909821048582988049LL);
 }
 
-TEST_F(NumericTest, Power_NegativeExponentTruncatesToZero)
+TEST_P(NumericTest, Power_NegativeExponentTruncatesToZero)
 {
     constexpr std::string_view code = R"(
         let a = 2 ** (0 - 1)
@@ -530,7 +533,7 @@ TEST_F(NumericTest, Power_NegativeExponentTruncatesToZero)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(NumericTest, Power_RuntimeIntegerPathIsExact)
+TEST_P(NumericTest, Power_RuntimeIntegerPathIsExact)
 {
     constexpr std::string_view code = R"(
         function ipow(b, e) { return b ** e }
@@ -554,7 +557,7 @@ TEST_F(NumericTest, Power_RuntimeIntegerPathIsExact)
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(NumericTest, Power_RuntimeFloatPath)
+TEST_P(NumericTest, Power_RuntimeFloatPath)
 {
     constexpr std::string_view code = R"(
         function fpow(b, e) { return b ** e }
@@ -572,7 +575,7 @@ TEST_F(NumericTest, Power_RuntimeFloatPath)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 0.25);
 }
 
-TEST_F(NumericTest, Power_FloatOperandsStayFloat)
+TEST_P(NumericTest, Power_FloatOperandsStayFloat)
 {
     constexpr std::string_view code = R"(
         let a = 2.0 ** 10
@@ -591,7 +594,7 @@ TEST_F(NumericTest, Power_FloatOperandsStayFloat)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 0.25);
 }
 
-TEST_F(NumericTest, FloatToIntegerConversion_OutOfRangeStaysFloat)
+TEST_P(NumericTest, FloatToIntegerConversion_OutOfRangeStaysFloat)
 {
     constexpr std::string_view code = R"(
         let math = import("math")
@@ -614,7 +617,7 @@ TEST_F(NumericTest, FloatToIntegerConversion_OutOfRangeStaysFloat)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(NumericTest, FloatToIntegerConversion_NanStaysFloat)
+TEST_P(NumericTest, FloatToIntegerConversion_NanStaysFloat)
 {
     constexpr std::string_view code = R"(
         let math = import("math")
@@ -628,7 +631,7 @@ TEST_F(NumericTest, FloatToIntegerConversion_NanStaysFloat)
     ASSERT_TRUE(std::isnan(behl::to_number(S, -1)));
 }
 
-TEST_F(NumericTest, MathAbsOfIntegerMinWraps)
+TEST_P(NumericTest, MathAbsOfIntegerMinWraps)
 {
     constexpr std::string_view code = R"(
         let math = import("math")
@@ -642,7 +645,7 @@ TEST_F(NumericTest, MathAbsOfIntegerMinWraps)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(NumericTest, TableKeyAtTwoToThe63IsNotAnArrayIndex)
+TEST_P(NumericTest, TableKeyAtTwoToThe63IsNotAnArrayIndex)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -657,7 +660,7 @@ TEST_F(NumericTest, TableKeyAtTwoToThe63IsNotAnArrayIndex)
     ASSERT_EQ(behl::to_string(S, -1), "zero");
 }
 
-TEST_F(NumericTest, Comparison_LargeIntegerConstants)
+TEST_P(NumericTest, Comparison_LargeIntegerConstants)
 {
     constexpr std::string_view code = R"(
         let a = 10 < 1000;
@@ -674,3 +677,6 @@ TEST_F(NumericTest, Comparison_LargeIntegerConstants)
     ASSERT_TRUE(behl::to_boolean(S, -2));
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, NumericTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

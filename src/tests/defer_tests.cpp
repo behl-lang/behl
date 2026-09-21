@@ -1,3 +1,5 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 #include <string>
@@ -5,7 +7,7 @@
 
 using namespace behl;
 
-class DeferTest : public ::testing::Test
+class DeferTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S;
@@ -13,6 +15,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         load_stdlib(S);
         set_top(S, 0);
@@ -39,7 +42,7 @@ protected:
     }
 };
 
-TEST_F(DeferTest, SimpleDeferStatement)
+TEST_P(DeferTest, SimpleDeferStatement)
 {
     constexpr std::string_view code = R"(
         let result = {};
@@ -59,7 +62,7 @@ TEST_F(DeferTest, SimpleDeferStatement)
     ASSERT_EQ(to_string(S, 2), "end");
 }
 
-TEST_F(DeferTest, DeferWithPrint)
+TEST_P(DeferTest, DeferWithPrint)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -86,7 +89,7 @@ TEST_F(DeferTest, DeferWithPrint)
     ASSERT_EQ(to_string(S, 2), "deferred");
 }
 
-TEST_F(DeferTest, MultipleDeferLIFO)
+TEST_P(DeferTest, MultipleDeferLIFO)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -115,7 +118,7 @@ TEST_F(DeferTest, MultipleDeferLIFO)
     ASSERT_EQ(to_string(S, 3), "third");
 }
 
-TEST_F(DeferTest, DeferWithBlock)
+TEST_P(DeferTest, DeferWithBlock)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -138,7 +141,7 @@ TEST_F(DeferTest, DeferWithBlock)
     ASSERT_EQ(to_string(S, 1), "block");
 }
 
-TEST_F(DeferTest, DeferSeesVariableMutations)
+TEST_P(DeferTest, DeferSeesVariableMutations)
 {
     constexpr std::string_view code = R"(
         let captured;
@@ -156,7 +159,7 @@ TEST_F(DeferTest, DeferSeesVariableMutations)
     ASSERT_EQ(to_integer(S, 0), 2); // Defer captures by reference
 }
 
-TEST_F(DeferTest, NestedScopes)
+TEST_P(DeferTest, NestedScopes)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -191,7 +194,7 @@ TEST_F(DeferTest, NestedScopes)
     ASSERT_EQ(to_string(S, 4), "outer"); // Outer defer executes at function end
 }
 
-TEST_F(DeferTest, DeferWithEarlyReturn)
+TEST_P(DeferTest, DeferWithEarlyReturn)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -223,7 +226,7 @@ TEST_F(DeferTest, DeferWithEarlyReturn)
     ASSERT_EQ(to_string(S, 1), "cleanup"); // Defer runs before return
 }
 
-TEST_F(DeferTest, DeferWithReturnValue)
+TEST_P(DeferTest, DeferWithReturnValue)
 {
     constexpr std::string_view code = R"(
         let executed = false;
@@ -243,7 +246,7 @@ TEST_F(DeferTest, DeferWithReturnValue)
     ASSERT_TRUE(to_boolean(S, 1));
 }
 
-TEST_F(DeferTest, MultipleDeferWithEarlyReturn)
+TEST_P(DeferTest, MultipleDeferWithEarlyReturn)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -277,7 +280,7 @@ TEST_F(DeferTest, MultipleDeferWithEarlyReturn)
     ASSERT_EQ(to_string(S, 2), "defer1");
 }
 
-TEST_F(DeferTest, DeferInIfScope)
+TEST_P(DeferTest, DeferInIfScope)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -311,7 +314,7 @@ TEST_F(DeferTest, DeferInIfScope)
     ASSERT_EQ(to_string(S, 3), "end");
 }
 
-TEST_F(DeferTest, DeferAccessingLocalVariables)
+TEST_P(DeferTest, DeferAccessingLocalVariables)
 {
     constexpr std::string_view code = R"(
         let result = 0;
@@ -330,7 +333,7 @@ TEST_F(DeferTest, DeferAccessingLocalVariables)
     ASSERT_EQ(to_integer(S, 0), 30);
 }
 
-TEST_F(DeferTest, DeferWithFunctionCall)
+TEST_P(DeferTest, DeferWithFunctionCall)
 {
     constexpr std::string_view code = R"(
         let closed = false;
@@ -354,7 +357,7 @@ TEST_F(DeferTest, DeferWithFunctionCall)
     ASSERT_TRUE(to_boolean(S, 1));
 }
 
-TEST_F(DeferTest, DeferPropagatesException)
+TEST_P(DeferTest, DeferPropagatesException)
 {
     constexpr std::string_view code = R"(
         let executed = false;
@@ -371,7 +374,7 @@ TEST_F(DeferTest, DeferPropagatesException)
     ASSERT_ANY_THROW(run_script(code));
 }
 
-TEST_F(DeferTest, DeferExecutesOnException)
+TEST_P(DeferTest, DeferExecutesOnException)
 {
     constexpr std::string_view code = R"(
         let executed = false;
@@ -391,7 +394,7 @@ TEST_F(DeferTest, DeferExecutesOnException)
     ASSERT_TRUE(to_boolean(S, 1));
 }
 
-TEST_F(DeferTest, BlockDeferExecutesOnException)
+TEST_P(DeferTest, BlockDeferExecutesOnException)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -412,7 +415,7 @@ TEST_F(DeferTest, BlockDeferExecutesOnException)
     ASSERT_EQ(to_string(S, 0), "block");
 }
 
-TEST_F(DeferTest, DeferRunsForEveryFrameWhileUnwinding)
+TEST_P(DeferTest, DeferRunsForEveryFrameWhileUnwinding)
 {
     constexpr std::string_view code = R"(
         let count = 0;
@@ -441,7 +444,7 @@ TEST_F(DeferTest, DeferRunsForEveryFrameWhileUnwinding)
     ASSERT_EQ(to_integer(S, 0), 3);
 }
 
-TEST_F(DeferTest, DeferErrorReplacesOriginalError)
+TEST_P(DeferTest, DeferErrorReplacesOriginalError)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -459,7 +462,7 @@ TEST_F(DeferTest, DeferErrorReplacesOriginalError)
     ASSERT_NE(to_string(S, 1).find("from defer"), std::string_view::npos);
 }
 
-TEST_F(DeferTest, DeferDoesNotDisturbMultipleReturnValues)
+TEST_P(DeferTest, DeferDoesNotDisturbMultipleReturnValues)
 {
     constexpr std::string_view code = R"(
         function three() {
@@ -485,7 +488,7 @@ TEST_F(DeferTest, DeferDoesNotDisturbMultipleReturnValues)
     ASSERT_EQ(to_integer(S, 2), 3);
 }
 
-TEST_F(DeferTest, DeferDoesNotDisturbFixedReturnValues)
+TEST_P(DeferTest, DeferDoesNotDisturbFixedReturnValues)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -507,7 +510,7 @@ TEST_F(DeferTest, DeferDoesNotDisturbFixedReturnValues)
     ASSERT_EQ(to_integer(S, 2), 3);
 }
 
-TEST_F(DeferTest, DeferInsideDefer)
+TEST_P(DeferTest, DeferInsideDefer)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -543,7 +546,7 @@ TEST_F(DeferTest, DeferInsideDefer)
     ASSERT_EQ(to_string(S, 4), "outer-end");
 }
 
-TEST_F(DeferTest, NestedBlockDefersRunInnermostFirstWhileUnwinding)
+TEST_P(DeferTest, NestedBlockDefersRunInnermostFirstWhileUnwinding)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -567,7 +570,7 @@ TEST_F(DeferTest, NestedBlockDefersRunInnermostFirstWhileUnwinding)
     ASSERT_EQ(to_string(S, 0), "CBF");
 }
 
-TEST_F(DeferTest, BlockDeferThatAlreadyRanDoesNotRunAgainOnError)
+TEST_P(DeferTest, BlockDeferThatAlreadyRanDoesNotRunAgainOnError)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -589,7 +592,7 @@ TEST_F(DeferTest, BlockDeferThatAlreadyRanDoesNotRunAgainOnError)
     ASSERT_EQ(to_string(S, 0), "bBF");
 }
 
-TEST_F(DeferTest, DeferStatementNeverReachedDoesNotRunOnError)
+TEST_P(DeferTest, DeferStatementNeverReachedDoesNotRunOnError)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -610,7 +613,7 @@ TEST_F(DeferTest, DeferStatementNeverReachedDoesNotRunOnError)
     ASSERT_EQ(to_string(S, 0), "F");
 }
 
-TEST_F(DeferTest, LoopBlockDeferRunsOncePerEnteredIteration)
+TEST_P(DeferTest, LoopBlockDeferRunsOncePerEnteredIteration)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -634,7 +637,7 @@ TEST_F(DeferTest, LoopBlockDeferRunsOncePerEnteredIteration)
     ASSERT_EQ(to_string(S, 0), "LLL");
 }
 
-TEST_F(DeferTest, BlockLocalIsReadableByItsDeferWhileUnwinding)
+TEST_P(DeferTest, BlockLocalIsReadableByItsDeferWhileUnwinding)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -655,7 +658,7 @@ TEST_F(DeferTest, BlockLocalIsReadableByItsDeferWhileUnwinding)
     ASSERT_EQ(to_string(S, 0), "kept");
 }
 
-TEST_F(DeferTest, ThrowingDeferDoesNotSkipRemainingDefers)
+TEST_P(DeferTest, ThrowingDeferDoesNotSkipRemainingDefers)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -676,7 +679,7 @@ TEST_F(DeferTest, ThrowingDeferDoesNotSkipRemainingDefers)
     ASSERT_NE(to_string(S, 2).find("boom"), std::string_view::npos);
 }
 
-TEST_F(DeferTest, ThrowingBlockDeferStillRunsOuterDefersWhileUnwinding)
+TEST_P(DeferTest, ThrowingBlockDeferStillRunsOuterDefersWhileUnwinding)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -699,7 +702,7 @@ TEST_F(DeferTest, ThrowingBlockDeferStillRunsOuterDefersWhileUnwinding)
     ASSERT_NE(to_string(S, 2).find("from block defer"), std::string_view::npos);
 }
 
-TEST_F(DeferTest, ThrowingDeferWhileADeeperFrameUnwinds)
+TEST_P(DeferTest, ThrowingDeferWhileADeeperFrameUnwinds)
 {
     constexpr std::string_view code = R"(
         let log = "";
@@ -728,7 +731,7 @@ TEST_F(DeferTest, ThrowingDeferWhileADeeperFrameUnwinds)
     ASSERT_NE(to_string(S, 2).find("block"), std::string_view::npos);
 }
 
-TEST_F(DeferTest, DeferRunsWhenBreakLeavesTheScope)
+TEST_P(DeferTest, DeferRunsWhenBreakLeavesTheScope)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -752,7 +755,7 @@ TEST_F(DeferTest, DeferRunsWhenBreakLeavesTheScope)
     ASSERT_EQ(to_string(S, 0), "dd");
 }
 
-TEST_F(DeferTest, DeferRunsWhenContinueLeavesTheScope)
+TEST_P(DeferTest, DeferRunsWhenContinueLeavesTheScope)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -777,7 +780,7 @@ TEST_F(DeferTest, DeferRunsWhenContinueLeavesTheScope)
     ASSERT_EQ(to_string(S, 0), ".cc.c");
 }
 
-TEST_F(DeferTest, DeferInNestedBlockRunsAtBlockExit)
+TEST_P(DeferTest, DeferInNestedBlockRunsAtBlockExit)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -799,7 +802,7 @@ TEST_F(DeferTest, DeferInNestedBlockRunsAtBlockExit)
     ASSERT_EQ(to_string(S, 0), "ainnerb");
 }
 
-TEST_F(DeferTest, DeferInForBodyRunsEveryIteration)
+TEST_P(DeferTest, DeferInForBodyRunsEveryIteration)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -818,7 +821,7 @@ TEST_F(DeferTest, DeferInForBodyRunsEveryIteration)
     ASSERT_EQ(to_string(S, 0), "012");
 }
 
-TEST_F(DeferTest, BreakInsideDeferBodyIsRejected)
+TEST_P(DeferTest, BreakInsideDeferBodyIsRejected)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -835,7 +838,7 @@ TEST_F(DeferTest, BreakInsideDeferBodyIsRejected)
     ASSERT_ANY_THROW(run_script(code));
 }
 
-TEST_F(DeferTest, DeferInLoopRunsEveryIteration)
+TEST_P(DeferTest, DeferInLoopRunsEveryIteration)
 {
     constexpr std::string_view code = R"(
         let count = 0;
@@ -857,7 +860,7 @@ TEST_F(DeferTest, DeferInLoopRunsEveryIteration)
     ASSERT_EQ(to_integer(S, 0), 5);
 }
 
-TEST_F(DeferTest, MultipleNestedScopes)
+TEST_P(DeferTest, MultipleNestedScopes)
 {
     constexpr std::string_view code = R"(
         let output = {};
@@ -893,7 +896,7 @@ TEST_F(DeferTest, MultipleNestedScopes)
     ASSERT_EQ(to_string(S, 3), "L0");
 }
 
-TEST_F(DeferTest, DeferWithTableAccess)
+TEST_P(DeferTest, DeferWithTableAccess)
 {
     constexpr std::string_view code = R"(
         let state = { file = nil, closed = false };
@@ -922,7 +925,7 @@ TEST_F(DeferTest, DeferWithTableAccess)
     ASSERT_TRUE(to_boolean(S, 1));
 }
 
-TEST_F(DeferTest, DeferInMultipleFunctions)
+TEST_P(DeferTest, DeferInMultipleFunctions)
 {
     constexpr std::string_view code = R"(
         let count = 0;
@@ -945,7 +948,7 @@ TEST_F(DeferTest, DeferInMultipleFunctions)
     ASSERT_EQ(to_integer(S, 0), 11); // 1 from func1, 10 from func2
 }
 
-TEST_F(DeferTest, DeferBlockWithMultipleStatements)
+TEST_P(DeferTest, DeferBlockWithMultipleStatements)
 {
     constexpr std::string_view code = R"(
         let a = 0;
@@ -971,7 +974,7 @@ TEST_F(DeferTest, DeferBlockWithMultipleStatements)
     ASSERT_EQ(to_integer(S, 2), 3);
 }
 
-TEST_F(DeferTest, DeferWithComplexExpression)
+TEST_P(DeferTest, DeferWithComplexExpression)
 {
     constexpr std::string_view code = R"(
         let result = 0;
@@ -991,7 +994,7 @@ TEST_F(DeferTest, DeferWithComplexExpression)
     ASSERT_EQ(to_integer(S, 0), 19); // 3 * 3 + 10 = 19
 }
 
-TEST_F(DeferTest, EmptyDeferBlock)
+TEST_P(DeferTest, EmptyDeferBlock)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -1005,3 +1008,6 @@ TEST_F(DeferTest, EmptyDeferBlock)
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 42);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, DeferTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

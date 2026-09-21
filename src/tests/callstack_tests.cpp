@@ -1,13 +1,16 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class CallStackTest : public ::testing::Test
+class CallStackTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
     void TearDown() override
     {
@@ -15,7 +18,7 @@ protected:
     }
 };
 
-TEST_F(CallStackTest, ChainedNonTailCalls)
+TEST_P(CallStackTest, ChainedNonTailCalls)
 {
     constexpr std::string_view code = R"(
         function f1(n) {
@@ -38,7 +41,7 @@ TEST_F(CallStackTest, ChainedNonTailCalls)
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
 
-TEST_F(CallStackTest, DeepNonTailCallStack)
+TEST_P(CallStackTest, DeepNonTailCallStack)
 {
     constexpr std::string_view code = R"(
         function recurse(n, acc) {
@@ -55,7 +58,7 @@ TEST_F(CallStackTest, DeepNonTailCallStack)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(CallStackTest, MultipleCallsInExpression)
+TEST_P(CallStackTest, MultipleCallsInExpression)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -72,7 +75,7 @@ TEST_F(CallStackTest, MultipleCallsInExpression)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(CallStackTest, CallWithMultipleNestedArguments)
+TEST_P(CallStackTest, CallWithMultipleNestedArguments)
 {
     constexpr std::string_view code = R"(
         function f(a, b, c) {
@@ -89,7 +92,7 @@ TEST_F(CallStackTest, CallWithMultipleNestedArguments)
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
 
-TEST_F(CallStackTest, DeepCallStackWithLocals)
+TEST_P(CallStackTest, DeepCallStackWithLocals)
 {
     constexpr std::string_view code = R"(
         function level5(n) {
@@ -120,7 +123,7 @@ TEST_F(CallStackTest, DeepCallStackWithLocals)
     ASSERT_EQ(behl::to_integer(S, -1), 240);
 }
 
-TEST_F(CallStackTest, CallStackWithUpvalues)
+TEST_P(CallStackTest, CallStackWithUpvalues)
 {
     constexpr std::string_view code = R"(
         function makeCounter() {
@@ -143,7 +146,7 @@ TEST_F(CallStackTest, CallStackWithUpvalues)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(CallStackTest, RecursiveCallsWithLocalVariables)
+TEST_P(CallStackTest, RecursiveCallsWithLocalVariables)
 {
     constexpr std::string_view code = R"(
         function sum_to_n(n) {
@@ -162,7 +165,7 @@ TEST_F(CallStackTest, RecursiveCallsWithLocalVariables)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(CallStackTest, CallStackWithTableArguments)
+TEST_P(CallStackTest, CallStackWithTableArguments)
 {
     constexpr std::string_view code = R"(
         function process(tab) {
@@ -184,7 +187,7 @@ TEST_F(CallStackTest, CallStackWithTableArguments)
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
 
-TEST_F(CallStackTest, NestedCallsInLoop)
+TEST_P(CallStackTest, NestedCallsInLoop)
 {
     constexpr std::string_view code = R"(
         function process(n) {
@@ -205,7 +208,7 @@ TEST_F(CallStackTest, NestedCallsInLoop)
     ASSERT_EQ(behl::to_integer(S, -1), 17);
 }
 
-TEST_F(CallStackTest, MixedTailAndNonTailCalls)
+TEST_P(CallStackTest, MixedTailAndNonTailCalls)
 {
     constexpr std::string_view code = R"(
         function f1(n) {
@@ -228,7 +231,7 @@ TEST_F(CallStackTest, MixedTailAndNonTailCalls)
     ASSERT_EQ(behl::to_integer(S, -1), 202);
 }
 
-TEST_F(CallStackTest, CallStackWithMultipleReturns)
+TEST_P(CallStackTest, CallStackWithMultipleReturns)
 {
     constexpr std::string_view code = R"(
         function triple(a, b, c) {
@@ -249,7 +252,7 @@ TEST_F(CallStackTest, CallStackWithMultipleReturns)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(CallStackTest, DeepCallStackStressTest)
+TEST_P(CallStackTest, DeepCallStackStressTest)
 {
     constexpr std::string_view code = R"(
         function chain(n, acc) {
@@ -266,3 +269,6 @@ TEST_F(CallStackTest, DeepCallStackStressTest)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 420);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, CallStackTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
