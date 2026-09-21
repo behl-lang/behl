@@ -1,6 +1,7 @@
 #include "vm.hpp"
 
 #include "bytecode.hpp"
+#include "common/arithmetic.hpp"
 #include "config_internal.hpp"
 #include "gc/gc.hpp"
 #include "gc/gc_object.hpp"
@@ -9,11 +10,11 @@
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
 #include "gc/gco_userdata.hpp"
+#include "jit/jit.hpp"
 #include "platform/platform.hpp"
 #include "state.hpp"
 #include "state_debug.hpp"
 #include "value.hpp"
-#include "common/arithmetic.hpp"
 #include "vm_arithmetic.hpp"
 #include "vm_bitwise.hpp"
 #include "vm_controlflow.hpp"
@@ -25,8 +26,6 @@
 #include "vm_operands.hpp"
 #include "vm_table.hpp"
 #include "vm_upvalues.hpp"
-
-#include "jit/jit.hpp"
 
 #include <behl/exceptions.hpp>
 #include <cassert>
@@ -63,8 +62,15 @@ namespace behl
         CallFrame* frame = &callstack.back();
         const Instruction* code = frame->proto->code.data();
 
+        const auto invalidate_frame = [&]() {
+            frame = &callstack.back();
+            code = frame->proto->code.data();
+        };
+
         for (;;)
         {
+            assert(frame == &callstack.back() && "opcode re-entered the VM without refreshing the frame pointer");
+
             if constexpr (TDebugMode)
             {
                 DebugEvent dv = DebugEvent::Paused;
@@ -83,8 +89,7 @@ namespace behl
                 }
 
                 // Refresh frame pointer, may have invalidated due to debug functions.
-                frame = &callstack.back();
-                code = frame->proto->code.data();
+                invalidate_frame();
             }
 
             const Instruction instr = code[frame->pc];
@@ -98,39 +103,39 @@ namespace behl
             {
                 case OpCode::kOpMove:
                     handler_move(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpLoadI:
                     handler_loadi(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpLoadF:
                     handler_loadf(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpLoadS:
                     handler_loadk(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpLoadBool:
                     handler_loadbool(S, *frame, instr.a(), instr.bool_value(), instr.skip_next());
-                    break;
+                    continue;
                 case OpCode::kOpLoadNil:
                     handler_loadnil(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpLoadImm:
                     handler_load_imm(S, *frame, instr.a(), instr.signed_immediate());
-                    break;
+                    continue;
 
                 case OpCode::kOpGetGlobal:
                     handler_getglobal(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpSetGlobal:
                     handler_setglobal(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
 
                 case OpCode::kOpGetUpval:
                     handler_getupval(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpSetUpval:
                     handler_setupval(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
 
                 case OpCode::kOpGetField:
                     handler_getfield(S, *frame, instr.a(), instr.b(), instr.c());
@@ -156,7 +161,7 @@ namespace behl
                     break;
                 case OpCode::kOpSetList:
                     handler_setlist(S, *frame, instr.a(), instr.b(), instr.c());
-                    break;
+                    continue;
 
                 case OpCode::kOpSelf:
                     handler_self(S, *frame, instr.a(), instr.b(), instr.c());
@@ -272,16 +277,16 @@ namespace behl
                     break;
                 case OpCode::kOpDefer:
                     handler_defer(S, *frame, instr.a());
-                    break;
+                    continue;
                 case OpCode::kOpDeferCall:
                     handler_defercall(S, *frame, instr.a());
-                    break;
+                    continue;
                 case OpCode::kOpEndDefer:
                     handler_enddefer(S, *frame, instr.a());
-                    break;
+                    continue;
                 case OpCode::kOpSaveRet:
                     handler_saveret(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpRetSaved:
                     if (!handler_retsaved(S, *frame, entry_call_depth))
                     {
@@ -291,9 +296,8 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
                 case OpCode::kOpEndUnwind:
                     return;
                 case OpCode::kOpMMAdd:
@@ -420,32 +424,32 @@ namespace behl
 
                 case OpCode::kOpTest:
                     handler_test(S, *frame, instr.a(), instr.b() != 0);
-                    break;
+                    continue;
                 case OpCode::kOpTestSet:
                     handler_testset(S, *frame, instr.a(), instr.b(), instr.c() != 0);
-                    break;
+                    continue;
 
                 case OpCode::kOpJmp:
                     handler_jmp(*frame, instr.jump_offset());
-                    break;
+                    continue;
 
                 case OpCode::kOpForPrep:
                     handler_forprep(S, *frame, instr.a(), instr.signed_offset());
-                    break;
+                    continue;
                 case OpCode::kOpForLoop:
                     handler_forloop(S, *frame, instr.a(), instr.signed_offset());
-                    break;
+                    continue;
 
                 case OpCode::kOpClosure:
                     handler_closure(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
 
                 case OpCode::kOpCall:
                 {
                     const bool self_call = instr.flag_bit();
-                    frame = handler_call(S, *frame, instr.a(), instr.b(), instr.c(), self_call);
-                    code = frame->proto->code.data();
-                    break;
+                    handler_call(S, *frame, instr.a(), instr.b(), instr.c(), self_call);
+                    invalidate_frame();
+                    continue;
                 }
 
                 case OpCode::kOpTailCall:
@@ -457,9 +461,8 @@ namespace behl
                     {
                         return;
                     }
-                    frame = &callstack.back();
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpReturn:
                     if (!handler_return(S, *frame, instr.a(), instr.b(), entry_call_depth))
@@ -470,9 +473,8 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpReturn0:
                     if (!handler_return0(S, *frame, entry_call_depth))
@@ -483,9 +485,8 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpReturn1:
                     if (!handler_return1(S, *frame, instr.a(), entry_call_depth))
@@ -496,17 +497,16 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpVararg:
                     handler_vararg(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
 
                 case OpCode::kOpVarargPrep:
                     handler_varargprep(S, *frame, instr.a());
-                    break;
+                    continue;
 
                 case OpCode::kOpVarargExpand:
                     handler_varargexpand(S, *frame, instr.a(), instr.b());
@@ -518,6 +518,8 @@ namespace behl
                     break;
 #endif
             }
+
+            frame = &callstack.back();
         }
     }
 

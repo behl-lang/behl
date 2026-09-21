@@ -530,8 +530,7 @@ namespace behl
 
     // Call instruction handler
     template<bool TExecuteCallee = true>
-    BEHL_INLINE CallFrame* handler_call(
-        State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
+    BEHL_INLINE void handler_call(State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
     {
         if (S->gc.gc_debt > 0)
         {
@@ -560,19 +559,18 @@ namespace behl
                 S->stack[call_pos] = S->stack[frame.base];
             }
 
-            CallFrame& new_frame = setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
+            setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
             prepare_call(S, proto->max_stack_size, new_base, actual_num_args, proto->num_params);
 
 #if BEHL_JIT_SUPPORTED
             if constexpr (TExecuteCallee)
             {
-                if (!S->debug.enabled && jit_try_execute(S, proto))
+                if (!S->debug.enabled)
                 {
-                    return &S->call_stack.back();
+                    jit_try_execute(S, proto);
                 }
             }
 #endif
-            return &new_frame;
         }
         else
         {
@@ -589,13 +587,12 @@ namespace behl
 #if BEHL_JIT_SUPPORTED
             if constexpr (TExecuteCallee)
             {
-                if (S->call_stack.size() > depth_before && !S->debug.enabled && jit_try_execute(S, new_frame.proto))
+                if (S->call_stack.size() > depth_before && !S->debug.enabled)
                 {
-                    return &S->call_stack.back();
+                    jit_try_execute(S, new_frame.proto);
                 }
             }
 #endif
-            return &new_frame;
         }
     }
 
