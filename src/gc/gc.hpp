@@ -21,6 +21,7 @@ namespace behl
     void gc_init(State* S);
     BEHL_API void gc_collect(State* S);
     BEHL_API void gc_step(State* S);
+    void gc_barrier_slow(State* S, GCObject* stored) noexcept;
     void gc_close(State* S);
     void gc_pause(State* S);
     bool gc_is_paused(State* S);

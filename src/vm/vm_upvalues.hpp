@@ -104,6 +104,7 @@ namespace behl
             {
                 Upvalue& uv = upvalues[uv_idx];
                 uv.closed_value = stack[static_cast<size_t>(uv.index)];
+                gc_keep_alive(S, uv.closed_value);
                 uv.index = -1;
             }
             open.clear();
@@ -119,6 +120,7 @@ namespace behl
         {
             Upvalue& uv = upvalues[*close_it];
             uv.closed_value = stack[static_cast<size_t>(uv.index)];
+            gc_keep_alive(S, uv.closed_value);
             uv.index = -1;
         }
 

@@ -112,6 +112,9 @@ namespace behl
     BEHL_INLINE
     void table_raw_setfield(State* S, struct GCTable* t, const Value& key, const Value& v)
     {
+        gc_barrier(S, t, v);
+        gc_barrier(S, t, key);
+
         // Try to interpret key as a non-negative array index
         if (const auto idx = key_as_positive_index(key))
         {
@@ -154,6 +157,7 @@ namespace behl
         // If key exists, update it directly
         if (slot != nullptr)
         {
+            gc_barrier(S, t, v);
             *slot = v;
             return;
         }
@@ -218,6 +222,8 @@ namespace behl
         auto* table = globals.get_table();
 
         const Value& v = get_register(S, frame, a);
+        gc_barrier(S, table, v);
+        gc_barrier(S, table, key);
         table->hash.insert_or_assign(S, key, v);
     }
 
@@ -411,7 +417,9 @@ namespace behl
 
         for (uint8_t i = 0; i < num_fields; ++i)
         {
-            table_data->array[start + i] = get_register(S, frame, static_cast<Reg>(a + 1U + i));
+            const Value& item = get_register(S, frame, static_cast<Reg>(a + 1U + i));
+            gc_barrier(S, table_data, item);
+            table_data->array[start + i] = item;
         }
     }
 

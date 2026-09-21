@@ -6,6 +6,7 @@
 #include "gc/gco_userdata.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
+#include "vm/vm_detail.hpp"
 #include "vm/vm_metatable.hpp"
 
 #include <behl/behl.hpp>
@@ -116,6 +117,9 @@ namespace behl
 
         GCTable* t = table_val.get_table();
         assert(t != nullptr);
+
+        gc_barrier(S, t, val);
+        gc_barrier(S, t, key);
 
         if (key.is_integer())
         {
@@ -614,10 +618,18 @@ namespace behl
 
         if (target.is_table())
         {
+            if (metatable != nullptr)
+            {
+                gc_barrier(S, target.get_table(), Value(metatable));
+            }
             target.get_table()->metatable = metatable;
         }
         else if (target.is_userdata())
         {
+            if (metatable != nullptr)
+            {
+                gc_barrier(S, target.get_userdata(), Value(metatable));
+            }
             target.get_userdata()->metatable = metatable;
         }
     }

@@ -15,6 +15,36 @@
 namespace behl
 {
 
+    BEHL_FORCEINLINE
+    void gc_barrier(State* S, const GCObject* container, const Value& stored) noexcept
+    {
+        if (!stored.is_gcobject() || container->get_header().color != GCColor::kBlack)
+        {
+            return;
+        }
+
+        GCObject* obj = stored.get_gcobject();
+        if (obj->get_header().color == GCColor::kWhite)
+        {
+            gc_barrier_slow(S, obj);
+        }
+    }
+
+    BEHL_FORCEINLINE
+    void gc_keep_alive(State* S, const Value& stored) noexcept
+    {
+        if (!stored.is_gcobject())
+        {
+            return;
+        }
+
+        GCObject* obj = stored.get_gcobject();
+        if (obj->get_header().color == GCColor::kWhite)
+        {
+            gc_barrier_slow(S, obj);
+        }
+    }
+
     BEHL_INLINE
     SourceLocation get_current_location(const CallFrame& frame)
     {

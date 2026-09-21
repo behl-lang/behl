@@ -760,6 +760,244 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
+    TEST_P(GCTest, ReparentingDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) {
+                    t[i] = {id = b * 100 + i}
+                }
+                buckets[b] = t
+            }
+
+            let dst = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            dst[moved] = o
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let o = dst[k]
+                if (o == nil || o.id != ids[k]) { corrupt = corrupt + 1 }
+            }
+
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no objects were reparented during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects were swept while still referenced";
+    }
+
+    TEST_P(GCTest, RawsetDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+            const table = import("table")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {id = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let dst = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            table.rawset(dst, moved, o)
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let o = dst[k]
+                if (o == nil || o.id != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "nothing was rawset during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while referenced through rawset";
+    }
+
+    TEST_P(GCTest, ClosedUpvalueDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            function capture(o) { return function() { return o.id } }
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {id = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let fns = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            fns[moved] = capture(o)
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let f = fns[k]
+                if (f == nil || f() != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no upvalues were closed during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while held by a closed upvalue";
+    }
+
+    TEST_P(GCTest, MetatableAssignedDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {tag = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let holders = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let mt = src[ii]
+                        if (mt != nil) {
+                            let h = {}
+                            setmetatable(h, mt)
+                            holders[moved] = h
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let mt = getmetatable(holders[k])
+                if (mt == nil || mt.tag != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no metatables were assigned during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "metatable swept while still attached";
+    }
+
     INSTANTIATE_TEST_SUITE_P(Mode, GCTest, ::testing::Bool(),
         [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
 

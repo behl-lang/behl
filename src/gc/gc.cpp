@@ -67,7 +67,8 @@ namespace behl
                     break;
             }
 
-            return behl::format<"{{ color={}, {:p} {} }}">(to_string(obj->get_header().color), static_cast<const void*>(obj), type_info);
+            return behl::format<"{{ color={}, {:p} {} }}">(
+                to_string(obj->get_header().color), static_cast<const void*>(obj), type_info);
         }
         else
         {
@@ -124,8 +125,8 @@ namespace behl
 
             if (found)
             {
-                println("[GC_VALIDATE] Object {} FOUND on stack at index {}, phase={}, stack_size={}",
-                    gc_object_to_string(obj), found_index, S->gc.gc_phase, S->stack.size());
+                println("[GC_VALIDATE] Object {} FOUND on stack at index {}, phase={}, stack_size={}", gc_object_to_string(obj),
+                    found_index, S->gc.gc_phase, S->stack.size());
             }
             else
             {
@@ -574,6 +575,11 @@ namespace behl
         }
     }
 
+    void gc_barrier_slow(State* S, GCObject* stored) noexcept
+    {
+        mark_gray(S, stored);
+    }
+
     static void mark_value(State* S, const Value& val)
     {
         if (val.is_gcobject())
@@ -852,8 +858,7 @@ namespace behl
                 {
                     if (upvalue.closed_value.is_gcobject())
                     {
-                        gc_log("Marked closed upvalue holding {}",
-                            gc_object_to_string(upvalue.closed_value.get_gcobject()));
+                        gc_log("Marked closed upvalue holding {}", gc_object_to_string(upvalue.closed_value.get_gcobject()));
                     }
                 }
             }
