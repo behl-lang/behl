@@ -390,39 +390,28 @@ namespace behl
     }
 
     BEHL_INLINE
-    void handler_setlist(State* S, CallFrame& frame, Reg a, uint8_t num_fields, uint8_t extra)
+    void handler_setlist(State* S, CallFrame& frame, Reg a, uint8_t num_fields, uint8_t batch)
     {
-        Value table = get_register(S, frame, a);
+        const Value& table = get_register(S, frame, a);
+        assert(table.is_table() && "SETLIST: register A must contain a table");
 
-        if (table.is_table())
+        if (!table.is_table())
         {
-            auto* table_data = table.get_table();
+            return;
+        }
 
-            int64_t start_idx = extra;
+        auto* table_data = table.get_table();
 
-            // If num_fields is 0, this means "use all values from top of stack" (multret)
-            // This happens when the last field is a vararg expansion (...)
-            uint8_t actual_num_fields;
-            if (num_fields == 0)
-            {
-                // Calculate number of fields from stack top
-                // Values start at register (a + 2), and frame.top points one past the last value
-                uint8_t values_start = a + 2;
-                actual_num_fields = static_cast<uint8_t>(frame_header(S, frame).top - (frame.base + values_start));
-            }
-            else
-            {
-                actual_num_fields = num_fields;
-            }
-
-            size_t needed = static_cast<size_t>(start_idx - 1 + actual_num_fields);
+        const size_t start = static_cast<size_t>(batch) * kFieldsPerFlush;
+        const size_t needed = start + num_fields;
+        if (needed > table_data->array.size())
+        {
             table_data->array.resize(S, needed);
+        }
 
-            for (uint8_t i = 0; i < actual_num_fields; ++i)
-            {
-                Value val = get_register(S, frame, static_cast<Reg>(a + 2U + i));
-                table_data->array[static_cast<size_t>(start_idx + i - 1)] = val;
-            }
+        for (uint8_t i = 0; i < num_fields; ++i)
+        {
+            table_data->array[start + i] = get_register(S, frame, static_cast<Reg>(a + 1U + i));
         }
     }
 

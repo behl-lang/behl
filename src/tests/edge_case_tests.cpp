@@ -1,5 +1,40 @@
+#include "config_internal.hpp"
+
 #include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+
+#include <string>
+
+namespace
+{
+    constexpr int kPoolOverflow = 520;
+    constexpr int kNarrowFieldLimit = 512;
+
+    std::string fp_padding(double& expected)
+    {
+        std::string out;
+        for (int i = 0; i < kNarrowFieldLimit; ++i)
+        {
+            const double v = static_cast<double>(i) + 0.5;
+            out += "    acc = acc + " + std::to_string(v) + "\n";
+            expected += v;
+        }
+        return out;
+    }
+
+    std::string int_padding(int64_t& expected)
+    {
+        std::string out;
+        for (int i = 0; i < kNarrowFieldLimit; ++i)
+        {
+            const int64_t v = 100000 + i;
+            out += "    acc = acc + " + std::to_string(v) + "\n";
+            expected += v;
+        }
+        return out;
+    }
+}
 
 class EdgeCaseTest : public ::testing::Test
 {
@@ -195,4 +230,161 @@ TEST_F(EdgeCaseTest, MethodCallSyntax)
     ASSERT_NO_THROW(behl::load_string(S, code));
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_F(EdgeCaseTest, FloatConstantIndexBeyondNarrowField)
+{
+    double expected = 0.0;
+    std::string code = "function f() {\n    let acc = 0.0\n";
+    for (int i = 0; i < kPoolOverflow; ++i)
+    {
+        const double v = static_cast<double>(i) + 0.5;
+        code += "    acc = acc + " + std::to_string(v) + "\n";
+        expected += v;
+    }
+    code += "    return acc\n}\nreturn f()\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
+}
+
+TEST_F(EdgeCaseTest, IntegerConstantIndexBeyondNarrowField)
+{
+    int64_t expected = 0;
+    std::string code = "function f() {\n    let acc = 0\n";
+    for (int i = 0; i < kPoolOverflow; ++i)
+    {
+        const int64_t v = 100000 + i;
+        code += "    acc = acc + " + std::to_string(v) + "\n";
+        expected += v;
+    }
+    code += "    return acc\n}\nreturn f()\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), expected);
+}
+
+TEST_F(EdgeCaseTest, StringConstantIndexBeyondNarrowField)
+{
+    std::string code = "function f() {\n    let acc = \"\"\n";
+    std::string expected;
+    for (int i = 0; i < kNarrowFieldLimit; ++i)
+    {
+        std::string tag = std::to_string(i);
+        while (tag.size() < 3)
+        {
+            tag.insert(tag.begin(), '0');
+        }
+        code += "    acc = acc + \"s" + tag + "\"\n";
+        expected += "s" + tag;
+    }
+    code += "    let tail = acc + \"final\"\n    return tail\n}\nreturn f()\n";
+    expected += "final";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), expected);
+}
+
+TEST_F(EdgeCaseTest, FloatCompareConstantIndexBeyondNarrowField)
+{
+    double expected = 0.0;
+    std::string code = "function f() {\n    let acc = 0.0\n";
+    code += fp_padding(expected);
+    code += "    if (acc < 8388609.25) { return 1 }\n    return 0\n}\nreturn f()\n";
+
+    ASSERT_LT(expected, 8388609.25);
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_F(EdgeCaseTest, IntegerCompareConstantIndexBeyondNarrowField)
+{
+    int64_t expected = 0;
+    std::string code = "function f() {\n    let acc = 0\n";
+    code += int_padding(expected);
+    code += "    if (acc > 100000000) { return 1 }\n    return 0\n}\nreturn f()\n";
+
+    ASSERT_LT(expected, 100000000);
+    ASSERT_GT(expected, 100000);
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_F(EdgeCaseTest, CompareInValueContextConstantIndexBeyondNarrowField)
+{
+    double expected = 0.0;
+    std::string code = "function id(v) { return v }\nfunction f() {\n    let acc = 0.0\n";
+    code += fp_padding(expected);
+    code += "    return id(acc < 8388609.25)\n}\nreturn f()\n";
+
+    ASSERT_LT(expected, 8388609.25);
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
+TEST_F(EdgeCaseTest, CompoundAssignConstantIndexBeyondNarrowField)
+{
+    double expected = 0.0;
+    std::string code = "function f() {\n    let acc = 0.0\n";
+    code += fp_padding(expected);
+    code += "    acc += 8388609.25\n    return acc\n}\nreturn f()\n";
+    expected += 8388609.25;
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
+}
+
+TEST_F(EdgeCaseTest, MetamethodSurvivesConstantIndexFallback)
+{
+    behl::load_stdlib(S);
+    double expected = 0.0;
+    std::string code = "function f() {\n    let acc = 0.0\n";
+    code += fp_padding(expected);
+    code += "    let mt = {}\n";
+    code += "    mt.__add = function(a, b) { return 4242 }\n";
+    code += "    let obj = setmetatable({}, mt)\n";
+    code += "    return obj + 8388609.25\n}\nreturn f()\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 4242);
+}
+
+TEST_F(EdgeCaseTest, ConstantLimitExceededThrows)
+{
+    std::string code;
+    code.reserve(4u << 20);
+    code += "function f() {\n    let acc = 0.0\n";
+    for (size_t i = 0; i <= behl::kMaxConstants; ++i)
+    {
+        code += "    acc = acc + " + std::to_string(i) + ".5\n";
+    }
+    code += "    return acc\n}\nreturn f()\n";
+
+    ASSERT_THROW(behl::load_string(S, code), behl::SyntaxError);
+}
+
+TEST_F(EdgeCaseTest, ConstantLimitBoundaryCompiles)
+{
+    double expected = 0.0;
+    std::string code;
+    code.reserve(4u << 20);
+    code += "function f() {\n    let acc = 0.0\n";
+    for (size_t i = 0; i < behl::kMaxConstants; ++i)
+    {
+        code += "    acc = acc + " + std::to_string(i) + ".5\n";
+        expected += static_cast<double>(i) + 0.5;
+    }
+    code += "    return acc\n}\nreturn f()\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }

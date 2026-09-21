@@ -362,11 +362,11 @@ namespace behl
         return i;
     }
 
-    constexpr Instruction make_op_setlist(Reg a, uint8_t num_fields, uint8_t extra) noexcept
+    constexpr Instruction make_op_setlist(Reg a, uint8_t num_fields, uint8_t batch) noexcept
     {
         Instruction i{};
         i.raw = (static_cast<uint32_t>(OpCode::kOpSetList) << 25) | static_cast<uint32_t>(a)
-            | (static_cast<uint32_t>(num_fields) << 8) | (static_cast<uint32_t>(extra) << 16);
+            | (static_cast<uint32_t>(num_fields) << 8) | (static_cast<uint32_t>(batch) << 16);
         return i;
     }
 
