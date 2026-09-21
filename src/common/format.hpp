@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/charconv.hpp"
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -618,8 +620,12 @@ namespace behl
                         case format_spec::type::decimal:
                         case format_spec::type::none:
                         default:
-                            result = std::to_string(value);
+                        {
+                            char buffer[32];
+                            const auto converted = behl::to_chars(buffer, buffer + sizeof(buffer), value);
+                            result.assign(buffer, converted.ptr);
                             break;
+                        }
                     }
 
                     char align = spec.align;
@@ -639,19 +645,9 @@ namespace behl
                     }
                     else
                     {
-                        result = std::to_string(value);
-                        while (!result.empty() && result.back() == '0')
-                        {
-                            result.pop_back();
-                        }
-                        if (!result.empty() && result.back() == '.')
-                        {
-                            result.pop_back();
-                        }
-                        if (result.empty())
-                        {
-                            result = "0";
-                        }
+                        char buffer[64];
+                        const auto converted = behl::to_chars(buffer, buffer + sizeof(buffer), value);
+                        result.assign(buffer, converted.ptr);
                     }
 
                     char align = spec.align;

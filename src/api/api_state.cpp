@@ -29,6 +29,7 @@ namespace behl
     {
         auto* state = new State();
         state->print_handler = default_print_handler;
+        state->start_time = std::chrono::steady_clock::now();
 
         gc_init(state);
         gc_pause(state);

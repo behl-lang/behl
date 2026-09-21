@@ -54,21 +54,18 @@ print("Elapsed: " + tostring(elapsed) + " seconds");
 
 ## os.hrtime()
 
-Returns the current time as seconds since the epoch, using a high resolution clock.
+Returns seconds elapsed since the Behl state was created, from a monotonic high resolution clock.
 
 ```cpp
-let timestamp = os.hrtime();
-print(timestamp);
-
 let start = os.hrtime();
 // ... wait or do work ...
 let elapsed = os.hrtime() - start;
 print("Elapsed: " + tostring(elapsed) + " seconds");
 ```
 
-**Returns:** Floating-point number of seconds since the epoch
+**Returns:** Floating-point number of seconds since state creation
 
-**Use Case:** Getting current time, calculating elapsed durations
+**Use Case:** Calculating elapsed durations
 
 ---
 
@@ -114,6 +111,6 @@ print("Operation took: " + tostring(time) + " seconds");
 
 ## Notes
 
-- `os.clock()` and `os.hrtime()` are both monotonic wall-clock times, not CPU time
-- `os.clock()` is measured from an arbitrary starting point; use it for elapsed-time measurements like benchmarking
-- `os.hrtime()` is measured from the epoch; use it when you need a timestamp as well as elapsed time
+- `os.clock()` and `os.hrtime()` are both monotonic, not CPU time, and neither is a wall-clock timestamp
+- `os.clock()` returns floating-point seconds from an arbitrary starting point
+- `os.hrtime()` returns floating-point seconds from state creation; prefer it when the measured interval is short

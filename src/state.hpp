@@ -15,6 +15,7 @@
 #include "vm/upvalue.hpp"
 #include "vm/value.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <type_traits>
@@ -60,6 +61,8 @@ namespace behl
         uint32_t jit_depth{};
         bool jit_enabled{ true };
         bool jit_pending_clear{};
+
+        std::chrono::steady_clock::time_point start_time{};
 
         static constexpr int32_t stack_data_offset()
         {
