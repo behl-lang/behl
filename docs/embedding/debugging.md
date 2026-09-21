@@ -65,12 +65,12 @@ Set a callback to receive debug events:
 
 ```cpp
 void debug_event_handler(behl::State* S, behl::DebugEvent event) {
-    const char* file = nullptr;
+    std::string_view file;
     int line = 0;
     int column = 0;
     
-    if (behl::debug_get_location(S, &file, &line, &column)) {
-        printf("Paused at %s:%d:%d\n", file, line, column);
+    if (behl::debug_get_location(S, file, line, column)) {
+        std::cout << "Paused at " << file << ":" << line << ":" << column << "\n";
     }
     
     // Resume execution
@@ -87,8 +87,8 @@ behl::debug_set_event_callback(S, debug_event_handler);
 ### Setting Breakpoints
 
 ```cpp
-// Set breakpoint at line 10 of current file
-behl::debug_set_breakpoint(S, nullptr, 10);
+// Set breakpoint at line 10 of a chunk loaded with load_string
+behl::debug_set_breakpoint(S, "<string>", 10);
 
 // Set breakpoint at specific file and line
 behl::debug_set_breakpoint(S, "script.behl", 25);
@@ -138,14 +138,14 @@ behl::debug_pause(S);
 Get the current execution location:
 
 ```cpp
-const char* file = nullptr;
+std::string_view file;
 int line = 0;
 int column = 0;
 
-bool has_location = behl::debug_get_location(S, &file, &line, &column);
+bool has_location = behl::debug_get_location(S, file, line, column);
 
 if (has_location) {
-    printf("Current location: %s:%d:%d\n", file, line, column);
+    std::cout << "Current location: " << file << ":" << line << ":" << column << "\n";
 }
 ```
 
@@ -168,10 +168,10 @@ private:
         // Get debugger instance from state
         SimpleDebugger* dbg = /* retrieve from state */;
         
-        const char* file;
-        int line, column;
+        std::string_view file;
+        int line = 0, column = 0;
         
-        if (behl::debug_get_location(S, &file, &line, &column)) {
+        if (behl::debug_get_location(S, file, line, column)) {
             std::cout << "Paused at " << file << ":" << line << "\n";
         }
         
@@ -206,7 +206,7 @@ private:
             else if (cmd.rfind("b ", 0) == 0) {
                 // Parse "b <line>"
                 int line = std::stoi(cmd.substr(2));
-                behl::debug_set_breakpoint(S, nullptr, line);
+                behl::debug_set_breakpoint(S, "<string>", line);
                 std::cout << "Breakpoint set at line " << line << "\n";
             }
             else if (cmd == "h" || cmd == "help") {
@@ -249,10 +249,10 @@ public:
     }
     
     void set_breakpoint(int line) {
-        behl::debug_set_breakpoint(state, nullptr, line);
+        behl::debug_set_breakpoint(state, "<string>", line);
     }
     
-    void run(const char* code) {
+    void run(std::string_view code) {
         behl::load_string(state, code);
         behl::call(state, 0, 0);
     }
@@ -274,7 +274,7 @@ int main() {
     debugger.set_breakpoint(3);
     
     // Run script
-    const char* code = R"(
+    std::string_view code = R"(
         let x = 1;
         let y = 2;
         let z = x + y;
@@ -303,10 +303,11 @@ struct ConditionalBreakpoint {
 std::vector<ConditionalBreakpoint> conditional_breakpoints;
 
 void event_callback(behl::State* S, behl::DebugEvent event) {
-    const char* file;
-    int line;
+    std::string_view file;
+    int line = 0;
+    int column = 0;
     
-    if (behl::debug_get_location(S, &file, &line, nullptr)) {
+    if (behl::debug_get_location(S, file, line, column)) {
         for (const auto& bp : conditional_breakpoints) {
             if (bp.line == line && bp.condition(S)) {
                 // Handle breakpoint
@@ -324,10 +325,11 @@ void event_callback(behl::State* S, behl::DebugEvent event) {
 
 ```cpp
 void trace_callback(behl::State* S, behl::DebugEvent event) {
-    const char* file;
-    int line;
+    std::string_view file;
+    int line = 0;
+    int column = 0;
     
-    if (behl::debug_get_location(S, &file, &line, nullptr)) {
+    if (behl::debug_get_location(S, file, line, column)) {
         std::cout << "[TRACE] " << file << ":" << line << "\n";
     }
     
@@ -352,10 +354,11 @@ std::chrono::time_point<std::chrono::steady_clock> last_time;
 void profile_callback(behl::State* S, behl::DebugEvent event) {
     auto now = std::chrono::steady_clock::now();
     
-    const char* file;
-    int line;
+    std::string_view file;
+    int line = 0;
+    int column = 0;
     
-    if (behl::debug_get_location(S, &file, &line, nullptr)) {
+    if (behl::debug_get_location(S, file, line, column)) {
         if (last_time.time_since_epoch().count() > 0) {
             auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                 now - last_time);

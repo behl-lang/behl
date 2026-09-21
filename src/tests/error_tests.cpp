@@ -346,5 +346,29 @@ TEST_P(ErrorTest, TypeError_CompareTableWithNumber)
     EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
 }
 
+TEST_P(ErrorTest, LongErrorMessageIsNotReadPastItsEnd)
+{
+    constexpr std::string_view code = R"(
+        const string = import("string")
+
+        let msg = ""
+        for (let i = 0; i < 40; i = i + 1) { msg = msg + "ABCDEFGH" }
+
+        let ok, err = pcall(function() { error(msg) })
+
+        let at = string.find(err, msg)
+        if (at == nil) { return #msg, -1, "" }
+
+        return #msg, at, string.sub(err, at + #msg, at + #msg)
+    )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+
+    ASSERT_EQ(behl::to_integer(S, -3), 320);
+    ASSERT_GE(behl::to_integer(S, -2), 0) << "error text does not contain the message that was raised";
+    EXPECT_EQ(behl::to_string(S, -1), "\n") << "bytes were read past the end of the message payload";
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ErrorTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

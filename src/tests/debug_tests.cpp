@@ -29,12 +29,13 @@ struct DebugTestHarness
 
         harness->events.push_back(event);
 
-        const char* file = nullptr;
+        std::string_view file;
         int line = 0;
-        if (debug_get_location(S, &file, &line, nullptr))
+        int column = 0;
+        if (debug_get_location(S, file, line, column))
         {
             harness->breakpoint_hits.push_back(line);
-            if (file)
+            if (!file.empty())
             {
                 harness->locations.push_back(std::string(file) + ":" + std::to_string(line));
             }
@@ -126,7 +127,7 @@ TEST_P(DebugTest, BasicBreakpoint)
 {
     harness.commands.push("continue");
 
-    debug_set_breakpoint(S, nullptr, 2); // Line 2 is "let x = 1;"
+    debug_set_breakpoint(S, "<string>", 2); // Line 2 is "let x = 1;"
 
     constexpr std::string_view code = R"(
         let x = 1;
@@ -148,9 +149,9 @@ TEST_P(DebugTest, MultipleBreakpoints)
     harness.commands.push("c");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 3);
-    debug_set_breakpoint(S, nullptr, 5);
-    debug_set_breakpoint(S, nullptr, 6);
+    debug_set_breakpoint(S, "<string>", 3);
+    debug_set_breakpoint(S, "<string>", 5);
+    debug_set_breakpoint(S, "<string>", 6);
 
     constexpr std::string_view code = R"(
         let x = 1;
@@ -176,7 +177,7 @@ TEST_P(DebugTest, StepInto)
     harness.commands.push("s");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 3);
+    debug_set_breakpoint(S, "<string>", 3);
 
     constexpr std::string_view code = R"(
         let x = 1;
@@ -198,7 +199,7 @@ TEST_P(DebugTest, StepOver)
     harness.commands.push("n");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 6);
+    debug_set_breakpoint(S, "<string>", 6);
 
     constexpr std::string_view code = R"(
         function foo() {
@@ -225,7 +226,7 @@ TEST_P(DebugTest, BreakpointInLoop)
     harness.commands.push("c");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 3);
+    debug_set_breakpoint(S, "<string>", 3);
 
     constexpr std::string_view code = R"(
         for (let i = 0; i < 3; i++) {
@@ -247,8 +248,8 @@ TEST_P(DebugTest, RemoveBreakpoint)
 {
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 4);
-    debug_remove_breakpoint(S, nullptr, 4);
+    debug_set_breakpoint(S, "<string>", 4);
+    debug_remove_breakpoint(S, "<string>", 4);
 
     constexpr std::string_view code = R"(
         let x = 1;
@@ -281,9 +282,9 @@ TEST_P(DebugTest, PauseExecution)
 
 TEST_P(DebugTest, ClearAllBreakpoints)
 {
-    debug_set_breakpoint(S, nullptr, 3);
-    debug_set_breakpoint(S, nullptr, 4);
-    debug_set_breakpoint(S, nullptr, 5);
+    debug_set_breakpoint(S, "<string>", 3);
+    debug_set_breakpoint(S, "<string>", 4);
+    debug_set_breakpoint(S, "<string>", 5);
     debug_clear_breakpoints(S);
 
     constexpr std::string_view code = R"(
@@ -305,23 +306,23 @@ TEST(DebugStandaloneTest, GetLocation)
 
     debug_enable(S, true);
     debug_set_event_callback(S, [](State* state, DebugEvent) {
-        const char* file = nullptr;
+        std::string_view file;
         int line = 0;
         int column = 0;
 
-        bool has_location = debug_get_location(state, &file, &line, &column);
+        bool has_location = debug_get_location(state, file, line, column);
         EXPECT_TRUE(has_location);
 
         if (has_location)
         {
-            EXPECT_NE(file, nullptr);
+            EXPECT_FALSE(file.empty());
             EXPECT_GT(line, 0);
         }
 
         debug_continue(state);
     });
 
-    debug_set_breakpoint(S, nullptr, 2);
+    debug_set_breakpoint(S, "<string>", 2);
 
     constexpr std::string_view code = R"(
         let x = 1;

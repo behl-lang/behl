@@ -165,7 +165,7 @@ TEST_P(RecursionTest, TailCallDeepRecursion)
 
 TEST_P(RecursionTest, TailCallToNativeFunction)
 {
-    const char* check_code = R"(
+    constexpr std::string_view check_code = R"(
         return print
     )";
     ASSERT_NO_THROW(behl::load_string(S, check_code));

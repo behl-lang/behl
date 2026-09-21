@@ -51,7 +51,7 @@ namespace behl
             if (bp.line == current_line)
             {
                 // If breakpoint has no file specified, or file matches
-                if (bp.file == nullptr || GCString::equals(bp.file, frame.proto->source_name))
+                if (GCString::equals(bp.file, frame.proto->source_name))
                 {
                     out_event = DebugEvent::BreakpointHit;
                     return true;

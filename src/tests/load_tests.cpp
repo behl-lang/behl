@@ -34,7 +34,7 @@ TEST_P(LoadTest, LoadStringSuccess)
 
 TEST_P(LoadTest, LoadStringSyntaxError)
 {
-    const char* bad_code = "let x = ";
+    constexpr std::string_view bad_code = "let x = ";
     EXPECT_THROW({ behl::load_string(S, bad_code); }, behl::SyntaxError);
 }
 

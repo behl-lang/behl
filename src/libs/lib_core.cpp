@@ -305,7 +305,7 @@ namespace behl
 
         if (str_val.is_string())
         {
-            error(S, str_val.get_string()->data());
+            error(S, str_val.get_string()->view());
         }
         else
         {

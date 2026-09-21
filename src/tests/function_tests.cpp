@@ -45,7 +45,7 @@ TEST_P(FunctionTest, GlobalFunctionAcrossLoadStrings)
 
     ASSERT_NO_THROW(behl::call(S, 0, 0));
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         return add(2, 3)
     )";
     ASSERT_NO_THROW(behl::load_string(S, code2));
@@ -64,7 +64,7 @@ TEST_P(FunctionTest, GlobalFunctionOverrideAcrossLoadStrings)
     ASSERT_NO_THROW(behl::load_string(S, code));
     ASSERT_NO_THROW(behl::call(S, 0, 0));
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         function add(a, b) {
             return a * b
         }
@@ -87,7 +87,7 @@ TEST_P(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
     ASSERT_NO_THROW(behl::call(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         return add(2, 3)
     )";
     ASSERT_NO_THROW(behl::load_string(S, code2));
@@ -96,7 +96,7 @@ TEST_P(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
     behl::pop(S, 1);
 
-    const char* code3 = R"(
+    constexpr std::string_view code3 = R"(
         function add(a, b) {
             return a * b
         }
@@ -105,7 +105,7 @@ TEST_P(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
     ASSERT_NO_THROW(behl::call(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 
-    const char* code4 = R"(
+    constexpr std::string_view code4 = R"(
         return add(2, 3)
     )";
     ASSERT_NO_THROW(behl::load_string(S, code4));
