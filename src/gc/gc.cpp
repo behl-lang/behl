@@ -278,7 +278,7 @@ namespace behl
                     new_obj->storage.heap.len = total_size_required;
                 }
 
-                new_obj->header.object_hash = string_hash32(new_obj->view());
+                new_obj->header.object_hash = StringHash32{}(new_obj->view());
 
                 gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -318,7 +318,7 @@ namespace behl
             new_obj->storage.heap.flag = GCString::kHeapFlag;
         }
 
-        new_obj->header.object_hash = string_hash32(new_obj->view());
+        new_obj->header.object_hash = StringHash32{}(new_obj->view());
 
         gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -900,7 +900,8 @@ namespace behl
             size_t queued_count = 0;
             for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
             {
-                if (obj->get_header().color == GCColor::kWhite && obj->get_header().type == GCType::kUserdata)
+                if (obj->get_header().color == GCColor::kWhite && obj->get_header().type == GCType::kUserdata
+                    && !obj->get_header().finalized)
                 {
                     auto* userdata = static_cast<UserdataData*>(obj);
                     if (userdata->metatable != nullptr)
@@ -1126,6 +1127,9 @@ namespace behl
             UserdataData* userdata = S->gc.gc_finalize_queue.back();
             S->gc.gc_finalize_queue.pop_back();
 
+            userdata->header.color = GCColor::kWhite;
+            userdata->header.finalized = true;
+
             // Call __gc metamethod
             if (userdata->metatable != nullptr)
             {
@@ -1137,10 +1141,6 @@ namespace behl
                     metatable_call_method(S, gc_method, Value(userdata));
                 }
             }
-
-            // Mark userdata WHITE so it will be collected in the next GC cycle
-            // (it was kept BLACK to survive this cycle's sweep)
-            userdata->header.color = GCColor::kWhite;
 
             gc_log("Marked finalized userdata {:p} WHITE for next cycle", static_cast<const void*>(userdata));
             ++work_done;
@@ -1194,28 +1194,8 @@ namespace behl
 
     // ===== Main GC Entry Point =====
 
-    void gc_step(State* S)
+    static void gc_step_impl(State* S)
     {
-        // Don't run if GC is paused
-        if (S->gc.gc_paused)
-        {
-            return;
-        }
-
-        // Guard against re-entrant GC (e.g., during finalizers)
-        if (S->gc.gc_running)
-        {
-            return;
-        }
-
-        const bool cycle_active = (S->gc.gc_phase != GCPhase::kIdle);
-        if (!cycle_active && S->gc.gc_debt <= 0)
-        {
-            return;
-        }
-
-        S->gc.gc_running = true;
-
         if constexpr (kGCLoggingEnabled)
         {
             static size_t call_count = 0;
@@ -1317,8 +1297,40 @@ namespace behl
 
         gc_log("gc_step complete: debt={}, phase={}, total_bytes={}", S->gc.gc_debt, static_cast<int>(S->gc.gc_phase),
             S->gc.gc_total_bytes);
+    }
 
-        // Clear running flag
+    void gc_step(State* S)
+    {
+        // Don't run if GC is paused
+        if (S->gc.gc_paused)
+        {
+            return;
+        }
+
+        // Guard against re-entrant GC (e.g., during finalizers)
+        if (S->gc.gc_running)
+        {
+            return;
+        }
+
+        const bool cycle_active = (S->gc.gc_phase != GCPhase::kIdle);
+        if (!cycle_active && S->gc.gc_debt <= 0)
+        {
+            return;
+        }
+
+        S->gc.gc_running = true;
+
+        try
+        {
+            gc_step_impl(S);
+        }
+        catch (...)
+        {
+            S->gc.gc_running = false;
+            throw;
+        }
+
         S->gc.gc_running = false;
     }
 
@@ -1345,6 +1357,14 @@ namespace behl
 
     void gc_collect(State* S)
     {
+        // Requests made from inside a finalizer are ignored
+        if (S->gc.gc_running)
+        {
+            return;
+        }
+
+        S->gc.gc_running = true;
+
         gc_log("===== FULL COLLECTION STARTED =====");
 
         // Completely reset GC state for a fresh cycle
@@ -1358,10 +1378,20 @@ namespace behl
             obj->get_header().color = GCColor::kBlack;
         }
 
-        // Start a new cycle
-        gc_start_cycle(S);
-        gc_advance_cycles(S);
-        gc_destroy_pools(S);
+        try
+        {
+            // Start a new cycle
+            gc_start_cycle(S);
+            gc_advance_cycles(S);
+            gc_destroy_pools(S);
+        }
+        catch (...)
+        {
+            S->gc.gc_running = false;
+            throw;
+        }
+
+        S->gc.gc_running = false;
 
         gc_log("===== FULL COLLECTION COMPLETE: phase={} =====", static_cast<int>(S->gc.gc_phase));
     }

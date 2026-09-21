@@ -35,8 +35,9 @@ namespace behl
 
     size_t ValueHash::operator()(const std::string_view key) const noexcept
     {
-        return string_key_hash(string_hash32(key));
+        return StringHash32{}(key);
     }
+
 
     static inline uint64_t fmix64(uint64_t k) noexcept
     {
@@ -116,8 +117,8 @@ namespace behl
             case Type::kString:
             {
                 auto* val = get_string();
-                assert(val->header.object_hash == string_hash32(val->view()) && "stale cached string hash");
-                return string_key_hash(val->header.object_hash);
+                assert(val->header.object_hash == StringHash32{}(val->view()) && "stale cached string hash");
+                return val->header.object_hash;
             }
 
             case Type::kClosure:

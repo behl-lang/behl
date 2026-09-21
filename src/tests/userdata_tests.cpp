@@ -822,5 +822,77 @@ TEST_P(UserdataTest, UserdataPolymorphicHandler)
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 3.14);
 }
 
+TEST_P(UserdataTest, FinalizerCallingCollectDoesNotCorruptState)
+{
+    gc_counter = 0;
+
+    constexpr std::string_view code = R"(
+            const gc = import("gc");
+            let mt = {};
+            mt["__gc"] = function(ud) { gc.collect(); };
+            let ud = create_test_userdata();
+            setmetatable(ud, mt);
+            ud = nil;
+            gc.collect();
+
+            let survivors = {};
+            for (let i = 0; i < 200; i = i + 1) { survivors[i] = {id = i}; }
+            gc.collect();
+
+            let bad = 0;
+            for (let i = 0; i < 200; i = i + 1) {
+                if (survivors[i] == nil || survivors[i].id != i) { bad = bad + 1; }
+            }
+            return bad;
+        )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 0) << "heap corrupted after a finalizer re-entered the collector";
+}
+
+TEST_P(UserdataTest, ThrowingFinalizerLeavesAutomaticCollectionRunning)
+{
+    gc_counter = 0;
+
+    constexpr std::string_view thrower = R"(
+            let mt = {};
+            mt["__gc"] = function(ud) { error("boom") };
+            let ud = create_test_userdata();
+            setmetatable(ud, mt);
+            ud = nil;
+            for (let i = 0; i < 200000; i = i + 1) { let junk = {pad = i}; }
+        )";
+
+    bool threw = false;
+    try
+    {
+        behl::load_string(S, thrower);
+        behl::call(S, 0, 0);
+    }
+    catch (const std::exception&)
+    {
+        threw = true;
+    }
+    ASSERT_TRUE(threw) << "finalizer never threw, test does not exercise the path";
+
+    behl::set_top(S, 0);
+
+    constexpr std::string_view after = R"(
+            const gc = import("gc");
+            let active = 0;
+            let keep = {};
+            for (let i = 0; i < 120000; i = i + 1) {
+                keep[i % 500] = {pad = i};
+                if (gc.phase() != "idle") { active = active + 1; }
+            }
+            return active;
+        )";
+
+    ASSERT_NO_THROW(behl::load_string(S, after));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_LT(behl::to_integer(S, -1), 50000) << "automatic collection never ran again after a finalizer threw";
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, UserdataTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

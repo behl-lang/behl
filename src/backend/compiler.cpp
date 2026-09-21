@@ -106,10 +106,10 @@ namespace behl
         AutoVector<PendingDefer> pending_defers;
         uint32_t defer_count{};
         size_t loop_floor{};
-        AutoHashMap<std::string_view, size_t, StringHash, StringEq> upvalue_indices;
+        AutoHashMap<std::string_view, size_t, StringHash32, StringEq> upvalue_indices;
         AutoHashMap<Value, ConstIndex, ValueHash, ValueEq> int_const_indices;
         AutoHashMap<Value, ConstIndex, ValueHash, ValueEq> fp_const_indices;
-        AutoHashMap<std::string_view, ConstIndex, StringHash, StringEq> str_const_indices;
+        AutoHashMap<std::string_view, ConstIndex, StringHash32, StringEq> str_const_indices;
         int32_t lastline = 1;
         int32_t lastcolumn = 1;
         uint8_t freereg = 0;

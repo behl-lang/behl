@@ -50,10 +50,11 @@ namespace behl
         BEHL_NO_UNIQUE_ADDRESS Eq eq_{};
 
         // Helper to extract 7-bit hash from full hash
-        static constexpr int8_t h2(size_t hash)
+        template<typename H>
+        static constexpr int8_t h2(H hash)
         {
-            // Use appropriate shift based on size_t width
-            constexpr int shift = sizeof(size_t) == 8 ? 57 : 25;
+            // Use appropriate shift based on the hash function's result width
+            constexpr int shift = static_cast<int>(sizeof(H) * 8 - 7);
             return static_cast<int8_t>((hash >> shift) & 0x7F);
         }
 
@@ -286,7 +287,7 @@ namespace behl
                     std::forward<KeyType>(key), std::forward<ValueType>(value));
             }
 
-            size_t hash = hasher_(key);
+            const auto hash = hasher_(key);
             int8_t h2_val = h2(hash);
             size_t mask = capacity_ - 1;
             size_t index = hash & mask;
@@ -363,7 +364,7 @@ namespace behl
                 return;
             }
 
-            size_t hash = hasher_(key);
+            const auto hash = hasher_(key);
             int8_t h2_val = h2(hash);
             size_t mask = capacity_ - 1;
             size_t index = hash & mask;
@@ -505,7 +506,7 @@ namespace behl
         template<typename KeyType, typename ValueType>
         size_t place(KeyType&& key, ValueType&& value)
         {
-            size_t hash = hasher_(key);
+            const auto hash = hasher_(key);
             int8_t h2_val = h2(hash);
             size_t mask = capacity_ - 1;
             size_t index = hash & mask;
@@ -534,7 +535,7 @@ namespace behl
                 return nullptr;
             }
 
-            size_t hash = self.hasher_(key);
+            const auto hash = self.hasher_(key);
             int8_t h2_val = h2(hash);
             size_t mask = self.capacity_ - 1;
             size_t index = hash & mask;

@@ -16,22 +16,6 @@
 namespace behl
 {
 
-    BEHL_FORCEINLINE static size_t string_key_hash(uint32_t h) noexcept
-    {
-        uint64_t k = h;
-        k ^= k >> 33;
-        k *= 0xff51afd7ed558ccdULL;
-        k ^= k >> 33;
-        k *= 0xc4ceb9fe1a85ec53ULL;
-        k ^= k >> 33;
-        return static_cast<size_t>(k);
-    }
-
-    BEHL_FORCEINLINE static uint32_t string_hash32(std::string_view sv) noexcept
-    {
-        return static_cast<uint32_t>(StringHash{}(sv));
-    }
-
     struct GCString : GCObject
     {
         static constexpr auto kObjectType = GCType::kString;
@@ -223,14 +207,14 @@ namespace behl
     {
         using is_transparent = void;
 
-        size_t operator()(const GCString* str) const noexcept
+        auto operator()(const GCString* str) const noexcept
         {
-            return string_key_hash(str->header.object_hash);
+            return str->header.object_hash;
         }
 
-        size_t operator()(const std::string_view str) const noexcept
+        auto operator()(const std::string_view str) const noexcept
         {
-            return string_key_hash(string_hash32(str));
+            return StringHash32{}(str);
         }
     };
 

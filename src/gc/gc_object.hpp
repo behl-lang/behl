@@ -14,6 +14,7 @@ namespace behl
     {
         GCType type{};
         GCColor color{};
+        bool finalized{};
 
         uint32_t object_hash{};
 
