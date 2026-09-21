@@ -351,5 +351,45 @@ TEST(DebugStandaloneTest, IsEnabled)
     close(S);
 }
 
+TEST_P(DebugTest, BreakpointMatchesLongSourceName)
+{
+    harness.commands.push("continue");
+
+    constexpr std::string_view chunkname = "a-source-name-that-is-longer-than-sso-capacity.behl";
+    static_assert(chunkname.size() > 31, "chunk name must exceed GCString SSO capacity");
+
+    debug_set_breakpoint(S, chunkname, 2);
+
+    constexpr std::string_view code = R"(
+        let x = 1;
+        let y = 2;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, chunkname, false));
+
+    call(S, 0, 0);
+
+    EXPECT_EQ(harness.breakpoint_hits.size(), 1) << "breakpoint on a source name longer than 31 bytes never fired";
+}
+
+TEST_P(DebugTest, BreakpointMatchesShortSourceName)
+{
+    harness.commands.push("continue");
+
+    constexpr std::string_view chunkname = "short.behl";
+    static_assert(chunkname.size() <= 31, "chunk name must fit GCString SSO capacity");
+
+    debug_set_breakpoint(S, chunkname, 2);
+
+    constexpr std::string_view code = R"(
+        let x = 1;
+        let y = 2;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, chunkname, false));
+
+    call(S, 0, 0);
+
+    EXPECT_EQ(harness.breakpoint_hits.size(), 1);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, DebugTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

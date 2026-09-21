@@ -201,11 +201,16 @@ namespace behl
                 return true;
             }
 
-            return [&]<size_t... Is>(std::index_sequence<Is...>) {
-                const auto& ac = a->storage.chunks;
-                const auto& bc = b->storage.chunks;
-                return ((ac[Is] == bc[Is]) && ...);
-            }(std::make_index_sequence<32 / sizeof(size_t)>{});
+            if (a->is_sso() && b->is_sso())
+            {
+                return [&]<size_t... Is>(std::index_sequence<Is...>) {
+                    const auto& ac = a->storage.chunks;
+                    const auto& bc = b->storage.chunks;
+                    return ((ac[Is] == bc[Is]) && ...);
+                }(std::make_index_sequence<32 / sizeof(size_t)>{});
+            }
+
+            return a->view() == b->view();
         }
     };
 
