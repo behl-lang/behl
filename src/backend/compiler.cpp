@@ -1605,7 +1605,15 @@ namespace behl
     void VisitorAdapter::visit(const AstUnOp& node)
     {
         Reg result_reg = get_target_reg();
+
+        const bool saved_compile_for_jump = compile_for_jump;
+        size_t* const saved_jump_patch = jump_patch_location;
+        compile_for_jump = false;
+        jump_patch_location = nullptr;
         node.expr->accept(*this);
+        compile_for_jump = saved_compile_for_jump;
+        jump_patch_location = saved_jump_patch;
+
         Reg expr_reg = C.freereg - 1;
         Instruction instr;
         switch (node.op)

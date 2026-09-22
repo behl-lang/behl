@@ -498,5 +498,45 @@ TEST_P(LogicalOperatorTest, OrReturnsLastValue)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
+TEST_P(LogicalOperatorTest, NotOfLocalInConditionTakesCorrectBranch)
+{
+    constexpr std::string_view code = R"(
+        let hits = 0
+        let t = true
+        let f = false
+        if (!t) { hits = hits + 1 }
+        if (!f) { hits = hits + 10 }
+        if (!!t) { hits = hits + 100 }
+        while (!t) { hits = hits + 1000
+            break }
+        let c = 46
+        let good = (c >= 48 && c <= 57) || c == 46
+        if (!good) { hits = hits + 10000 }
+        if (!(c == 46)) { hits = hits + 100000 }
+        return hits
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 110);
+}
+
+TEST_P(LogicalOperatorTest, NotOfLocalInConditionInsideFunction)
+{
+    constexpr std::string_view code = R"(
+        function count_bad(s) {
+            let bad = 0
+            for (let i = 0; i < #s; i++) {
+                let good = s[i] == 1 || s[i] == 2
+                if (!good) { bad = bad + 1 }
+            }
+            return bad
+        }
+        return count_bad({1, 2, 1, 3, 2})
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 1);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, LogicalOperatorTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
