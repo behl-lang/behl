@@ -102,7 +102,11 @@ namespace behl
     BEHL_FORCEINLINE
     CallFrameHeader& frame_header(State* S, const CallFrame& frame) noexcept
     {
-        return S->call_headers[static_cast<size_t>(&frame - S->call_stack.data())];
+        const ptrdiff_t index = &frame - S->call_stack.data();
+        assert(S->call_stack.size() == S->call_headers.size() && "frame_header: header array out of step with call stack");
+        assert(index >= 0 && static_cast<size_t>(index) < S->call_stack.size()
+            && "frame_header: frame is not a live call_stack element");
+        return S->call_headers[static_cast<size_t>(index)];
     }
 
     BEHL_FORCEINLINE
