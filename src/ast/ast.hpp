@@ -82,7 +82,6 @@ namespace behl
             : type(t)
         {
         }
-        virtual ~AstNode() = default;
         virtual AstNode* clone(AstHolder& holder) const = 0;
         virtual void accept(AstVisitor& v) const = 0;
 
@@ -122,6 +121,8 @@ namespace behl
         }
 
     protected:
+        ~AstNode() = default;
+
         template<typename T, typename... TArgs>
         T* make_clone(AstHolder& holder, TArgs&&... args) const
         {
@@ -130,7 +131,7 @@ namespace behl
         }
     };
 
-    struct AstNil : AstNode
+    struct AstNil final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kNil;
         AstNil()
@@ -144,7 +145,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstBlock : AstNode
+    struct AstBlock final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kBlock;
         AstNode* first_stat = nullptr;
@@ -170,7 +171,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstProgram : AstNode
+    struct AstProgram final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kProgram;
         AstBlock* block = nullptr;
@@ -202,7 +203,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstBool : AstNode
+    struct AstBool final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kBool;
         bool value;
@@ -218,7 +219,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstInt : AstNode
+    struct AstInt final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kInteger;
         Integer value;
@@ -234,7 +235,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstFP : AstNode
+    struct AstFP final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kFP;
         FP value;
@@ -250,7 +251,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstString : AstNode
+    struct AstString final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kString;
         char* data;
@@ -275,7 +276,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstVararg : AstNode
+    struct AstVararg final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kVararg;
         AstVararg()
@@ -289,7 +290,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstIdent : AstNode
+    struct AstIdent final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kIdent;
         AstString* name;
@@ -305,7 +306,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstBinOp : AstNode
+    struct AstBinOp final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kBinOp;
         TokenType op;
@@ -326,7 +327,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstUnOp : AstNode
+    struct AstUnOp final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kUnOp;
         TokenType op;
@@ -344,7 +345,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstTernary : AstNode
+    struct AstTernary final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kTernary;
         AstNode* condition;
@@ -368,7 +369,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstFuncCall : AstNode
+    struct AstFuncCall final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kFuncCall;
         AstNode* func;
@@ -397,7 +398,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct TableField : AstNode
+    struct TableField final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kTableField;
         AstNode* key = nullptr; // nullptr for array-style entries
@@ -419,7 +420,7 @@ namespace behl
         }
     };
 
-    struct AstTableCtor : AstNode
+    struct AstTableCtor final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kTableCtor;
         TableField* first_field = nullptr;
@@ -444,7 +445,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstIndex : AstNode
+    struct AstIndex final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kIndex;
         AstNode* table;
@@ -462,7 +463,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstMember : AstNode
+    struct AstMember final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kMember;
         AstNode* table;
@@ -480,7 +481,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstFuncDef : AstNode
+    struct AstFuncDef final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kFuncDef;
         AstString* first_param = nullptr;
@@ -519,7 +520,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstAssign : AstNode
+    struct AstAssign final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kAssign;
         AstNode* first_var = nullptr;
@@ -548,7 +549,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstLocalDecl : AstNode
+    struct AstLocalDecl final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kLocalDecl;
         bool is_const = false;
@@ -582,7 +583,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstAssignLocal : AstNode
+    struct AstAssignLocal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kAssignLocal;
         AstString* name;
@@ -603,7 +604,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstAssignGlobal : AstNode
+    struct AstAssignGlobal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kAssignGlobal;
         AstString* name;
@@ -624,7 +625,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstAssignUpvalue : AstNode
+    struct AstAssignUpvalue final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kAssignUpvalue;
         AstString* name;
@@ -645,7 +646,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstCompoundAssign : AstNode
+    struct AstCompoundAssign final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kCompoundAssign;
         AstNode* target;
@@ -668,7 +669,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstIncrement : AstNode
+    struct AstIncrement final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kIncrement;
         AstNode* target;
@@ -687,7 +688,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstDecrement : AstNode
+    struct AstDecrement final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kDecrement;
         AstNode* target;
@@ -706,7 +707,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstCompoundLocal : AstNode
+    struct AstCompoundLocal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kCompoundLocal;
         AstString* name;
@@ -729,7 +730,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstCompoundGlobal : AstNode
+    struct AstCompoundGlobal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kCompoundGlobal;
         AstString* name;
@@ -752,7 +753,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstCompoundUpvalue : AstNode
+    struct AstCompoundUpvalue final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kCompoundUpvalue;
         AstString* name;
@@ -775,7 +776,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstIncLocal : AstNode
+    struct AstIncLocal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kIncLocal;
         AstString* name;
@@ -794,7 +795,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstIncGlobal : AstNode
+    struct AstIncGlobal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kIncGlobal;
         AstString* name;
@@ -813,7 +814,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstIncUpvalue : AstNode
+    struct AstIncUpvalue final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kIncUpvalue;
         AstString* name;
@@ -832,7 +833,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstDecLocal : AstNode
+    struct AstDecLocal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kDecLocal;
         AstString* name;
@@ -851,7 +852,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstDecGlobal : AstNode
+    struct AstDecGlobal final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kDecGlobal;
         AstString* name;
@@ -870,7 +871,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstDecUpvalue : AstNode
+    struct AstDecUpvalue final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kDecUpvalue;
         AstString* name;
@@ -889,7 +890,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct ElseIf : AstNode
+    struct ElseIf final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kElseIf;
         AstNode* cond = nullptr;
@@ -923,7 +924,7 @@ namespace behl
         }
     };
 
-    struct AstIf : AstNode
+    struct AstIf final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kIf;
         AstNode* cond;
@@ -973,7 +974,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstWhile : AstNode
+    struct AstWhile final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kWhile;
         AstNode* cond;
@@ -1001,7 +1002,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstForIn : AstNode
+    struct AstForIn final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kForIn;
         AstNode* first_name = nullptr;
@@ -1044,7 +1045,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstForC : AstNode
+    struct AstForC final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kForC;
         AstNode* init;
@@ -1081,7 +1082,7 @@ namespace behl
 
     // Optimized numeric C-style for loop
     // Pattern: for(let i = start; i </<=/>/>= end; i++ / i-- / i += step / i -= step)
-    struct AstForCNumeric : AstNode
+    struct AstForCNumeric final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kForCNumeric;
         AstString* var; // Loop variable name
@@ -1122,7 +1123,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstFuncDefStat : AstNode
+    struct AstFuncDefStat final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kFuncDefStat;
         AstNode* first_name_part = nullptr;
@@ -1170,7 +1171,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstReturn : AstNode
+    struct AstReturn final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kReturn;
         AstNode* first_expr = nullptr;
@@ -1195,7 +1196,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstBreak : AstNode
+    struct AstBreak final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kBreak;
         AstBreak()
@@ -1209,7 +1210,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstContinue : AstNode
+    struct AstContinue final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kContinue;
         AstContinue()
@@ -1223,7 +1224,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstDefer : AstNode
+    struct AstDefer final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kDefer;
         AstNode* body = nullptr; // Can be a single statement or AstBlock
@@ -1247,7 +1248,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstScope : AstNode
+    struct AstScope final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kScope;
         AstBlock* block = nullptr;
@@ -1273,7 +1274,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstExprStat : AstNode
+    struct AstExprStat final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kExprStat;
         AstNode* expr;
@@ -1290,7 +1291,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstModuleDecl : AstNode
+    struct AstModuleDecl final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kModuleDecl;
 
@@ -1305,7 +1306,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstExportDecl : AstNode
+    struct AstExportDecl final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kExportDecl;
         AstNode* declaration; // FuncDefStat or LocalDecl (const only)
@@ -1322,7 +1323,7 @@ namespace behl
         void accept(AstVisitor& v) const override;
     };
 
-    struct AstExportList : AstNode
+    struct AstExportList final : AstNode
     {
         static constexpr AstNodeType kType = AstNodeType::kExportList;
         AstString* first_name = nullptr;

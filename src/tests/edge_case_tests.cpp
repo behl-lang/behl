@@ -492,5 +492,37 @@ TEST_P(EdgeCaseTest, StringCaseConversionLeavesHighBytesAlone)
     ASSERT_EQ(behl::to_integer(S, -1), -1) << "byte was altered by case conversion";
 }
 
+TEST_P(EdgeCaseTest, StringLiteralLargerThanAstPool)
+{
+    std::string code = "let s = " + std::string(1, '"') + std::string(70000, 'A') + std::string(1, '"') + "\nreturn #s\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 70000);
+}
+
+TEST_P(EdgeCaseTest, StringLiteralManyTimesTheAstPool)
+{
+    std::string code = "let s = " + std::string(1, '"') + std::string(1024 * 1024, 'B') + std::string(1, '"') + "\nreturn #s\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 1024 * 1024);
+}
+
+TEST_P(EdgeCaseTest, MultipleOversizedStringLiteralsCoexist)
+{
+    const std::string big_a(70000, 'A');
+    const std::string big_b(90000, 'B');
+    std::string code = "let a = " + std::string(1, '"') + big_a + std::string(1, '"') + "\n";
+    code += "let b = " + std::string(1, '"') + big_b + std::string(1, '"') + "\n";
+    code += "let c = " + std::string(1, '"') + "small" + std::string(1, '"') + "\n";
+    code += "return #a + #b + #c\n";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 70000 + 90000 + 5);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, EdgeCaseTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
