@@ -155,6 +155,26 @@ TEST_P(IntegerWrappingTest, NegationOfMin)
     ASSERT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
 }
 
+TEST_P(IntegerWrappingTest, ConstantFoldedNegationOfMinMatchesRuntime)
+{
+    constexpr std::string_view code = R"(
+        function negate(v) { return -v }
+
+        let folded = -(-9223372036854775807 - 1)
+        let runtime = negate(-9223372036854775807 - 1)
+
+        return folded, runtime
+    )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::get_top(S), 2);
+
+    ASSERT_EQ(behl::type(S, -2), behl::Type::kInteger);
+    ASSERT_EQ(behl::to_integer(S, -2), static_cast<int64_t>(0x8000000000000000ULL));
+    ASSERT_EQ(behl::to_integer(S, -1), behl::to_integer(S, -2));
+}
+
 TEST_P(IntegerWrappingTest, ComplexWrapping)
 {
     constexpr std::string_view code = R"(

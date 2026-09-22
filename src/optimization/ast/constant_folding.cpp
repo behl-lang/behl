@@ -1,9 +1,9 @@
 #include "constant_folding.hpp"
 
 #include "ast/ast_transformer.hpp"
+#include "common/arithmetic.hpp"
 #include "common/print.hpp"
 #include "config_internal.hpp"
-#include "common/arithmetic.hpp"
 
 #include <cmath>
 
@@ -204,10 +204,10 @@ namespace behl
                     if constexpr (kOptimizationPassDebug)
                     {
                         fold_count++;
-                        println("      Folding unary minus int (-{}) -> {}", int_node->value, -int_node->value);
+                        println("      Folding unary minus int (-{}) -> {}", int_node->value, arithmetic::neg(int_node->value));
                     }
                     changed = true;
-                    auto* folded = holder.make<AstInt>(-int_node->value);
+                    auto* folded = holder.make<AstInt>(arithmetic::neg(int_node->value));
                     folded->line = node->line;
                     folded->column = node->column;
                     return folded;
