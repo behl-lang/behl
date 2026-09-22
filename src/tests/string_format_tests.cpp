@@ -1,6 +1,7 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 
 namespace behl
@@ -212,6 +213,85 @@ namespace behl
         ASSERT_NO_THROW(load_string(S, code));
         ASSERT_NO_THROW(call(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "test             test    test   ");
+    }
+
+    TEST_P(StringFormatTest, RejectsOversizedWidth)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:99999999999}", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsOversizedPrecision)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.99999999999}", 1.5);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsOversizedWidthArgumentIndex)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:{99999999999}}", 1, 2);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsOversizedPrecisionArgumentIndex)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.{99999999999}}", 1.5, 2);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsWidthJustPastTheLimit)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:65537}", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, AcceptsWidthAtTheLimit)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return #string.format("{:65536}", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_integer(S, -1), 65536);
+    }
+
+    TEST_P(StringFormatTest, OrdinaryWidthsStillWork)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("[{:>5}]", 42) + string.format("[{:.2f}]", 1.239);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "[   42][1.24]");
     }
 
     INSTANTIATE_TEST_SUITE_P(Mode, StringFormatTest, ::testing::Bool(),

@@ -88,6 +88,24 @@ namespace behl
         constexpr format_parts() = default;
     };
 
+    inline constexpr int kMaxFormatNumber = 1 << 16;
+
+    constexpr int parse_bounded_number(std::string_view spec_str, size_t& i, const char* message)
+    {
+        int value = 0;
+        while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
+        {
+            const int digit = spec_str[i] - '0';
+            if (value > (kMaxFormatNumber - digit) / 10)
+            {
+                throw std::runtime_error(message);
+            }
+            value = value * 10 + digit;
+            ++i;
+        }
+        return value;
+    }
+
     constexpr format_spec parse_format_spec(std::string_view spec_str)
     {
         format_spec spec;
@@ -111,12 +129,7 @@ namespace behl
             if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
             {
                 // Parse indexed dynamic width: {N}
-                int index = 0;
-                while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
-                {
-                    index = index * 10 + (spec_str[i++] - '0');
-                }
-                spec.width_arg_index = index;
+                spec.width_arg_index = parse_bounded_number(spec_str, i, "format width argument index out of range");
                 spec.dynamic_width = true;
             }
             else if (i < spec_str.size() && spec_str[i] == '}')
@@ -132,12 +145,7 @@ namespace behl
         }
         else if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
         {
-            int width = 0;
-            while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
-            {
-                width = width * 10 + (spec_str[i++] - '0');
-            }
-            spec.width = width;
+            spec.width = parse_bounded_number(spec_str, i, "format width out of range");
         }
 
         // Check for dynamic precision: .{} or .{N}
@@ -150,12 +158,8 @@ namespace behl
                 if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
                 {
                     // Parse indexed dynamic precision: .{N}
-                    int index = 0;
-                    while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
-                    {
-                        index = index * 10 + (spec_str[i++] - '0');
-                    }
-                    spec.precision_arg_index = index;
+                    spec.precision_arg_index = parse_bounded_number(
+                        spec_str, i, "format precision argument index out of range");
                     spec.dynamic_precision = true;
                 }
                 else if (i < spec_str.size() && spec_str[i] == '}')
@@ -171,12 +175,7 @@ namespace behl
             }
             else if (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
             {
-                int precision = 0;
-                while (i < spec_str.size() && spec_str[i] >= '0' && spec_str[i] <= '9')
-                {
-                    precision = precision * 10 + (spec_str[i++] - '0');
-                }
-                spec.precision = precision;
+                spec.precision = parse_bounded_number(spec_str, i, "format precision out of range");
             }
         }
 
