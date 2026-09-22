@@ -1,5 +1,6 @@
 #include "frontend/lexer.hpp"
 
+#include "common/ascii.hpp"
 #include "common/vector.hpp"
 #include "gc/gc.hpp"
 #include "state.hpp"
@@ -52,21 +53,6 @@ namespace behl
             return it->second;
         }
         return std::nullopt;
-    }
-
-    static constexpr bool is_ascii_space(char32_t c) noexcept
-    {
-        return c == U' ' || c == U'\t' || c == U'\n' || c == U'\r' || c == U'\v' || c == U'\f';
-    }
-
-    static constexpr bool is_ascii_digit(char32_t c) noexcept
-    {
-        return c >= U'0' && c <= U'9';
-    }
-
-    static constexpr bool is_ascii_alpha(char32_t c) noexcept
-    {
-        return (c >= U'a' && c <= U'z') || (c >= U'A' && c <= U'Z');
     }
 
     static constexpr bool is_excluded_identifier_char(char32_t c) noexcept
@@ -323,7 +309,7 @@ namespace behl
             if (is_hex)
             {
                 // Hexadecimal digits: 0-9, a-f, A-F
-                if (is_ascii_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))
+                if (is_ascii_hex_digit(c))
                 {
                     size_t bytes = 0;
                     decode_codepoint(L, L.pos, bytes);

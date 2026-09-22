@@ -390,5 +390,107 @@ TEST_P(EdgeCaseTest, ConstantLimitBoundaryCompiles)
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }
 
+TEST_P(EdgeCaseTest, StringRepNormalCases)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        return string.rep("ab", 3) + "|" + string.rep("x", 1) + "|" + string.rep("y", 0)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_string(S, -1), "ababab|x|");
+}
+
+TEST_P(EdgeCaseTest, StringRepNegativeCountIsEmpty)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        return string.rep("ab", -5)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_string(S, -1), "");
+}
+
+TEST_P(EdgeCaseTest, StringRepEmptySourceIgnoresCount)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        return string.rep("", 9223372036854775807)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_string(S, -1), "");
+}
+
+TEST_P(EdgeCaseTest, StringRepOverflowingCountIsRejected)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        return string.rep("ab", 9223372036854775807)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_THROW(behl::call(S, 0, 1), behl::RuntimeError);
+}
+
+TEST_P(EdgeCaseTest, StringRepBeyondSizeLimitIsRejected)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        return string.rep("a", 3000000000)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_THROW(behl::call(S, 0, 1), behl::RuntimeError);
+}
+
+TEST_P(EdgeCaseTest, StringRepLongSourceBeyondSizeLimitIsRejected)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        let s = string.rep("abcdefgh", 128)
+        return string.rep(s, 3000000)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_THROW(behl::call(S, 0, 1), behl::RuntimeError);
+}
+
+TEST_P(EdgeCaseTest, StringCaseConversionHandlesAscii)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        return string.upper("abcXYZ123!") + "|" + string.lower("ABCxyz123!")
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_string(S, -1), "ABCXYZ123!|abcxyz123!");
+}
+
+TEST_P(EdgeCaseTest, StringCaseConversionLeavesHighBytesAlone)
+{
+    behl::load_stdlib(S);
+
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        let out = ""
+        for (let i = 128; i < 256; i = i + 1) {
+            let c = string.char(i)
+            if (string.byte(string.upper(c), 0) != i) { return i }
+            if (string.byte(string.lower(c), 0) != i) { return i }
+        }
+        return -1
+    )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), -1) << "byte was altered by case conversion";
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, EdgeCaseTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });

@@ -104,6 +104,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/compiler.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/ascii.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv_tables.hpp

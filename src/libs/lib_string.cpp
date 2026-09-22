@@ -1,5 +1,6 @@
 #include "api/api_internal.hpp"
 #include "behl.hpp"
+#include "common/ascii.hpp"
 #include "common/format.hpp"
 #include "common/vector.hpp"
 #include "gc/gc.hpp"
@@ -9,10 +10,11 @@
 #include "vm/vm_detail.hpp"
 
 #include <algorithm>
-#include <cctype>
 
 namespace behl
 {
+
+    static constexpr size_t kMaxStringLength = size_t(2) * 1024 * 1024 * 1024;
 
     // string.len(s) - returns length of string
     static int str_len(State* S)
@@ -84,7 +86,7 @@ namespace behl
 
         for (size_t i = 0; i < len; ++i)
         {
-            data[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(data[i])));
+            data[i] = ascii_to_upper(data[i]);
         }
 
         S->stack.push_back(S, Value(result));
@@ -102,7 +104,7 @@ namespace behl
 
         for (size_t i = 0; i < len; ++i)
         {
-            data[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(data[i])));
+            data[i] = ascii_to_lower(data[i]);
         }
 
         S->stack.push_back(S, Value(result));
@@ -193,14 +195,22 @@ namespace behl
         auto str = check_string(S, 0);
         const Integer n = check_integer(S, 1);
 
-        if (n <= 0)
+        const size_t str_len = str.length();
+
+        if (n <= 0 || str_len == 0)
         {
             push_string(S, "");
             return 1;
         }
 
-        const size_t str_len = str.length();
-        const size_t total_len = str_len * static_cast<size_t>(n);
+        const size_t count = static_cast<size_t>(n);
+
+        if (count > kMaxStringLength / str_len)
+        {
+            error(S, "resulting string too large");
+        }
+
+        const size_t total_len = str_len * count;
 
         AutoVector<char> buffer(S);
         buffer.reserve(total_len);
