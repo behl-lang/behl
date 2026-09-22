@@ -10,15 +10,16 @@ on:
 jobs:
   # Windows builds with MSVC - Debug
   windows-msvc-debug:
-    name: Windows MSVC ${{ matrix.arch }} Debug
-    runs-on: windows-latest
+    name: Windows MSVC ${{ matrix.os }} ${{ matrix.arch }} Debug
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-2022, windows-2025-vs2026]
         arch: [x64, Win32]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Configure CMake
       run: cmake -B build -A ${{ matrix.arch }} -DBEHL_BUILD_TESTS=ON
@@ -32,16 +33,17 @@ jobs:
 
   # Windows builds with MSVC - Release
   windows-msvc-release:
-    name: Windows MSVC ${{ matrix.arch }} Release
-    runs-on: windows-latest
+    name: Windows MSVC ${{ matrix.os }} ${{ matrix.arch }} Release
+    runs-on: ${{ matrix.os }}
     needs: windows-msvc-debug
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-2022, windows-2025-vs2026]
         arch: [x64, Win32]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Configure CMake
       run: cmake -B build -A ${{ matrix.arch }} -DBEHL_BUILD_TESTS=ON
@@ -58,7 +60,7 @@ jobs:
     runs-on: windows-11-arm
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: cmake -B build -A ARM64 -DBEHL_BUILD_TESTS=ON
@@ -76,7 +78,7 @@ jobs:
     needs: windows-arm64-debug
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: cmake -B build -A ARM64 -DBEHL_BUILD_TESTS=ON
@@ -95,10 +97,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-2025, ubuntu-24.04, macos-15]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
@@ -134,10 +136,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-2025, ubuntu-24.04, macos-15]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
@@ -168,14 +170,14 @@ jobs:
   # Windows builds with MinGW - Debug
   windows-mingw-debug:
     name: Windows MinGW ${{ matrix.arch }} Debug
-    runs-on: windows-latest
+    runs-on: windows-2025
     strategy:
       fail-fast: false
       matrix:
         arch: [64, 32]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Setup MinGW
       uses: msys2/setup-msys2@v2
@@ -202,7 +204,7 @@ jobs:
   # Windows builds with MinGW - Release
   windows-mingw-release:
     name: Windows MinGW ${{ matrix.arch }} Release
-    runs-on: windows-latest
+    runs-on: windows-2025
     needs: windows-mingw-debug
     strategy:
       fail-fast: false
@@ -210,7 +212,7 @@ jobs:
         arch: [64, 32]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Setup MinGW
       uses: msys2/setup-msys2@v2
@@ -237,15 +239,15 @@ jobs:
   # Linux builds with GCC - Debug
   linux-gcc-debug:
     name: Linux GCC-${{ matrix.gcc }} ${{ matrix.arch }} Debug
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        gcc: [11, 12, 13]
+        gcc: [11, 12, 13, 14]
         arch: [x64, x86]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Install GCC
       run: |
@@ -273,16 +275,16 @@ jobs:
   # Linux builds with GCC - Release
   linux-gcc-release:
     name: Linux GCC-${{ matrix.gcc }} ${{ matrix.arch }} Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: linux-gcc-debug
     strategy:
       fail-fast: false
       matrix:
-        gcc: [11, 12, 13]
+        gcc: [11, 12, 13, 14]
         arch: [x64, x86]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Install GCC
       run: |
@@ -312,7 +314,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
@@ -330,7 +332,7 @@ jobs:
     needs: linux-arm64-debug
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
@@ -349,11 +351,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [14, 15, 16, 17]
+        clang: [14, 15, 16, 17, 18, 19, 20]
         arch: [x64, x86]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Install Clang
       run: |
@@ -388,11 +390,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [14, 15, 16, 17]
+        clang: [14, 15, 16, 17, 18, 19, 20]
         arch: [x64, x86]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Install Clang
       run: |
@@ -421,11 +423,15 @@ jobs:
 
   # macOS builds with AppleClang - Debug
   macos-debug:
-    name: macOS Debug
-    runs-on: macos-latest
+    name: macOS ${{ matrix.os }} Debug
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26, macos-15-intel, macos-26-intel]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
@@ -439,12 +445,16 @@ jobs:
 
   # macOS builds with AppleClang - Release
   macos-release:
-    name: macOS Release
-    runs-on: macos-latest
+    name: macOS ${{ matrix.os }} Release
+    runs-on: ${{ matrix.os }}
     needs: macos-debug
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26, macos-15-intel, macos-26-intel]
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
@@ -466,13 +476,16 @@ jobs:
         include:
           - sanitizer: address
             name: ASan (Clang)
+            extra_flags: ''
           - sanitizer: undefined
             name: UBSan (Clang)
+            extra_flags: '-fno-sanitize-recover=undefined'
           - sanitizer: thread
             name: TSan (Clang)
+            extra_flags: ''
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Install Clang
       run: |
@@ -485,9 +498,9 @@ jobs:
       env:
         CC: clang-17
         CXX: clang++-17
-        CFLAGS: -fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer
-        CXXFLAGS: -fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer
-        LDFLAGS: -fsanitize=${{ matrix.sanitizer }}
+        CFLAGS: -fsanitize=${{ matrix.sanitizer }} ${{ matrix.extra_flags }} -fno-omit-frame-pointer
+        CXXFLAGS: -fsanitize=${{ matrix.sanitizer }} ${{ matrix.extra_flags }} -fno-omit-frame-pointer
+        LDFLAGS: -fsanitize=${{ matrix.sanitizer }} ${{ matrix.extra_flags }}
       run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBEHL_BUILD_TESTS=ON -DBEHL_BUILD_BENCHMARKS=OFF
     
     - name: Build
@@ -497,17 +510,17 @@ jobs:
       working-directory: build
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1
-        UBSAN_OPTIONS: print_stacktrace=1
+        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:abort_on_error=1
         TSAN_OPTIONS: second_deadlock_stack=1
       run: ctest --output-on-failure --timeout 60
 
   # Code coverage
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - name: Install dependencies
       run: |
