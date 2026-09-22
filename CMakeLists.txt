@@ -289,6 +289,7 @@ endif()
 if(BEHL_BUILD_TESTS)
     set(BEHL_TEST_SOURCES
         src/tests/main.cpp
+        src/tests/math_tests.cpp
         src/tests/api_tests.cpp
         src/tests/bitwise_tests.cpp
         src/tests/callstack_tests.cpp
