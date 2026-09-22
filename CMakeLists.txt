@@ -291,6 +291,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/main.cpp
         src/tests/math_tests.cpp
         src/tests/api_tests.cpp
+        src/tests/api_stack_tests.cpp
         src/tests/bitwise_tests.cpp
         src/tests/callstack_tests.cpp
         src/tests/charconv_tests.cpp
