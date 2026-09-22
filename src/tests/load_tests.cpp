@@ -38,5 +38,5 @@ TEST_P(LoadTest, LoadStringSyntaxError)
     EXPECT_THROW({ behl::load_string(S, bad_code); }, behl::SyntaxError);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Mode, LoadTest, ::testing::Bool(), [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+INSTANTIATE_TEST_SUITE_P(Mode, LoadTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -361,6 +361,6 @@ namespace behl
     }
 
     INSTANTIATE_TEST_SUITE_P(Mode, GCStressTest, ::testing::Bool(),
-        [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+        [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
 } // namespace behl

@@ -346,4 +346,4 @@ TEST_P(PinningTest, PinTableWithMetatable)
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, PinningTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

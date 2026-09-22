@@ -389,5 +389,5 @@ TEST_P(APITest, CallWithZeroResultsDiscards)
     ASSERT_EQ(get_top(S), 0);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Mode, APITest, ::testing::Bool(), [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+INSTANTIATE_TEST_SUITE_P(Mode, APITest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

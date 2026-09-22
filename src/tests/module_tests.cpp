@@ -387,7 +387,7 @@ TEST_P(ModuleFileTest, ImportFailureNamesTheModule)
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, ModuleTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
 INSTANTIATE_TEST_SUITE_P(Mode, ModuleFileTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

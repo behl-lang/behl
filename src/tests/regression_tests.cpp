@@ -905,4 +905,4 @@ TEST_P(RegressionTest, SelfCallLeavesUnpassedParamsNil)
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, RegressionTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

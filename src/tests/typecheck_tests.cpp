@@ -860,4 +860,4 @@ TEST_P(TypecheckTest, TypenameFromTypeEnum)
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, TypecheckTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

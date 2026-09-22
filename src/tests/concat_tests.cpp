@@ -228,7 +228,7 @@ TEST_P(SplitArithTest, FloatOperandsTakeFastPath)
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, ConcatTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
 INSTANTIATE_TEST_SUITE_P(Mode, SplitArithTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

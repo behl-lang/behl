@@ -660,4 +660,4 @@ TEST_P(BitwiseTest, Variables_BitwiseOperations)
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, BitwiseTest, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

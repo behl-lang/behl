@@ -926,5 +926,5 @@ TEST_P(LoopTest, ForLoopIntBoundsFloatStep)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 10.0);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Mode, LoopTest, ::testing::Bool(), [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "jit" : "nojit"; });
+INSTANTIATE_TEST_SUITE_P(Mode, LoopTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
