@@ -29,7 +29,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest -C Debug --output-on-failure --timeout 30
+      run: ctest -C Debug --output-on-failure --timeout 30 --parallel
 
   # Windows builds with MSVC - Release
   windows-msvc-release:
@@ -53,7 +53,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest -C Release --output-on-failure --timeout 30
+      run: ctest -C Release --output-on-failure --timeout 30 --parallel
 
   windows-arm64-debug:
     name: Windows MSVC ARM64 Debug
@@ -70,7 +70,7 @@ jobs:
 
     - name: Run Tests
       working-directory: build
-      run: ctest -C Debug --output-on-failure --timeout 30
+      run: ctest -C Debug --output-on-failure --timeout 30 --parallel
 
   windows-arm64-release:
     name: Windows MSVC ARM64 Release
@@ -88,7 +88,7 @@ jobs:
 
     - name: Run Tests
       working-directory: build
-      run: ctest -C Release --output-on-failure --timeout 30
+      run: ctest -C Release --output-on-failure --timeout 30 --parallel
 
   # Shared Library builds - Debug
   shared-library-debug:
@@ -121,12 +121,12 @@ jobs:
     - name: Run Tests (Windows)
       if: runner.os == 'Windows'
       working-directory: build
-      run: ctest -C Debug --output-on-failure --timeout 30
+      run: ctest -C Debug --output-on-failure --timeout 30 --parallel
     
     - name: Run Tests (Linux/macOS)
       if: runner.os != 'Windows'
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Shared Library builds - Release
   shared-library-release:
@@ -160,12 +160,12 @@ jobs:
     - name: Run Tests (Windows)
       if: runner.os == 'Windows'
       working-directory: build
-      run: ctest -C Release --output-on-failure --timeout 30
+      run: ctest -C Release --output-on-failure --timeout 30 --parallel
     
     - name: Run Tests (Linux/macOS)
       if: runner.os != 'Windows'
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Windows builds with MinGW - Debug
   windows-mingw-debug:
@@ -199,7 +199,7 @@ jobs:
     - name: Run Tests
       shell: msys2 {0}
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Windows builds with MinGW - Release
   windows-mingw-release:
@@ -234,7 +234,7 @@ jobs:
     - name: Run Tests
       shell: msys2 {0}
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Linux builds with GCC - Debug
   linux-gcc-debug:
@@ -270,7 +270,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Linux builds with GCC - Release
   linux-gcc-release:
@@ -307,7 +307,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   linux-arm64-debug:
     name: Linux GCC ARM64 Debug
@@ -324,7 +324,7 @@ jobs:
 
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   linux-arm64-release:
     name: Linux GCC ARM64 Release
@@ -342,7 +342,7 @@ jobs:
 
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Linux builds with Clang - Debug
   linux-clang-debug:
@@ -380,7 +380,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Linux builds with Clang - Release
   linux-clang-release:
@@ -419,7 +419,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # macOS builds with AppleClang - Debug
   macos-debug:
@@ -441,7 +441,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # macOS builds with AppleClang - Release
   macos-release:
@@ -464,7 +464,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
 
   # Sanitizers (AddressSanitizer, UndefinedBehaviorSanitizer)
   sanitizers:
@@ -512,7 +512,7 @@ jobs:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:abort_on_error=1
         TSAN_OPTIONS: second_deadlock_stack=1
-      run: ctest --output-on-failure --timeout 60
+      run: ctest --output-on-failure --timeout 60 --parallel
 
   # Code coverage
   coverage:
@@ -535,7 +535,7 @@ jobs:
     
     - name: Run Tests
       working-directory: build
-      run: ctest --output-on-failure --timeout 30
+      run: ctest --output-on-failure --timeout 30 --parallel
     
     - name: Generate Coverage Report
       run: |
