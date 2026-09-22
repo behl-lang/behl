@@ -1,5 +1,6 @@
 #include "api/api_internal.hpp"
 #include "behl.hpp"
+#include "common/arithmetic.hpp"
 #include "common/format.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_string.hpp"
@@ -56,7 +57,11 @@ namespace behl
 
         if (v.is_fp())
         {
-            return static_cast<Integer>(v.get_fp());
+            Integer n = 0;
+            if (arithmetic::try_from_fp(v.get_fp(), n))
+            {
+                return n;
+            }
         }
 
         return 0;
@@ -252,10 +257,11 @@ namespace behl
 
         if (v.is_fp())
         {
-            FP d = v.get_fp();
-            if (std::floor(d) == d)
+            const FP d = v.get_fp();
+            Integer n = 0;
+            if (std::floor(d) == d && arithmetic::try_from_fp(d, n))
             {
-                return static_cast<Integer>(d);
+                return n;
             }
         }
 
