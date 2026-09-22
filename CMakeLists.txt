@@ -292,6 +292,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/api_tests.cpp
         src/tests/bitwise_tests.cpp
         src/tests/callstack_tests.cpp
+        src/tests/charconv_tests.cpp
         src/tests/cfunction_tests.cpp
         src/tests/compare_tests.cpp
         src/tests/concat_tests.cpp
