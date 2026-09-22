@@ -240,7 +240,8 @@ namespace behl
         out_first_param = nullptr;
         if (!check(P, TokenType::kRParen))
         {
-            AstNode** tail = reinterpret_cast<AstNode**>(&out_first_param);
+            AstNode* first_param = nullptr;
+            AstNode** tail = &first_param;
             do
             {
                 if (check(P, TokenType::kIdentifier))
@@ -260,6 +261,7 @@ namespace behl
                     error(P, "Expected parameter name or '...'");
                 }
             } while (match(P, { TokenType::kComma }));
+            out_first_param = static_cast<AstString*>(first_param);
         }
         consume(P, TokenType::kRParen, "Expected ')' after parameters");
     }
@@ -614,7 +616,8 @@ namespace behl
             return tc;
         }
         // Build linked list of TableField nodes
-        TableField** tail = &tc->first_field;
+        AstNode* first_field = nullptr;
+        AstNode** tail = &first_field;
         do
         {
             AstNode* key = nullptr;
@@ -649,8 +652,9 @@ namespace behl
             }
             auto* field = make_node<TableField>(P.holder, tok, key, val);
             *tail = field;
-            tail = reinterpret_cast<TableField**>(&field->next_child);
+            tail = &field->next_child;
         } while (match(P, { TokenType::kComma, TokenType::kSemi }));
+        tc->first_field = static_cast<TableField*>(first_field);
         consume(P, TokenType::kRBrace, "Expected '}' to close table");
         return tc;
     }
@@ -719,7 +723,8 @@ namespace behl
             match(P, { TokenType::kSemi });
         }
 
-        ElseIf** elseif_tail = &iff->first_elseif;
+        AstNode* first_elseif = nullptr;
+        AstNode** elseif_tail = &first_elseif;
         while (match(P, { TokenType::kElseIf }))
         {
             consume(P, TokenType::kLParen, "Expected '(' after 'elseif'");
@@ -743,8 +748,9 @@ namespace behl
             }
 
             *elseif_tail = elseif;
-            elseif_tail = reinterpret_cast<ElseIf**>(&elseif->next_child);
+            elseif_tail = &elseif->next_child;
         }
+        iff->first_elseif = static_cast<ElseIf*>(first_elseif);
 
         if (match(P, { TokenType::kElse }))
         {
@@ -851,14 +857,15 @@ namespace behl
                 first_init = parse_expr(P);
             }
 
-            AstString** name_tail = reinterpret_cast<AstString**>(&first_name->next_child);
+            AstNode** name_tail = &first_name->next_child;
             AstNode** init_tail = first_init ? &first_init->next_child : &first_init;
 
             // Parse additional variables if comma-separated
             while (match(P, { TokenType::kComma }))
             {
-                *name_tail = P.holder.make_string(consume(P, TokenType::kIdentifier, "Expected identifier").value);
-                name_tail = reinterpret_cast<AstString**>(&(*name_tail)->next_child);
+                auto* extra_name = P.holder.make_string(consume(P, TokenType::kIdentifier, "Expected identifier").value);
+                *name_tail = extra_name;
+                name_tail = &extra_name->next_child;
 
                 if (match(P, { TokenType::kAssign }))
                 {
@@ -1285,14 +1292,16 @@ namespace behl
             else if (match(P, { TokenType::kLBrace }))
             {
                 auto export_list = make_node<AstExportList>(P.holder, export_tok);
-                AstString** name_tail = &export_list->first_name;
+                AstNode* first_export_name = nullptr;
+                AstNode** name_tail = &first_export_name;
                 do
                 {
                     auto name_tok = consume(P, TokenType::kIdentifier, "Expected identifier in export list");
                     auto name = P.holder.make_string(name_tok.value);
                     *name_tail = name;
-                    name_tail = reinterpret_cast<AstString**>(&name->next_child);
+                    name_tail = &name->next_child;
                 } while (match(P, { TokenType::kComma }));
+                export_list->first_name = static_cast<AstString*>(first_export_name);
                 consume(P, TokenType::kRBrace, "Expected '}' after export list");
                 return export_list;
             }

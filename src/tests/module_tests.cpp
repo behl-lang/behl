@@ -323,6 +323,58 @@ TEST_P(ModuleFileTest, ImportResolvesSiblingOfImporter)
     EXPECT_EQ(behl::to_integer(S, -1), 99);
 }
 
+TEST_P(ModuleFileTest, ExportListExportsSeveralNames)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const A = 1;\n"
+        "const B = 2;\n"
+        "const C = 3;\n"
+        "function add(x, y) { return x + y }\n"
+        "export { A, B, C, add };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.A + h.B + h.C + h.add(10, 20);
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 36);
+}
+
+TEST_P(ModuleFileTest, ExportListWithSingleNameWorks)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const ONLY = 42;\n"
+        "export { ONLY };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.ONLY;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 42);
+}
+
+TEST_P(ModuleFileTest, ExportListDoesNotExportOmittedNames)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const SHOWN = 1;\n"
+        "const HIDDEN = 2;\n"
+        "export { SHOWN };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.HIDDEN == nil;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
 TEST_P(ModuleFileTest, ImportResolvesModulesSubdirectoryOfImporter)
 {
     write_file("modules/helper.behl", "module;\nexport const VALUE = 7;\n");
