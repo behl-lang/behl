@@ -250,18 +250,66 @@ TEST_P(ProcessTest, SignalConstants)
 
 TEST_P(ProcessTest, StdinPipe)
 {
+#ifdef _WIN32
+    auto code = behl::format(R"(
+        const process = import("process");
+        let proc = process.spawn("{}", {{"{}", "5"}}, {{stdin = "pipe", stdout = "null"}});
+        let written = proc:write("test data\n");
+        proc:kill();
+        proc:wait();
+        return written;
+    )",
+        TEST_SLEEP_CMD, TEST_SLEEP_ARG);
+#else
+    auto code = behl::format(R"(
+        const process = import("process");
+        let proc = process.spawn("{}", {{"5"}}, {{stdin = "pipe", stdout = "null"}});
+        let written = proc:write("test data\n");
+        proc:kill();
+        proc:wait();
+        return written;
+    )",
+        TEST_SLEEP_CMD);
+#endif
+
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_P(ProcessTest, WriteToExitedChildDoesNotTerminateHost)
+{
     auto code = behl::format(R"(
         const process = import("process");
         let proc = process.spawn("{}", {{"{}", "exit 0"}}, {{stdin = "pipe"}});
-        let written = proc:write("test data\n");
         proc:wait();
-        return written > 0;
+        let written = proc:write("data the child will never read\n");
+        return written;
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
     ASSERT_NO_THROW(load_string(S, code));
     ASSERT_NO_THROW(behl::call(S, 0, 1));
-    EXPECT_TRUE(to_boolean(S, -1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
+}
+
+TEST_P(ProcessTest, RepeatedWritesToExitedChildStaySafe)
+{
+    auto code = behl::format(R"(
+        const process = import("process");
+        let proc = process.spawn("{}", {{"{}", "exit 0"}}, {{stdin = "pipe"}});
+        proc:wait();
+        let total = 0;
+        for (let i = 0; i < 16; i++) {{
+            total = total + proc:write("payload\n");
+        }}
+        return total;
+    )",
+        TEST_SHELL, TEST_SHELL_FLAG);
+
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
 }
 
 TEST_P(ProcessTest, NullStdio)
