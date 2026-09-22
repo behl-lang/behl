@@ -58,6 +58,10 @@ namespace behl
             {
                 return false;
             }
+            if (lhs_size == 0)
+            {
+                return true;
+            }
             return std::memcmp(lhs.data(), rhs.data(), lhs_size) == 0;
         }
     };
