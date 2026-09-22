@@ -294,6 +294,84 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "[   42][1.24]");
     }
 
+    TEST_P(StringFormatTest, FixedPrecisionOnLargeMagnitudes)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.5f}", 1000000000000000000.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "1000000000000000000.00000");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionBeyondDoubleResolutionPadsWithZeros)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.20f}", 1.5);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "1.50000000000000000000");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionAtTheWidthLimitIsAllDigits)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            let s = string.format("{:.400f}", 1.5);
+            let ok = true;
+            for (let i = 0; i < #s; i++) {
+                let c = string.byte(s, i);
+                if (!((c >= 48 && c <= 57) || c == 46)) { ok = false }
+            }
+            return ok && #s == 402 && string.byte(s, 0) == 49 && string.byte(s, 2) == 53;
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_TRUE(to_boolean(S, -1));
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionOnUnrepresentableMagnitudeFallsBackToShortest)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.2f}", 100000000000000000000.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "1e+20");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionHandlesNonFiniteValues)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.3f}", 1.0 / 0.0) + "|" + string.format("{:.3f}", 0.0 - 1.0 / 0.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "inf|-inf");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionOnNegativeLargeMagnitude)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.2f}", 0.0 - 1000000000000000000.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "-1000000000000000000.00");
+    }
+
     INSTANTIATE_TEST_SUITE_P(Mode, StringFormatTest, ::testing::Bool(),
         [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 

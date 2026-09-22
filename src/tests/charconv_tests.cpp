@@ -2,6 +2,7 @@
 
 #include <array>
 #include <bit>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <gtest/gtest.h>
@@ -41,6 +42,48 @@ namespace
         ASSERT_EQ(std::bit_cast<Bits<T>>(back), std::bit_cast<Bits<T>>(value))
             << "value printed as \"" << text << "\" did not survive the round trip";
     }
+} // namespace
+
+namespace
+{
+    template<typename T>
+    constexpr bool to_chars_equals(T value, std::string_view expected)
+    {
+        std::array<char, 64> buf{};
+        const auto r = behl::to_chars(buf.data(), buf.data() + buf.size(), value);
+        return r.ec == std::errc{} && std::string_view(buf.data(), static_cast<size_t>(r.ptr - buf.data())) == expected;
+    }
+
+    constexpr uint64_t parsed_bits(std::string_view text)
+    {
+        double out = 0.0;
+        behl::from_chars(text.data(), text.data() + text.size(), out);
+        return std::bit_cast<uint64_t>(out);
+    }
+
+    constexpr bool round_trips(double value)
+    {
+        std::array<char, 64> buf{};
+        const auto r = behl::to_chars(buf.data(), buf.data() + buf.size(), value);
+        double back = 0.0;
+        behl::from_chars(buf.data(), r.ptr, back);
+        return std::bit_cast<uint64_t>(back) == std::bit_cast<uint64_t>(value);
+    }
+
+    static_assert(to_chars_equals(0.1, "0.1"));
+    static_assert(to_chars_equals(1.5, "1.5"));
+    static_assert(to_chars_equals(-0.0, "-0.0"));
+    static_assert(to_chars_equals(1e21, "1e+21"));
+    static_assert(to_chars_equals(5e-324, "5e-324"));
+    static_assert(to_chars_equals(1.7976931348623157e308, "1.7976931348623157e+308"));
+    static_assert(to_chars_equals(123456789012345678.0, "1.2345678901234568e+17"));
+    static_assert(to_chars_equals(-9223372036854775807LL - 1, "-9223372036854775808"));
+    static_assert(to_chars_equals(18446744073709551615ull, "18446744073709551615"));
+    static_assert(parsed_bits("0.1") == std::bit_cast<uint64_t>(0.1));
+    static_assert(parsed_bits("3.518437208883201171875e13") == 0x42c0000000000002ull);
+    static_assert(parsed_bits("1.00000000000000011102230246251565404236316680908203125") == 0x3ff0000000000000ull);
+    static_assert(round_trips(3.141592653589793));
+    static_assert(round_trips(2.2250738585072014e-308));
 } // namespace
 
 TEST(CharconvTest, RoundTripCuratedDoubles)
@@ -356,3 +399,150 @@ TEST(CharconvTest, IntegerOverloadsStillWork)
     ASSERT_EQ(parse<int64_t>("-42"), -42);
     ASSERT_EQ(parse<uint32_t>("4294967295"), 4294967295u);
 }
+
+namespace
+{
+    template<typename T>
+    void expect_to_chars_matches_std(T value, int base)
+    {
+        std::array<char, 72> mine{};
+        std::array<char, 72> theirs{};
+        const auto a = behl::to_chars(mine.data(), mine.data() + mine.size(), value, base);
+        const auto b = std::to_chars(theirs.data(), theirs.data() + theirs.size(), value, base);
+        ASSERT_EQ(a.ec, b.ec);
+        ASSERT_EQ(std::string_view(mine.data(), static_cast<size_t>(a.ptr - mine.data())),
+            std::string_view(theirs.data(), static_cast<size_t>(b.ptr - theirs.data())))
+            << "value " << +value << " base " << base;
+    }
+
+    template<typename T>
+    void expect_from_chars_matches_std(std::string_view text, int base)
+    {
+        T mine = static_cast<T>(42);
+        T theirs = static_cast<T>(42);
+        const auto a = behl::from_chars(text.data(), text.data() + text.size(), mine, base);
+        const auto b = std::from_chars(text.data(), text.data() + text.size(), theirs, base);
+        ASSERT_EQ(a.ec, b.ec) << "input \"" << text << "\" base " << base;
+        ASSERT_EQ(a.ptr - text.data(), b.ptr - text.data()) << "input \"" << text << "\" base " << base;
+        ASSERT_EQ(mine, theirs) << "input \"" << text << "\" base " << base;
+    }
+} // namespace
+
+TEST(CharconvTest, IntegerToCharsMatchesStdAcrossTypesAndBases)
+{
+    std::mt19937_64 rng(0xC0FFEEull);
+    for (int base = 2; base <= 36; ++base)
+    {
+        for (int i = 0; i < 400; ++i)
+        {
+            const uint64_t bits = rng();
+            expect_to_chars_matches_std(static_cast<int64_t>(bits), base);
+            expect_to_chars_matches_std(bits, base);
+            expect_to_chars_matches_std(static_cast<int32_t>(bits), base);
+            expect_to_chars_matches_std(static_cast<uint16_t>(bits), base);
+            expect_to_chars_matches_std(static_cast<int8_t>(bits), base);
+        }
+        expect_to_chars_matches_std(std::numeric_limits<int64_t>::min(), base);
+        expect_to_chars_matches_std(std::numeric_limits<int64_t>::max(), base);
+        expect_to_chars_matches_std(std::numeric_limits<uint64_t>::max(), base);
+        expect_to_chars_matches_std(std::numeric_limits<int8_t>::min(), base);
+        expect_to_chars_matches_std(0, base);
+    }
+}
+
+TEST(CharconvTest, IntegerToCharsReportsBufferTooSmall)
+{
+    std::array<char, 3> buf{};
+    const auto r = behl::to_chars(buf.data(), buf.data() + buf.size(), -1234);
+    ASSERT_EQ(r.ec, std::errc::value_too_large);
+    const auto fits = behl::to_chars(buf.data(), buf.data() + buf.size(), -12);
+    ASSERT_EQ(fits.ec, std::errc{});
+    ASSERT_EQ(std::string_view(buf.data(), static_cast<size_t>(fits.ptr - buf.data())), "-12");
+}
+
+TEST(CharconvTest, IntegerFromCharsMatchesStdOnEdgeCases)
+{
+    const std::string_view inputs[] = {
+        "",
+        "-",
+        "+1",
+        " 1",
+        "0",
+        "-0",
+        "007",
+        "123abc",
+        "9223372036854775807",
+        "9223372036854775808",
+        "-9223372036854775808",
+        "-9223372036854775809",
+        "18446744073709551615",
+        "18446744073709551616",
+        "99999999999999999999999999",
+        "-99999999999999999999999999",
+        "127",
+        "128",
+        "-128",
+        "-129",
+        "255",
+        "256",
+        "ff",
+        "FF",
+        "7fffffffffffffff",
+        "8000000000000000",
+        "zz",
+        "ZZ",
+        "12.5",
+        "1e5",
+        "--1",
+        "0x10",
+    };
+
+    for (const std::string_view text : inputs)
+    {
+        for (const int base : { 2, 8, 10, 16, 36 })
+        {
+            expect_from_chars_matches_std<int64_t>(text, base);
+            expect_from_chars_matches_std<uint64_t>(text, base);
+            expect_from_chars_matches_std<int32_t>(text, base);
+            expect_from_chars_matches_std<uint8_t>(text, base);
+            expect_from_chars_matches_std<int8_t>(text, base);
+        }
+    }
+}
+
+TEST(CharconvTest, IntegerFromCharsMatchesStdOnRandomDigitStrings)
+{
+    std::mt19937_64 rng(0xBADC0DEull);
+    const std::string_view alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-+. ";
+    std::uniform_int_distribution<size_t> pick(0, alphabet.size() - 1);
+    std::uniform_int_distribution<int> length(0, 24);
+    std::uniform_int_distribution<int> base_dist(2, 36);
+
+    for (int i = 0; i < 20000; ++i)
+    {
+        std::string text;
+        const int n = length(rng);
+        for (int c = 0; c < n; ++c)
+        {
+            text += alphabet[pick(rng)];
+        }
+        const int base = base_dist(rng);
+        expect_from_chars_matches_std<int64_t>(text, base);
+        expect_from_chars_matches_std<uint64_t>(text, base);
+        expect_from_chars_matches_std<int16_t>(text, base);
+    }
+}
+
+namespace
+{
+    constexpr int64_t parse_int(std::string_view text, int base = 10)
+    {
+        int64_t out = 0;
+        behl::from_chars(text.data(), text.data() + text.size(), out, base);
+        return out;
+    }
+
+    static_assert(parse_int("-9223372036854775808") == std::numeric_limits<int64_t>::min());
+    static_assert(parse_int("7fffffffffffffff", 16) == std::numeric_limits<int64_t>::max());
+    static_assert(parse_int("-42") == -42);
+} // namespace

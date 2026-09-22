@@ -1,18 +1,26 @@
 #pragma once
 
+#include "common/ascii.hpp"
 #include "common/charconv.hpp"
 
 #include <algorithm>
 #include <array>
-#include <charconv>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <variant>
 #include <vector>
+
+#if defined(__cpp_lib_constexpr_string) && __cpp_lib_constexpr_string >= 201907L
+#    define BEHL_CONSTEXPR_STRING constexpr
+#else
+#    define BEHL_CONSTEXPR_STRING
+#endif
 
 namespace behl
 {
@@ -393,7 +401,7 @@ namespace behl
     class format_arg
     {
     public:
-        using value_type = std::variant<std::monostate, bool, long long, double, std::string_view, std::string, const void*>;
+        using value_type = std::variant<std::monostate, bool, long long, double, std::string_view, const void*>;
 
         constexpr format_arg()
             : value_(std::monostate{})
@@ -443,10 +451,6 @@ namespace behl
             : value_(v)
         {
         }
-        format_arg(std::string v)
-            : value_(std::move(v))
-        {
-        }
         constexpr format_arg(const void* v)
             : value_(v)
         {
@@ -467,213 +471,210 @@ namespace behl
 
     namespace detail
     {
-        inline std::string to_hex(long long value, bool uppercase)
+        template<typename Out, typename T>
+        constexpr void append_integer(Out& out, T value, int base)
         {
-            if (value == 0)
-            {
-                return "0";
-            }
-
-            const char* digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
-            std::string result;
-            auto uvalue = static_cast<unsigned long long>(value);
-
-            while (uvalue > 0)
-            {
-                result += digits[uvalue % 16];
-                uvalue /= 16;
-            }
-
-            std::reverse(result.begin(), result.end());
-            return result;
+            std::array<char, 72> buffer{};
+            const auto converted = behl::to_chars(buffer.data(), buffer.data() + buffer.size(), value, base);
+            out.append(buffer.data(), static_cast<size_t>(converted.ptr - buffer.data()));
         }
 
-        inline std::string constexpr_double_to_string(double value, size_t precision)
+        template<typename Out>
+        constexpr void append_hex(Out& out, unsigned long long value, bool uppercase)
         {
-            // Simple double to string for fixed precision
-            bool negative = value < 0;
-            if (negative)
+            const size_t start = out.size();
+            append_integer(out, value, 16);
+            if (uppercase)
             {
-                value = -value;
+                for (size_t i = start; i < out.size(); ++i)
+                {
+                    out[i] = ascii_to_upper(out[i]);
+                }
+            }
+        }
+
+        template<typename Out>
+        constexpr void append_shortest(Out& out, double value)
+        {
+            std::array<char, 64> buffer{};
+            const auto converted = behl::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+            out.append(buffer.data(), static_cast<size_t>(converted.ptr - buffer.data()));
+        }
+
+        template<typename Out>
+        constexpr void append_fixed(Out& out, double value, size_t precision)
+        {
+            constexpr double kInt64Limit = 9223372036854775808.0;
+            constexpr size_t kMaxExactPowerOfTen = 19;
+
+            const bool negative = value < 0;
+            const double magnitude = negative ? -value : value;
+
+            if (!(magnitude < kInt64Limit))
+            {
+                append_shortest(out, value);
+                return;
             }
 
             // Round to precision
             double multiplier = 1.0;
-            for (size_t i = 0; i < precision; ++i)
+            size_t scaled_digits = 0;
+            while (scaled_digits < precision && magnitude * (multiplier * 10.0) + 0.5 < kInt64Limit)
             {
                 multiplier *= 10.0;
+                ++scaled_digits;
             }
-            value = (value * multiplier + 0.5); // Round
-            long long rounded = static_cast<long long>(value);
+            const auto rounded = static_cast<unsigned long long>(magnitude * multiplier + 0.5);
 
             // Split into integer and fractional parts
-            long long int_part = rounded;
-            for (size_t i = 0; i < precision; ++i)
+            unsigned long long int_part = 0;
+            unsigned long long frac_part = rounded;
+            if (scaled_digits < kMaxExactPowerOfTen)
             {
-                int_part /= 10;
+                unsigned long long power = 1;
+                for (size_t i = 0; i < scaled_digits; ++i)
+                {
+                    power *= 10;
+                }
+                int_part = rounded / power;
+                frac_part = rounded % power;
             }
-            long long frac_part = rounded - static_cast<long long>(static_cast<double>(int_part) * multiplier);
 
-            std::string result;
             if (negative)
             {
-                result += '-';
+                out += '-';
             }
 
             // Convert integer part
-            if (int_part == 0)
-            {
-                result += '0';
-            }
-            else
-            {
-                std::string int_str;
-                long long temp = int_part;
-                while (temp > 0)
-                {
-                    int_str += static_cast<char>('0' + (temp % 10));
-                    temp /= 10;
-                }
-                std::reverse(int_str.begin(), int_str.end());
-                result += int_str;
-            }
+            append_integer(out, int_part, 10);
 
             // Only add decimal point and fraction if precision > 0
             if (precision > 0)
             {
-                result += '.';
+                out += '.';
 
                 // Convert fractional part with leading zeros
-                std::string frac_str;
-                for (size_t i = 0; i < precision; ++i)
+                if (scaled_digits > 0)
                 {
-                    frac_str += static_cast<char>('0' + (frac_part % 10));
-                    frac_part /= 10;
+                    std::array<char, 24> digits{};
+                    const auto converted = behl::to_chars(digits.data(), digits.data() + digits.size(), frac_part);
+                    const auto length = static_cast<size_t>(converted.ptr - digits.data());
+                    out.append(scaled_digits - length, '0');
+                    out.append(digits.data(), length);
                 }
-                std::reverse(frac_str.begin(), frac_str.end());
-                result += frac_str;
+                out.append(precision - scaled_digits, '0');
             }
-
-            return result;
         }
 
-        inline std::string to_string_with_precision(double value, int precision)
+        template<typename Out>
+        constexpr void pad_to_width(Out& out, size_t start, int width, char align, char fill)
         {
-            return constexpr_double_to_string(value, static_cast<size_t>(precision));
-        }
-
-        inline std::string apply_width_and_align(std::string str, int width, char align, char fill)
-        {
-            if (width <= 0 || static_cast<size_t>(width) <= str.size())
+            const size_t length = out.size() - start;
+            if (width <= 0 || static_cast<size_t>(width) <= length)
             {
-                return str;
+                return;
             }
 
-            size_t padding = static_cast<size_t>(width) - str.size();
+            const size_t padding = static_cast<size_t>(width) - length;
             switch (align)
             {
                 case '<':
-                    return str + std::string(padding, fill);
+                    out.append(padding, fill);
+                    break;
                 case '>':
-                    return std::string(padding, fill) + str;
+                    out.insert(start, padding, fill);
+                    break;
                 case '^':
                 {
-                    size_t left_pad = padding / 2;
-                    size_t right_pad = padding - left_pad;
-                    return std::string(left_pad, fill) + str + std::string(right_pad, fill);
+                    const size_t left_pad = padding / 2;
+                    out.insert(start, left_pad, fill);
+                    out.append(padding - left_pad, fill);
+                    break;
                 }
                 default:
-                    return str;
+                    break;
             }
+        }
+
+        constexpr char numeric_align(const format_spec& spec)
+        {
+            if (!spec.explicit_align && spec.align == '<' && spec.width > 0)
+            {
+                return '>';
+            }
+            return spec.align;
+        }
+
+        template<typename Out>
+        constexpr void append_literal(Out& out, std::string_view lit)
+        {
+            size_t run_start = 0;
+            for (size_t i = 0; i < lit.size(); ++i)
+            {
+                if ((lit[i] == '{' || lit[i] == '}') && i + 1 < lit.size() && lit[i + 1] == lit[i])
+                {
+                    out.append(lit.substr(run_start, i + 1 - run_start));
+                    ++i;
+                    run_start = i + 1;
+                }
+            }
+            out.append(lit.substr(run_start));
         }
     } // namespace detail
 
-    inline std::string format_value(const format_arg& arg, const format_spec& spec)
+    template<typename Out>
+    constexpr void format_value_to(Out& out, const format_arg& arg, const format_spec& spec)
     {
-        return std::visit(
-            [&spec](auto&& value) -> std::string {
+        std::visit(
+            [&out, &spec](const auto& value) {
                 using T = std::decay_t<decltype(value)>;
+                const size_t start = out.size();
 
-                if constexpr (std::is_same_v<T, std::monostate>)
+                if constexpr (std::is_same_v<T, bool>)
                 {
-                    return "";
-                }
-                else if constexpr (std::is_same_v<T, bool>)
-                {
-                    std::string result = value ? "true" : "false";
-                    char align = spec.align == '<' && spec.width > 0 ? '<' : spec.align;
-                    return detail::apply_width_and_align(result, spec.width, align, spec.fill);
+                    out.append(value ? std::string_view("true") : std::string_view("false"));
+                    detail::pad_to_width(out, start, spec.width, spec.align, spec.fill);
                 }
                 else if constexpr (std::is_same_v<T, long long>)
                 {
-                    std::string result;
-
                     switch (spec.spec_type)
                     {
                         case format_spec::type::hex_lower:
-                            result = detail::to_hex(value, false);
+                            detail::append_hex(out, static_cast<unsigned long long>(value), false);
                             break;
                         case format_spec::type::hex_upper:
-                            result = detail::to_hex(value, true);
+                            detail::append_hex(out, static_cast<unsigned long long>(value), true);
                             break;
                         case format_spec::type::decimal:
                         case format_spec::type::none:
                         default:
-                        {
-                            char buffer[32];
-                            const auto converted = behl::to_chars(buffer, buffer + sizeof(buffer), value);
-                            result.assign(buffer, converted.ptr);
+                            detail::append_integer(out, value, 10);
                             break;
-                        }
                     }
-
-                    char align = spec.align;
-                    if (!spec.explicit_align && align == '<' && spec.width > 0)
-                    {
-                        align = '>';
-                    }
-                    return detail::apply_width_and_align(result, spec.width, align, spec.fill);
+                    detail::pad_to_width(out, start, spec.width, detail::numeric_align(spec), spec.fill);
                 }
                 else if constexpr (std::is_same_v<T, double>)
                 {
-                    std::string result;
-
                     if (spec.precision != -1)
                     {
-                        result = detail::to_string_with_precision(value, spec.precision);
+                        detail::append_fixed(out, value, static_cast<size_t>(spec.precision));
                     }
                     else
                     {
-                        char buffer[64];
-                        const auto converted = behl::to_chars(buffer, buffer + sizeof(buffer), value);
-                        result.assign(buffer, converted.ptr);
+                        detail::append_shortest(out, value);
                     }
-
-                    char align = spec.align;
-                    if (!spec.explicit_align && align == '<' && spec.width > 0)
-                    {
-                        align = '>';
-                    }
-                    return detail::apply_width_and_align(result, spec.width, align, spec.fill);
+                    detail::pad_to_width(out, start, spec.width, detail::numeric_align(spec), spec.fill);
                 }
                 else if constexpr (std::is_same_v<T, std::string_view>)
                 {
-                    std::string result(value);
-                    return detail::apply_width_and_align(result, spec.width, spec.align, spec.fill);
-                }
-                else if constexpr (std::is_same_v<T, std::string>)
-                {
-                    return detail::apply_width_and_align(value, spec.width, spec.align, spec.fill);
+                    out.append(value);
+                    detail::pad_to_width(out, start, spec.width, spec.align, spec.fill);
                 }
                 else if constexpr (std::is_same_v<T, const void*>)
                 {
                     // Pointer formatting - convert to hex address
-                    auto addr = reinterpret_cast<uintptr_t>(value);
-                    return "0x" + detail::to_hex(static_cast<long long>(addr), false);
-                }
-                else
-                {
-                    return "";
+                    out.append(std::string_view("0x"));
+                    detail::append_hex(out, static_cast<unsigned long long>(std::bit_cast<uintptr_t>(value)), false);
                 }
             },
             arg.value());
@@ -704,38 +705,8 @@ namespace behl
 
     namespace detail
     {
-        inline std::string process_literal(std::string_view lit)
-        {
-            std::string result;
-            result.reserve(lit.size());
-            for (size_t i = 0; i < lit.size(); ++i)
-            {
-                if (lit[i] == '{' && i + 1 < lit.size() && lit[i + 1] == '{')
-                {
-                    result += '{';
-                    ++i;
-                }
-                else if (lit[i] == '}' && i + 1 < lit.size() && lit[i + 1] == '}')
-                {
-                    result += '}';
-                    ++i;
-                }
-                else
-                {
-                    result += lit[i];
-                }
-            }
-            return result;
-        }
-
-        template<typename T>
-        inline std::string format_arg_value(T&& arg, const format_spec& spec)
-        {
-            return format_value(format_arg(std::forward<T>(arg)), spec);
-        }
-
         template<typename Tuple, size_t... Is>
-        inline int get_integer_arg(const Tuple& args, size_t index, std::index_sequence<Is...>)
+        constexpr int get_integer_arg(const Tuple& args, size_t index, std::index_sequence<Is...>)
         {
             int result = 0;
             [[maybe_unused]] auto extract = [&]<size_t I>() {
@@ -759,9 +730,10 @@ namespace behl
 
         // Dynamic array-based format impl (determines size at runtime)
         template<typename Tuple, size_t... Is>
-        std::string format_impl_dynamic(std::string_view fmt, const Tuple& args, std::index_sequence<Is...>)
+        BEHL_CONSTEXPR_STRING std::string format_impl_dynamic(std::string_view fmt, const Tuple& args, std::index_sequence<Is...>)
         {
             std::string result;
+            result.reserve(fmt.size());
             size_t i = 0;
             size_t arg_index = 0;
 
@@ -912,7 +884,8 @@ namespace behl
                         throw std::runtime_error("not enough arguments for format string");
                     }
 
-                    (void)((current_arg_index == Is ? (result += format_arg_value(std::get<Is>(args), spec), true) : false)
+                    (void)((current_arg_index == Is ? (format_value_to(result, format_arg(std::get<Is>(args)), spec), true)
+                                                    : false)
                         || ...);
 
                     i = brace_end + 1;
@@ -937,40 +910,51 @@ namespace behl
         }
 
         template<typename ArgsTuple, size_t... Is>
-        std::string format_parts_tuple(const auto& parts_tuple, const ArgsTuple& args, std::index_sequence<Is...>)
+        BEHL_CONSTEXPR_STRING std::string format_parts_tuple(const auto& parts_tuple, const ArgsTuple& args, std::index_sequence<Is...>)
         {
             std::string result;
             auto process_part = [&](const auto& part) {
                 if (part.is_literal)
                 {
-                    result += process_literal(part.literal);
+                    append_literal(result, part.literal);
                 }
                 else
                 {
-                    ((part.arg_index == Is ? (result += format_arg_value(std::get<Is>(args), part.spec), true) : false) || ...);
+                    ((part.arg_index == Is ? (format_value_to(result, format_arg(std::get<Is>(args)), part.spec), true) : false)
+                        || ...);
                 }
             };
             (process_part(std::get<Is>(parts_tuple)), ...);
             return result;
         }
 
-        template<size_t N, typename Tuple, size_t... Is>
-        std::string format_impl(const format_parts<N>& parts, const Tuple& args, std::index_sequence<Is...>)
+        template<format_string_literal Fmt>
+        struct compiled_format
+        {
+            static constexpr size_t part_count = count_format_parts(Fmt.view());
+            static constexpr auto parts = parse_format_string_sized<part_count>(Fmt.view());
+        };
+
+        template<format_string_literal Fmt, size_t I, typename Out, typename Tuple>
+        constexpr void append_part(Out& out, const Tuple& args)
+        {
+            constexpr const format_part& part = compiled_format<Fmt>::parts.parts[I];
+            if constexpr (part.is_literal)
+            {
+                append_literal(out, part.literal);
+            }
+            else if constexpr (part.arg_index < std::tuple_size_v<Tuple>)
+            {
+                format_value_to(out, format_arg(std::get<part.arg_index>(args)), part.spec);
+            }
+        }
+
+        template<format_string_literal Fmt, typename Tuple, size_t... Ps>
+        BEHL_CONSTEXPR_STRING std::string format_impl(const Tuple& args, std::index_sequence<Ps...>)
         {
             std::string result;
-            for (size_t i = 0; i < parts.count; ++i)
-            {
-                const auto& part = parts.parts[i];
-                if (part.is_literal)
-                {
-                    result += process_literal(part.literal);
-                }
-                else
-                {
-                    (void)((part.arg_index == Is ? (result += format_arg_value(std::get<Is>(args), part.spec), true) : false)
-                        || ...);
-                }
-            }
+            result.reserve(Fmt.view().size());
+            (append_part<Fmt, Ps>(result, args), ...);
             return result;
         }
 
@@ -988,16 +972,14 @@ namespace behl
     } // namespace detail
 
     template<format_string_literal Fmt, typename... Args>
-    std::string format(Args&&... args)
+    BEHL_CONSTEXPR_STRING std::string format(Args&&... args)
     {
-        constexpr size_t part_count = count_format_parts(Fmt.view());
-        constexpr auto parts = parse_format_string_sized<part_count>(Fmt.view());
         auto args_tuple = std::forward_as_tuple(args...);
-        return detail::format_impl(parts, args_tuple, std::index_sequence_for<Args...>{});
+        return detail::format_impl<Fmt>(args_tuple, std::make_index_sequence<detail::compiled_format<Fmt>::parts.count>{});
     }
 
     template<typename... Args>
-    std::string format(format_string<std::type_identity_t<Args>...> fmt, Args&&... args)
+    BEHL_CONSTEXPR_STRING std::string format(format_string<std::type_identity_t<Args>...> fmt, Args&&... args)
     {
         auto args_tuple = std::forward_as_tuple(args...);
         return detail::format_impl_dynamic(fmt.view(), args_tuple, std::index_sequence_for<Args...>{});

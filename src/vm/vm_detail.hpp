@@ -10,7 +10,6 @@
 #include "vm_metatable.hpp"
 
 #include <cassert>
-#include <charconv>
 
 namespace behl
 {

@@ -46,7 +46,7 @@ namespace behl
                     }
                     else
                     {
-                        type_info = behl::format<"Table[arr={}, hash={}}]">(table->array.size(), table->hash.size());
+                        type_info = behl::format<"Table[arr={}, hash={}]">(table->array.size(), table->hash.size());
                     }
                     break;
                 }
@@ -63,7 +63,7 @@ namespace behl
                     break;
                 }
                 default:
-                    type_info = behl::format<"Unknown[type={}]">(obj->get_header().type);
+                    type_info = behl::format<"Unknown[type={}]">(static_cast<int>(obj->get_header().type));
                     break;
             }
 

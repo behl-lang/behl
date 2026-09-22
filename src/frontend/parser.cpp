@@ -7,7 +7,6 @@
 #include "gc/gc.hpp"
 
 #include <behl/exceptions.hpp>
-#include <charconv>
 #include <stdexcept>
 
 namespace behl
@@ -412,7 +411,7 @@ namespace behl
             if (tok.value.find('.') == tok.value.npos)
             {
                 int64_t ival = 0;
-                std::from_chars_result res;
+                behl::from_chars_result res;
 
                 if (is_hex)
                 {

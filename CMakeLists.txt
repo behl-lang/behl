@@ -105,7 +105,6 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/ascii.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv_tables.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.cpp
@@ -407,6 +406,7 @@ if(BEHL_BUILD_BENCHMARKS AND NOT EMSCRIPTEN)
         src/benchmarks/jit_codegen_benchmarks.cpp
         src/benchmarks/scriptcall_benchmarks.cpp
         src/benchmarks/charconv_benchmarks.cpp
+        src/benchmarks/format_benchmarks.cpp
     )
 
     add_executable(benchmarks)
