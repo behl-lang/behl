@@ -926,5 +926,292 @@ TEST_P(LoopTest, ForLoopIntBoundsFloatStep)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 10.0);
 }
 
+TEST_P(LoopTest, ForLoopRuntimeZeroStepAscendingRunsWhileConditionHolds)
+{
+    constexpr std::string_view code = R"(
+        let s = 0
+        let count = 0
+        let last = -1
+        for (let i = 0; i < 10; i += s) {
+            count = count + 1
+            last = i
+            if (count >= 5) { break }
+        }
+        return count, last
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(LoopTest, ForLoopRuntimeZeroStepAscendingFalseConditionRunsZeroTimes)
+{
+    constexpr std::string_view code = R"(
+        let s = 0
+        let count = 0
+        for (let i = 20; i < 10; i += s) {
+            count = count + 1
+            if (count >= 5) { break }
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(LoopTest, ForLoopRuntimeZeroStepDescendingRunsWhileConditionHolds)
+{
+    constexpr std::string_view code = R"(
+        let s = 0
+        let count = 0
+        let last = -1
+        for (let i = 10; i > 0; i -= s) {
+            count = count + 1
+            last = i
+            if (count >= 5) { break }
+        }
+        return count, last
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_P(LoopTest, ForLoopRuntimeZeroStepDescendingFalseConditionRunsZeroTimes)
+{
+    constexpr std::string_view code = R"(
+        let s = 0
+        let count = 0
+        for (let i = 0; i > 10; i -= s) {
+            count = count + 1
+            if (count >= 5) { break }
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(LoopTest, ForLoopRuntimeNegativeStepAscendingMovesAwayFromLimit)
+{
+    constexpr std::string_view code = R"(
+        let s = -1
+        let count = 0
+        let last = 0
+        for (let i = 0; i < 10; i += s) {
+            count = count + 1
+            last = i
+            if (count >= 5) { break }
+        }
+        return count, last
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_integer(S, -1), -4);
+}
+
+TEST_P(LoopTest, ForLoopRuntimeNegativeStepDescendingMovesAwayFromLimit)
+{
+    constexpr std::string_view code = R"(
+        let s = -1
+        let count = 0
+        let last = 0
+        for (let i = 10; i > 0; i -= s) {
+            count = count + 1
+            last = i
+            if (count >= 5) { break }
+        }
+        return count, last
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_integer(S, -1), 14);
+}
+
+TEST_P(LoopTest, ForLoopLiteralZeroStepRunsWhileConditionHolds)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 0; i < 10; i += 0) {
+            count = count + 1
+            if (count >= 5) { break }
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_P(LoopTest, ForLoopStepFromFunctionArgumentMatchesCondition)
+{
+    constexpr std::string_view code = R"(
+        function run(start, limit, s) {
+            let count = 0
+            for (let i = start; i < limit; i += s) {
+                count = count + 1
+                if (count >= 5) { break }
+            }
+            return count
+        }
+        return run(0, 10, 3) * 1000 + run(0, 10, 0) * 100 + run(20, 10, 0) * 10 + run(0, 10, -2)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 4505);
+}
+
+TEST_P(LoopTest, ForLoopLimitVariableWrittenInBody)
+{
+    constexpr std::string_view code = R"(
+        let n = 10
+        let count = 0
+        for (let i = 0; i < n; i++) {
+            n = n - 1
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_P(LoopTest, ForLoopLimitLengthGrowsInBody)
+{
+    constexpr std::string_view code = R"(
+        let t = {1, 2, 3}
+        let count = 0
+        for (let i = 0; i < #t; i++) {
+            if (#t < 6) { t[#t] = 0 }
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 6);
+}
+
+TEST_P(LoopTest, ForLoopStepVariableWrittenInBody)
+{
+    constexpr std::string_view code = R"(
+        let s = 1
+        let count = 0
+        let last = 0
+        for (let i = 0; i < 20; i += s) {
+            s = s + 1
+            last = i
+            count = count + 1
+        }
+        return count, last
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_integer(S, -1), 14);
+}
+
+TEST_P(LoopTest, ForLoopLimitWrittenByClosureCalledInBody)
+{
+    constexpr std::string_view code = R"(
+        let n = 10
+        let shrink = function() { n = n - 1 }
+        let count = 0
+        for (let i = 0; i < n; i++) {
+            shrink()
+            count = count + 1
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_P(LoopTest, ForLoopLimitCallEvaluatedEachIteration)
+{
+    constexpr std::string_view code = R"(
+        let calls = 0
+        function lim() { calls = calls + 1; return 3 }
+        for (let i = 0; i < lim(); i++) {
+        }
+        return calls
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 4);
+}
+
+TEST_P(LoopTest, ForLoopStrictFloatLimitKeepsIntegerIndex)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        let last = 0
+        for (let i = 0; i < 5.5; i++) {
+            count = count + 1
+            last = i
+        }
+        return count, last, typeof(last)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::to_integer(S, -3), 6);
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_string(S, -1), "integer");
+}
+
+TEST_P(LoopTest, ForLoopStrictLimitAtIntegerMinRunsZeroTimes)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 0; i < -9223372036854775807 - 1; i++) {
+            count = count + 1
+            if (count >= 5) { break }
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(LoopTest, ForLoopStrictLimitAtIntegerMaxRunsZeroTimes)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        for (let i = 0; i > 9223372036854775807; i--) {
+            count = count + 1
+            if (count >= 5) { break }
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(LoopTest, ForLoopLimitMetamethodIsCalled)
+{
+    constexpr std::string_view code = R"(
+        let lim = setmetatable({}, { __lt = function(a, b) { return a < 3 } })
+        let count = 0
+        for (let i = 0; i < lim; i++) {
+            count = count + 1
+            if (count >= 10) { break }
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 3);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, LoopTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

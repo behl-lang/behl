@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bytecode.hpp"
+#include "common/arithmetic.hpp"
 #include "frame.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_closure.hpp"
@@ -9,7 +10,8 @@
 #include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
-#include "common/arithmetic.hpp"
+#include "vm_arithmetic.hpp"
+#include "vm_controlflow.hpp"
 #include "vm_detail.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
@@ -250,11 +252,58 @@ namespace behl
     }
 
     BEHL_INLINE
+    bool for_loop_condition(State* S, const Value idx, const Value limit, Integer mode)
+    {
+        const bool descending = (mode & kForModeDescending) != 0;
+        const bool inclusive = (mode & kForModeInclusive) != 0;
+
+        bool result = false;
+        if (descending)
+        {
+            const bool has_mm = inclusive ? try_comparison_metamethod<MetaMethodType::kLt>(S, idx, limit, result)
+                                          : try_comparison_metamethod<MetaMethodType::kLe>(S, idx, limit, result);
+            if (has_mm)
+            {
+                return !result;
+            }
+        }
+        else
+        {
+            const bool has_mm = inclusive ? try_comparison_metamethod<MetaMethodType::kLe>(S, idx, limit, result)
+                                          : try_comparison_metamethod<MetaMethodType::kLt>(S, idx, limit, result);
+            if (has_mm)
+            {
+                return result;
+            }
+        }
+
+        switch (make_type_pair(idx, limit))
+        {
+            case kTypePairIntInt:
+            case kTypePairIntFloat:
+            case kTypePairFloatInt:
+            case kTypePairFloatFloat:
+            case kTypePairStringString:
+                if (descending)
+                {
+                    return inclusive ? idx >= limit : idx > limit;
+                }
+                return inclusive ? idx <= limit : idx < limit;
+            default:
+                break;
+        }
+
+        throw TypeError(behl::format("attempt to compare {} with {}", idx.get_type_string(), limit.get_type_string()),
+            get_current_location(S->call_stack.back()));
+    }
+
+    BEHL_INLINE
     void handler_forprep(State* S, CallFrame& frame, Reg a, int32_t offset)
     {
         Value& init = get_register(S, frame, a);
-        Value& limit = get_register(S, frame, a + 1);
+        const Value& limit = get_register(S, frame, a + 1);
         Value& step = get_register(S, frame, a + 2);
+        const Integer mode = get_register(S, frame, a + 4).get_integer();
 
         if (init.is_integer() && limit.is_integer() && step.is_integer())
         {
@@ -264,69 +313,61 @@ namespace behl
             const auto i = init.get_integer();
             const auto l = limit.get_integer();
             const auto s = step.get_integer();
+            const bool descending = (mode & kForModeDescending) != 0;
+            const bool inclusive = (mode & kForModeInclusive) != 0;
 
-            if ((s > 0) ? (i > l) : (i < l))
+            const bool enter = descending ? (inclusive ? i >= l : i > l) : (inclusive ? i <= l : i < l);
+            if (!enter)
             {
                 // Zero iterations: skip past the FORLOOP instruction
                 frame.pc += static_cast<uint32_t>(offset) + 1;
                 return;
             }
 
-            using UInt = std::make_unsigned_t<Integer>;
-            UInt remaining;
             if (s > 0)
             {
-                remaining = (static_cast<UInt>(l) - static_cast<UInt>(i)) / static_cast<UInt>(s);
-            }
-            else if (s < 0)
-            {
-                remaining = (static_cast<UInt>(i) - static_cast<UInt>(l)) / (0 - static_cast<UInt>(s));
-            }
-            else
-            {
-                // A zero step never advances; mirror the old endless behavior
-                remaining = ~static_cast<UInt>(0);
+                using UInt = std::make_unsigned_t<Integer>;
+                UInt span = descending ? static_cast<UInt>(i) - static_cast<UInt>(l)
+                                       : static_cast<UInt>(l) - static_cast<UInt>(i);
+                if (!inclusive)
+                {
+                    span -= 1;
+                }
+                get_register(S, frame, a + 3).emplace<Integer>(static_cast<Integer>(span / static_cast<UInt>(s)));
+                if (descending)
+                {
+                    step.update(arithmetic::sub(Integer{ 0 }, s));
+                }
+
+                // Fall through into the body with the loop variable at its start value
+                return;
             }
 
-            get_register(S, frame, a + 3).emplace<Integer>(static_cast<Integer>(remaining));
-
-            // Fall through into the body with the loop variable at its start value
+            get_register(S, frame, a + 3) = Value{};
             return;
         }
 
-        if (init.is_numeric() && step.is_numeric())
+        if (!for_loop_condition(S, init, limit, mode))
         {
-            const FP i = init.is_integer() ? static_cast<FP>(init.get_integer()) : init.get_fp();
-            const FP s = step.is_integer() ? static_cast<FP>(step.get_integer()) : step.get_fp();
-            init.emplace<FP>(i - s);
-
-            // FORLOOP distinguishes counted loops by an integer step, so float
-            // loops always carry a float step
-            step.emplace<FP>(s);
-            if (limit.is_integer())
-            {
-                limit.emplace<FP>(static_cast<FP>(limit.get_integer()));
-            }
-
-            frame.pc += static_cast<uint32_t>(offset);
+            S->call_stack.back().pc += static_cast<uint32_t>(offset) + 1;
             return;
         }
 
-        throw TypeError("numeric for-loop requires number initial and step values", get_current_location(frame));
+        CallFrame& current = S->call_stack.back();
+        get_register(S, current, a + 3) = Value{};
     }
 
     BEHL_INLINE
     void handler_forloop(State* S, CallFrame& frame, Reg a, int32_t offset)
     {
-        Value& idx = get_register(S, frame, a);
-        const Value& limit = get_register(S, frame, a + 1);
-        const Value& step = get_register(S, frame, a + 2);
+        Value& count = get_register(S, frame, a + 3);
 
-        if (step.is_integer())
+        if (count.is_integer())
         {
             // Counted loop: FORPREP proved idx/limit/step are integers and left
             // the remaining iteration count in the internal register at a+3
-            Value& count = get_register(S, frame, a + 3);
+            Value& idx = get_register(S, frame, a);
+            const Value& step = get_register(S, frame, a + 2);
             using UInt = std::make_unsigned_t<Integer>;
             const auto remaining = static_cast<UInt>(count.get_integer());
 
@@ -342,25 +383,22 @@ namespace behl
             return;
         }
 
-        if (idx.is_numeric() && limit.is_numeric() && step.is_numeric())
+        const Integer mode = get_register(S, frame, a + 4).get_integer();
+        const auto step_reg = static_cast<Reg>(a + 2);
+        if ((mode & kForModeDescending) != 0)
         {
-            const FP i = idx.is_integer() ? static_cast<FP>(idx.get_integer()) : idx.get_fp();
-            const FP l = limit.is_integer() ? static_cast<FP>(limit.get_integer()) : limit.get_fp();
-            const FP s = step.is_integer() ? static_cast<FP>(step.get_integer()) : step.get_fp();
-
-            const FP new_idx = i + s;
-            idx.emplace<FP>(new_idx);
-
-            const bool continue_loop = (s > 0) ? (new_idx <= l) : (new_idx >= l);
-            if (continue_loop)
-            {
-                frame.pc += static_cast<uint32_t>(offset - 1);
-            }
-
-            return;
+            handler_numeric<MetaMethodType::kSub, false, NumericSubOp, operand_reg, operand_reg>(S, frame, a, a, step_reg);
+        }
+        else
+        {
+            handler_add(S, frame, a, a, step_reg);
         }
 
-        throw TypeError("numeric for-loop requires number index/limit/step values", get_current_location(frame));
+        CallFrame& current = S->call_stack.back();
+        if (for_loop_condition(S, get_register(S, current, a), get_register(S, current, a + 1), mode))
+        {
+            S->call_stack.back().pc += static_cast<uint32_t>(offset - 1);
+        }
     }
 
 } // namespace behl

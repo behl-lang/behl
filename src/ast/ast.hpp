@@ -1092,6 +1092,7 @@ namespace behl
         bool ascending; // true for <=/<, false for >=/>
         bool inclusive; // true for <=/>=, false for </>
         AstBlock* block = nullptr;
+        AstForC* original = nullptr;
 
         AstForCNumeric(AstString* v, AstNode* s, AstNode* e, AstNode* st, bool asc, bool incl)
             : AstNode(AstNodeType::kForCNumeric)
@@ -1108,6 +1109,10 @@ namespace behl
         {
             auto c = make_clone<AstForCNumeric>(holder, var, start->clone(holder), end->clone(holder),
                 step ? step->clone(holder) : nullptr, ascending, inclusive);
+            if (original)
+            {
+                c->original = static_cast<AstForC*>(original->clone(holder));
+            }
             if (block)
             {
                 c->block = holder.make<AstBlock>();

@@ -435,10 +435,10 @@ namespace behl
 
                 case OpCode::kOpForPrep:
                     handler_forprep(S, *frame, instr.a(), instr.signed_offset());
-                    continue;
+                    break;
                 case OpCode::kOpForLoop:
                     handler_forloop(S, *frame, instr.a(), instr.signed_offset());
-                    continue;
+                    break;
 
                 case OpCode::kOpClosure:
                     handler_closure(S, *frame, instr.a(), instr.const_or_proto_index());

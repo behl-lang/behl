@@ -3418,33 +3418,34 @@ namespace behl
         leave_scope(C);
     }
 
-    void VisitorAdapter::visit(const AstForC& node)
+    static void compile_for_c(CompilerState& C, VisitorAdapter& visitor, const AstNode* init, const AstNode* condition,
+        const AstNode* update, const AstBlock* block)
     {
         enter_scope(C);
 
-        if (node.init)
+        if (init)
         {
-            node.init->accept(*this);
+            init->accept(visitor);
         }
 
         size_t loop_start = C.current_proto->code.size();
 
         size_t exit_jmp = 0;
-        if (node.condition)
+        if (condition)
         {
-            compile_for_jump = true;
-            jump_patch_location = &exit_jmp;
-            node.condition->accept(*this);
-            compile_for_jump = false;
-            jump_patch_location = nullptr;
+            visitor.compile_for_jump = true;
+            visitor.jump_patch_location = &exit_jmp;
+            condition->accept(visitor);
+            visitor.compile_for_jump = false;
+            visitor.jump_patch_location = nullptr;
         }
 
         // Push loop context for break/continue tracking
         C.loop_stack.emplace_back(C.S, current_scope_level(C));
 
-        if (node.block)
+        if (block)
         {
-            node.block->accept(*this);
+            block->accept(visitor);
         }
 
         // Continue jumps should jump to the update statement (or loop start if no update)
@@ -3454,12 +3455,12 @@ namespace behl
             C.current_proto->code[pos] = make_op_jmp(static_cast<int32_t>(continue_target - pos - 1));
         }
 
-        if (node.update)
+        if (update)
         {
             Reg before_freereg = C.freereg;
-            node.update->accept(*this);
+            update->accept(visitor);
 
-            if (node.update->type != AstNodeType::kAssign && C.freereg > before_freereg)
+            if (update->type != AstNodeType::kAssign && C.freereg > before_freereg)
             {
                 C.freereg = before_freereg;
             }
@@ -3467,7 +3468,7 @@ namespace behl
 
         emit(C, make_op_jmp(static_cast<int32_t>(loop_start - C.current_proto->code.size() - 1)), C.lastline);
 
-        if (node.condition)
+        if (condition)
         {
             C.current_proto->code[exit_jmp] = make_op_jmp(static_cast<int32_t>(C.current_proto->code.size() - exit_jmp - 1));
         }
@@ -3485,9 +3486,30 @@ namespace behl
         leave_scope(C);
     }
 
+    void VisitorAdapter::visit(const AstForC& node)
+    {
+        compile_for_c(C, *this, node.init, node.condition, node.update, node.block);
+    }
+
+    static bool is_loop_invariant_operand(CompilerState& C, const AstNode* operand)
+    {
+        if (!operand || operand->type == AstNodeType::kInteger || operand->type == AstNodeType::kFP)
+        {
+            return true;
+        }
+        const auto* ident = operand->try_as<AstIdent>();
+        return ident && resolve_local(C, ident->name->view()) != kInvalidLocal;
+    }
+
     void VisitorAdapter::visit(const AstForCNumeric& node)
     {
         // Compile optimized numeric C-style for loop using FORPREP/FORLOOP
+
+        if (!is_loop_invariant_operand(C, node.end) || !is_loop_invariant_operand(C, node.step))
+        {
+            compile_for_c(C, *this, node.original->init, node.original->condition, node.original->update, node.block);
+            return;
+        }
 
         enter_scope(C);
         Reg base = alloc_reg(C);
@@ -3496,62 +3518,31 @@ namespace behl
         Reg limit_reg = alloc_reg(C);
         Reg step_reg = alloc_reg(C);
         Reg internal_reg = alloc_reg(C);
+        Reg mode_reg = alloc_reg(C);
 
         // Compile start value
         node.start->accept(*this);
         emit(C, make_op_move(base, static_cast<Reg>(C.freereg - 1)), C.lastline);
         free_reg(C, C.freereg - 1);
 
-        // Compile end value
-        // For non-inclusive comparisons (<, >), adjust the limit by 1
-        if (node.inclusive)
-        {
-            // For <= or >=, use the end value directly
-            node.end->accept(*this);
-            emit(C, make_op_move(limit_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
-            free_reg(C, C.freereg - 1);
-        }
-        else
-        {
-            // For < or >, adjust the limit by +/-1 to make it inclusive for FORLOOP
-            node.end->accept(*this);
-            Reg end_reg = C.freereg - 1;
-            if (node.ascending)
-            {
-                // For i < end, convert to i <= (end - 1)
-                emit(C, make_op_subimm(limit_reg, end_reg, 1), C.lastline);
-            }
-            else
-            {
-                // For i > end, convert to i >= (end + 1)
-                emit(C, make_op_addimm(limit_reg, end_reg, 1), C.lastline);
-            }
-            free_reg(C, end_reg);
-        }
+        node.end->accept(*this);
+        emit(C, make_op_move(limit_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
+        free_reg(C, C.freereg - 1);
 
         // Compile step value
         if (node.step)
         {
             node.step->accept(*this);
-            Reg step_value_reg = C.freereg - 1;
-
-            // If descending, negate the step value
-            if (!node.ascending)
-            {
-                emit(C, make_op_unm(step_reg, step_value_reg), C.lastline);
-            }
-            else
-            {
-                emit(C, make_op_move(step_reg, step_value_reg), C.lastline);
-            }
-            free_reg(C, step_value_reg);
+            emit(C, make_op_move(step_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
+            free_reg(C, C.freereg - 1);
         }
         else
         {
-            // Implicit step: 1 for ascending, -1 for descending
-            const auto k = add_integer_constant(C, node.ascending ? 1 : -1);
-            emit(C, make_op_loadi(step_reg, k), C.lastline);
+            emit(C, make_op_loadi(step_reg, add_integer_constant(C, 1)), C.lastline);
         }
+
+        const int32_t mode = (node.ascending ? 0 : kForModeDescending) | (node.inclusive ? kForModeInclusive : 0);
+        emit(C, make_op_loadimm(mode_reg, mode), C.lastline);
 
         if (C.freereg > C.min_freereg)
         {
@@ -3591,6 +3582,7 @@ namespace behl
         C.loop_stack.pop_back();
 
         leave_scope(C);
+        free_reg(C, mode_reg);
         free_reg(C, internal_reg);
         free_reg(C, step_reg);
         free_reg(C, limit_reg);

@@ -562,6 +562,9 @@ namespace behl
         return i;
     }
 
+    inline constexpr int32_t kForModeDescending = 1;
+    inline constexpr int32_t kForModeInclusive = 2;
+
     constexpr Instruction make_op_forprep(Reg a, int32_t offset) noexcept
     {
         uint32_t encoded_offset = static_cast<uint32_t>(offset + 65536);

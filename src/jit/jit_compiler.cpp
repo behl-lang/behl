@@ -1553,66 +1553,63 @@ namespace behl
                     ColdBlock cb{ new_label(), 0, jit_op_forprep, ins.raw, pcn, ColdKind::kForPrep, off };
                     cb.resume = cb.entry;
 
+                    int32_t mode = -1;
+                    if (pc > 0 && !jump_targets_[pc])
+                    {
+                        const Instruction prev = proto_->code[pc - 1];
+                        if (prev.op() == OpCode::kOpLoadImm && prev.a() == a + 4)
+                        {
+                            mode = prev.signed_immediate();
+                        }
+                    }
+                    if (mode < 0 || mode > (kForModeDescending | kForModeInclusive))
+                    {
+                        jump(cb.entry);
+                        cold_blocks_.push_back(cb);
+                        break;
+                    }
+                    const bool descending = (mode & kForModeDescending) != 0;
+                    const bool inclusive = (mode & kForModeInclusive) != 0;
+
                     guard_tag(a, Type::kInteger, cb.entry);
                     guard_tag(a + 1, Type::kInteger, cb.entry);
                     guard_tag(a + 2, Type::kInteger, cb.entry);
 
-                    const uint32_t neg_step = new_label();
-                    const uint32_t zero_step = new_label();
                     const uint32_t zero_trip = new_label();
                     const uint32_t prepared = new_label();
 
                     {
                         const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
-                        branch_i64_imm(s, 0, CgCmp::kEq, zero_step);
+                        branch_i64_imm(s, 0, CgCmp::kLe, cb.entry);
                     }
-                    {
-                        const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
-                        branch_i64_imm(s, 0, CgCmp::kLt, neg_step);
-                    }
-
                     {
                         const uint32_t i = load(CgOpKind::kLoadI64, a);
                         const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
-                        branch_i64(i, l, CgCmp::kGt, zero_trip);
+                        const CgCmp skip = descending ? (inclusive ? CgCmp::kLt : CgCmp::kLe)
+                                                      : (inclusive ? CgCmp::kGt : CgCmp::kGe);
+                        branch_i64(i, l, skip, zero_trip);
                     }
                     {
-                        const uint32_t t = load(CgOpKind::kLoadI64, a + 1);
-                        const uint32_t i = load(CgOpKind::kLoadI64, a);
-                        arith(CgOpKind::kSubI64, t, i);
+                        const uint32_t t = load(CgOpKind::kLoadI64, descending ? a : a + 1);
+                        const uint32_t u = load(CgOpKind::kLoadI64, descending ? a + 1 : a);
+                        arith(CgOpKind::kSubI64, t, u);
+                        if (!inclusive)
+                        {
+                            add_i64_imm(t, -1);
+                        }
                         const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
                         arith(CgOpKind::kDivU64, t, s);
                         store(CgOpKind::kStoreI64, a + 3, t);
                         store_tag(a + 3, Type::kInteger);
-                        jump(prepared);
                     }
-
-                    bind(neg_step, false);
+                    if (descending)
                     {
-                        const uint32_t i = load(CgOpKind::kLoadI64, a);
-                        const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
-                        branch_i64(i, l, CgCmp::kLt, zero_trip);
-                    }
-                    {
-                        const uint32_t t = load(CgOpKind::kLoadI64, a);
-                        const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
-                        arith(CgOpKind::kSubI64, t, l);
                         const uint32_t d = const_i64(0);
                         const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
                         arith(CgOpKind::kSubI64, d, s);
-                        arith(CgOpKind::kDivU64, t, d);
-                        store(CgOpKind::kStoreI64, a + 3, t);
-                        store_tag(a + 3, Type::kInteger);
-                        jump(prepared);
+                        store(CgOpKind::kStoreI64, a + 2, d);
                     }
-
-                    bind(zero_step, false);
-                    {
-                        const uint32_t v = const_i64(-1);
-                        store(CgOpKind::kStoreI64, a + 3, v);
-                        store_tag(a + 3, Type::kInteger);
-                        jump(prepared);
-                    }
+                    jump(prepared);
 
                     bind(zero_trip, false);
                     jump((*labels_)[static_cast<size_t>(exit_pc)]);
@@ -1633,7 +1630,7 @@ namespace behl
                     const int32_t a = ins.a();
                     ColdBlock cb{ new_label(), 0, jit_op_forloop, ins.raw, pcn, ColdKind::kForLoop, off };
                     cb.resume = cb.entry;
-                    guard_tag(a + 2, Type::kInteger, cb.entry);
+                    guard_tag(a + 3, Type::kInteger, cb.entry);
                     const uint32_t step = load(CgOpKind::kLoadI64, a + 2);
                     const uint32_t idx = load(CgOpKind::kLoadI64, a);
                     arith(CgOpKind::kAddI64, idx, step);
@@ -1736,9 +1733,7 @@ namespace behl
                     case ColdKind::kForPrep:
                     {
                         const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
-                        pc_dispatch(r,
-                            { static_cast<int64_t>(cb.pcn), static_cast<int64_t>(cb.pcn) + cb.offset,
-                                static_cast<int64_t>(cb.pcn) + cb.offset + 1 });
+                        pc_dispatch(r, { static_cast<int64_t>(cb.pcn), static_cast<int64_t>(cb.pcn) + cb.offset + 1 });
                         break;
                     }
 
