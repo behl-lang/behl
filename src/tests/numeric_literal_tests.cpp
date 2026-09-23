@@ -3,10 +3,12 @@
  * @brief Tests for numeric literal parsing (decimal and hexadecimal)
  */
 
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class NumericLiteralTest : public ::testing::Test
+class NumericLiteralTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -14,6 +16,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -22,7 +25,7 @@ protected:
     }
 };
 
-TEST_F(NumericLiteralTest, HexadecimalLowercase)
+TEST_P(NumericLiteralTest, HexadecimalLowercase)
 {
     constexpr std::string_view code = R"(
         let a = 0xff;
@@ -33,7 +36,7 @@ TEST_F(NumericLiteralTest, HexadecimalLowercase)
     EXPECT_EQ(behl::to_integer(S, -1), 255);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalUppercase)
+TEST_P(NumericLiteralTest, HexadecimalUppercase)
 {
     constexpr std::string_view code = R"(
         let a = 0xFF;
@@ -44,7 +47,7 @@ TEST_F(NumericLiteralTest, HexadecimalUppercase)
     EXPECT_EQ(behl::to_integer(S, -1), 255);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalUppercaseX)
+TEST_P(NumericLiteralTest, HexadecimalUppercaseX)
 {
     constexpr std::string_view code = R"(
         let a = 0XFF;
@@ -55,7 +58,7 @@ TEST_F(NumericLiteralTest, HexadecimalUppercaseX)
     EXPECT_EQ(behl::to_integer(S, -1), 255);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalMixedCase)
+TEST_P(NumericLiteralTest, HexadecimalMixedCase)
 {
     constexpr std::string_view code = R"(
         let a = 0xAbCdEf;
@@ -66,7 +69,7 @@ TEST_F(NumericLiteralTest, HexadecimalMixedCase)
     EXPECT_EQ(behl::to_integer(S, -1), 11259375);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalZero)
+TEST_P(NumericLiteralTest, HexadecimalZero)
 {
     constexpr std::string_view code = R"(
         let a = 0x0;
@@ -77,7 +80,7 @@ TEST_F(NumericLiteralTest, HexadecimalZero)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalSingleDigit)
+TEST_P(NumericLiteralTest, HexadecimalSingleDigit)
 {
     constexpr std::string_view code = R"(
         let a = 0xF;
@@ -88,7 +91,7 @@ TEST_F(NumericLiteralTest, HexadecimalSingleDigit)
     EXPECT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalLarge)
+TEST_P(NumericLiteralTest, HexadecimalLarge)
 {
     constexpr std::string_view code = R"(
         let a = 0xFFFFFF;
@@ -99,7 +102,7 @@ TEST_F(NumericLiteralTest, HexadecimalLarge)
     EXPECT_EQ(behl::to_integer(S, -1), 16777215);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalAddition)
+TEST_P(NumericLiteralTest, HexadecimalAddition)
 {
     constexpr std::string_view code = R"(
         let a = 0x10 + 0x20;
@@ -110,7 +113,7 @@ TEST_F(NumericLiteralTest, HexadecimalAddition)
     EXPECT_EQ(behl::to_integer(S, -1), 48);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalBitwiseAND)
+TEST_P(NumericLiteralTest, HexadecimalBitwiseAND)
 {
     constexpr std::string_view code = R"(
         let a = 0xFF & 0xF0;
@@ -121,7 +124,7 @@ TEST_F(NumericLiteralTest, HexadecimalBitwiseAND)
     EXPECT_EQ(behl::to_integer(S, -1), 0xF0);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalBitwiseOR)
+TEST_P(NumericLiteralTest, HexadecimalBitwiseOR)
 {
     constexpr std::string_view code = R"(
         let a = 0x0F | 0xF0;
@@ -132,7 +135,7 @@ TEST_F(NumericLiteralTest, HexadecimalBitwiseOR)
     EXPECT_EQ(behl::to_integer(S, -1), 0xFF);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalBitwiseXOR)
+TEST_P(NumericLiteralTest, HexadecimalBitwiseXOR)
 {
     constexpr std::string_view code = R"(
         let a = 0xFF ^ 0xAA;
@@ -143,7 +146,7 @@ TEST_F(NumericLiteralTest, HexadecimalBitwiseXOR)
     EXPECT_EQ(behl::to_integer(S, -1), 0x55);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalBitwiseNOT)
+TEST_P(NumericLiteralTest, HexadecimalBitwiseNOT)
 {
     constexpr std::string_view code = R"(
         let a = ~0xF;
@@ -154,7 +157,7 @@ TEST_F(NumericLiteralTest, HexadecimalBitwiseNOT)
     EXPECT_EQ(behl::to_integer(S, -1), ~15);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalLeftShift)
+TEST_P(NumericLiteralTest, HexadecimalLeftShift)
 {
     constexpr std::string_view code = R"(
         let a = 0x1 << 4;
@@ -165,7 +168,7 @@ TEST_F(NumericLiteralTest, HexadecimalLeftShift)
     EXPECT_EQ(behl::to_integer(S, -1), 0x10);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalRightShift)
+TEST_P(NumericLiteralTest, HexadecimalRightShift)
 {
     constexpr std::string_view code = R"(
         let a = 0x80 >> 4;
@@ -176,7 +179,7 @@ TEST_F(NumericLiteralTest, HexadecimalRightShift)
     EXPECT_EQ(behl::to_integer(S, -1), 0x8);
 }
 
-TEST_F(NumericLiteralTest, DecimalInteger)
+TEST_P(NumericLiteralTest, DecimalInteger)
 {
     constexpr std::string_view code = R"(
         let a = 42;
@@ -187,7 +190,7 @@ TEST_F(NumericLiteralTest, DecimalInteger)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(NumericLiteralTest, DecimalFloat)
+TEST_P(NumericLiteralTest, DecimalFloat)
 {
     constexpr std::string_view code = R"(
         let a = 3.14159;
@@ -198,7 +201,7 @@ TEST_F(NumericLiteralTest, DecimalFloat)
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 3.14159);
 }
 
-TEST_F(NumericLiteralTest, DecimalZero)
+TEST_P(NumericLiteralTest, DecimalZero)
 {
     constexpr std::string_view code = R"(
         let a = 0;
@@ -209,7 +212,7 @@ TEST_F(NumericLiteralTest, DecimalZero)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(NumericLiteralTest, DecimalLeadingZero)
+TEST_P(NumericLiteralTest, DecimalLeadingZero)
 {
     constexpr std::string_view code = R"(
         let a = 007;
@@ -220,7 +223,7 @@ TEST_F(NumericLiteralTest, DecimalLeadingZero)
     EXPECT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(NumericLiteralTest, MixedDecimalAndHex)
+TEST_P(NumericLiteralTest, MixedDecimalAndHex)
 {
     constexpr std::string_view code = R"(
         let a = 10 + 0x10;
@@ -231,7 +234,7 @@ TEST_F(NumericLiteralTest, MixedDecimalAndHex)
     EXPECT_EQ(behl::to_integer(S, -1), 26);
 }
 
-TEST_F(NumericLiteralTest, MixedInTable)
+TEST_P(NumericLiteralTest, MixedInTable)
 {
     constexpr std::string_view code = R"(
         let t = {10, 0x10, 20, 0x20};
@@ -242,7 +245,7 @@ TEST_F(NumericLiteralTest, MixedInTable)
     EXPECT_EQ(behl::to_integer(S, -1), 0x10);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalInFunction)
+TEST_P(NumericLiteralTest, HexadecimalInFunction)
 {
     constexpr std::string_view code = R"(
         function get_color() {
@@ -255,7 +258,7 @@ TEST_F(NumericLiteralTest, HexadecimalInFunction)
     EXPECT_EQ(behl::to_integer(S, -1), 0xFF00FF);
 }
 
-TEST_F(NumericLiteralTest, HexadecimalAsTableKey)
+TEST_P(NumericLiteralTest, HexadecimalAsTableKey)
 {
     constexpr std::string_view code = R"(
         let t = {};
@@ -267,7 +270,7 @@ TEST_F(NumericLiteralTest, HexadecimalAsTableKey)
     ASSERT_EQ(behl::to_string(S, -1), "color");
 }
 
-TEST_F(NumericLiteralTest, HexadecimalComparison)
+TEST_P(NumericLiteralTest, HexadecimalComparison)
 {
     constexpr std::string_view code = R"(
         if (0xFF == 255) {
@@ -280,3 +283,6 @@ TEST_F(NumericLiteralTest, HexadecimalComparison)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, NumericLiteralTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

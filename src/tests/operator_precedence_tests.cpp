@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class OperatorPrecedenceTest : public ::testing::Test
+class OperatorPrecedenceTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(OperatorPrecedenceTest, ArithmeticPrecedence)
+TEST_P(OperatorPrecedenceTest, ArithmeticPrecedence)
 {
     constexpr std::string_view code = R"(
         if (2 + 3 * 4 != 14) { return false }
@@ -31,7 +34,7 @@ TEST_F(OperatorPrecedenceTest, ArithmeticPrecedence)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorPrecedenceTest, ModuloOperations)
+TEST_P(OperatorPrecedenceTest, ModuloOperations)
 {
     constexpr std::string_view code = R"(
         if (10 % 3 != 1) { return false }
@@ -44,7 +47,7 @@ TEST_F(OperatorPrecedenceTest, ModuloOperations)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorPrecedenceTest, BitwiseOperations)
+TEST_P(OperatorPrecedenceTest, BitwiseOperations)
 {
     constexpr std::string_view code = R"(
         if ((0xF0 | 0x0F) != 0xFF) { return false }
@@ -58,7 +61,7 @@ TEST_F(OperatorPrecedenceTest, BitwiseOperations)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorPrecedenceTest, PowerOperator)
+TEST_P(OperatorPrecedenceTest, PowerOperator)
 {
     constexpr std::string_view code = R"(
         if (2 ** 3 != 8) { return false }
@@ -71,7 +74,7 @@ TEST_F(OperatorPrecedenceTest, PowerOperator)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorPrecedenceTest, ShortCircuitEvaluation)
+TEST_P(OperatorPrecedenceTest, ShortCircuitEvaluation)
 {
     constexpr std::string_view code = R"(
         let counter = 0
@@ -96,7 +99,7 @@ TEST_F(OperatorPrecedenceTest, ShortCircuitEvaluation)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorPrecedenceTest, StringComparisons)
+TEST_P(OperatorPrecedenceTest, StringComparisons)
 {
     constexpr std::string_view code = R"(
         let result = 0
@@ -112,7 +115,7 @@ TEST_F(OperatorPrecedenceTest, StringComparisons)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(OperatorPrecedenceTest, MixedArithmetic)
+TEST_P(OperatorPrecedenceTest, MixedArithmetic)
 {
     constexpr std::string_view code = R"(
         let a = 10
@@ -127,7 +130,7 @@ TEST_F(OperatorPrecedenceTest, MixedArithmetic)
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 13.5 + 35.0 + 5.0);
 }
 
-TEST_F(OperatorPrecedenceTest, NilComparisons)
+TEST_P(OperatorPrecedenceTest, NilComparisons)
 {
     constexpr std::string_view code = R"(
         if (nil == nil) { return 1 }
@@ -138,7 +141,7 @@ TEST_F(OperatorPrecedenceTest, NilComparisons)
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(OperatorPrecedenceTest, BooleanComparisons)
+TEST_P(OperatorPrecedenceTest, BooleanComparisons)
 {
     constexpr std::string_view code = R"(
         if ((true == true) && (false == false)) { return 1 }
@@ -148,3 +151,6 @@ TEST_F(OperatorPrecedenceTest, BooleanComparisons)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, OperatorPrecedenceTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

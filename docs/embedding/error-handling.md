@@ -112,7 +112,7 @@ int my_func(behl::State* S) {
 
 **Example error message:**
 ```
-bad argument #1 (expected integer, got string)
+TypeError: bad argument #1 (expected integer, got string)
 ```
 
 **Note:** You typically don't need to catch these exceptions unless you want custom error handling. The VM will propagate them automatically.
@@ -203,9 +203,11 @@ int main() {
 
 **Output:**
 ```
-Compile error: unexpected end of input
-Runtime error: Cannot divide by zero
-Type error: bad argument #1 (expected integer, got string)
+Compile error: <string>(1,9): SyntaxError: Unexpected token in expression
+Runtime error: RuntimeError: Cannot divide by zero
+Stack trace:
+  ... one line per call frame ...
+Type error: TypeError: bad argument #1 (expected integer, got string)
 Result: 5
 ```
 

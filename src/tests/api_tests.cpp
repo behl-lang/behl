@@ -1,3 +1,5 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
@@ -5,7 +7,7 @@
 #include <string>
 using namespace behl;
 
-class APITest : public ::testing::Test
+class APITest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S;
@@ -13,6 +15,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         set_top(S, 0);
     }
@@ -25,7 +28,7 @@ protected:
 
 #define ASSERT_STRVIEWEQ(a, b) ASSERT_EQ(std::string_view(a), std::string_view(b))
 
-TEST_F(APITest, StackBasics)
+TEST_P(APITest, StackBasics)
 {
     push_integer(S, 42);
     ASSERT_EQ(get_top(S), 1);
@@ -50,7 +53,7 @@ TEST_F(APITest, StackBasics)
     ASSERT_EQ(type(S, 2), behl::Type::kNil);
 }
 
-TEST_F(APITest, DupFunction)
+TEST_P(APITest, DupFunction)
 {
     push_integer(S, 123);
     dup(S, -1);
@@ -65,7 +68,7 @@ TEST_F(APITest, DupFunction)
     ASSERT_EQ(to_integer(S, -3), 123);
 }
 
-TEST_F(APITest, TableBasics)
+TEST_P(APITest, TableBasics)
 {
     table_new(S);
     ASSERT_EQ(get_top(S), 1);
@@ -82,7 +85,7 @@ TEST_F(APITest, TableBasics)
     ASSERT_EQ(to_integer(S, -1), 42);
 }
 
-TEST_F(APITest, GetTable)
+TEST_P(APITest, GetTable)
 {
     table_new(S);
 
@@ -101,7 +104,7 @@ TEST_F(APITest, GetTable)
     ASSERT_EQ(type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(APITest, SetTable)
+TEST_P(APITest, SetTable)
 {
     table_new(S);
 
@@ -122,7 +125,7 @@ TEST_F(APITest, SetTable)
     ASSERT_EQ(to_integer(S, -1), 200);
 }
 
-TEST_F(APITest, GetField)
+TEST_P(APITest, GetField)
 {
     table_new(S);
 
@@ -134,7 +137,7 @@ TEST_F(APITest, GetField)
     ASSERT_EQ(to_integer(S, -1), 42);
 }
 
-TEST_F(APITest, SetField)
+TEST_P(APITest, SetField)
 {
     table_new(S);
 
@@ -145,7 +148,7 @@ TEST_F(APITest, SetField)
     ASSERT_EQ(to_integer(S, -1), 99);
 }
 
-TEST_F(APITest, NextFunction)
+TEST_P(APITest, NextFunction)
 {
     table_new(S);
 
@@ -167,7 +170,7 @@ TEST_F(APITest, NextFunction)
     ASSERT_EQ(get_top(S), 1);
 }
 
-TEST_F(APITest, LenFunction)
+TEST_P(APITest, LenFunction)
 {
     table_new(S);
 
@@ -182,7 +185,7 @@ TEST_F(APITest, LenFunction)
     ASSERT_EQ(to_integer(S, -1), 3);
 }
 
-TEST_F(APITest, TableWithHoles)
+TEST_P(APITest, TableWithHoles)
 {
     table_new(S);
 
@@ -198,7 +201,7 @@ TEST_F(APITest, TableWithHoles)
     ASSERT_EQ(to_integer(S, -1), 1);
 }
 
-TEST_F(APITest, TableCyclesAndGC)
+TEST_P(APITest, TableCyclesAndGC)
 {
     table_new(S);
     table_new(S);
@@ -215,7 +218,7 @@ TEST_F(APITest, TableCyclesAndGC)
     ASSERT_EQ(get_top(S), 2);
 }
 
-TEST_F(APITest, TableIteration)
+TEST_P(APITest, TableIteration)
 {
     table_new(S);
 
@@ -251,7 +254,7 @@ static int c_add2(State* S)
     return 1;
 }
 
-TEST_F(APITest, CallNativeFunctionDirect)
+TEST_P(APITest, CallNativeFunctionDirect)
 {
     push_cfunction(S, &c_add2);
     push_integer(S, 3);
@@ -261,7 +264,7 @@ TEST_F(APITest, CallNativeFunctionDirect)
     ASSERT_EQ(to_integer(S, -1), 7);
 }
 
-TEST_F(APITest, RegisterNativeFunctionAndCallFromScript)
+TEST_P(APITest, RegisterNativeFunctionAndCallFromScript)
 {
     register_function(S, "add2", &c_add2);
     constexpr std::string_view code = "return add2(10, 32);";
@@ -276,7 +279,7 @@ static int c_fail(State* S)
     error(S, "TypeError: native broke");
 }
 
-TEST_F(APITest, NativeFunctionErrorPropagates)
+TEST_P(APITest, NativeFunctionErrorPropagates)
 {
     push_cfunction(S, &c_fail);
     try
@@ -298,7 +301,7 @@ static int c_add_checked(State* S)
     return 1;
 }
 
-TEST_F(APITest, NativeCheckHelpers)
+TEST_P(APITest, NativeCheckHelpers)
 {
     push_cfunction(S, &c_add_checked);
     push_integer(S, 5);
@@ -333,7 +336,7 @@ static int c_return_one(State* S)
     return 1;
 }
 
-TEST_F(APITest, CallWithMultretReturnsAllResults)
+TEST_P(APITest, CallWithMultretReturnsAllResults)
 {
     push_cfunction(S, &c_return_multiple);
     ASSERT_NO_THROW(call(S, 0, kMultRet));
@@ -343,14 +346,14 @@ TEST_F(APITest, CallWithMultretReturnsAllResults)
     ASSERT_EQ(to_integer(S, -1), 3);
 }
 
-TEST_F(APITest, CallWithMultretHandlesZeroResults)
+TEST_P(APITest, CallWithMultretHandlesZeroResults)
 {
     push_cfunction(S, &c_return_none);
     ASSERT_NO_THROW(call(S, 0, kMultRet));
     ASSERT_EQ(get_top(S), 0);
 }
 
-TEST_F(APITest, CallWithMultretHandlesOneResult)
+TEST_P(APITest, CallWithMultretHandlesOneResult)
 {
     push_cfunction(S, &c_return_one);
     ASSERT_NO_THROW(call(S, 0, kMultRet));
@@ -358,7 +361,7 @@ TEST_F(APITest, CallWithMultretHandlesOneResult)
     ASSERT_EQ(to_integer(S, -1), 42);
 }
 
-TEST_F(APITest, CallWithFixedResultCountTruncates)
+TEST_P(APITest, CallWithFixedResultCountTruncates)
 {
     push_cfunction(S, &c_return_multiple);
     ASSERT_NO_THROW(call(S, 0, 2));
@@ -367,7 +370,7 @@ TEST_F(APITest, CallWithFixedResultCountTruncates)
     ASSERT_EQ(to_integer(S, -1), 2);
 }
 
-TEST_F(APITest, CallWithFixedResultCountPadsWithNil)
+TEST_P(APITest, CallWithFixedResultCountPadsWithNil)
 {
     push_cfunction(S, &c_return_multiple);
     ASSERT_NO_THROW(call(S, 0, 5));
@@ -379,9 +382,12 @@ TEST_F(APITest, CallWithFixedResultCountPadsWithNil)
     ASSERT_EQ(type(S, -1), Type::kNil);
 }
 
-TEST_F(APITest, CallWithZeroResultsDiscards)
+TEST_P(APITest, CallWithZeroResultsDiscards)
 {
     push_cfunction(S, &c_return_multiple);
     ASSERT_NO_THROW(call(S, 0, 0));
     ASSERT_EQ(get_top(S), 0);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, APITest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

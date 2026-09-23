@@ -58,24 +58,41 @@ namespace behl
         S->debug.last_line = -1; // Force break on next line
     }
 
-    void debug_set_breakpoint(State* S, const char* file, int32_t line)
+    void debug_set_breakpoint(State* S, std::string_view file, int32_t line)
     {
         assert(S && "State cannot be null");
-        assert(line > 0 && "Line number must be positive");
+
+        if (file.empty())
+        {
+            throw RuntimeError("debug_set_breakpoint: file must not be empty");
+        }
+        if (line <= 0)
+        {
+            throw RuntimeError("debug_set_breakpoint: line must be positive");
+        }
 
         Breakpoint bp;
-        bp.file = (file != nullptr && *file != '\0') ? gc_new_string(S, file) : nullptr;
+        bp.file = gc_new_string(S, file);
         bp.line = line;
 
         S->debug.breakpoints.insert(S, bp);
     }
 
-    void debug_remove_breakpoint(State* S, const char* file, int32_t line)
+    void debug_remove_breakpoint(State* S, std::string_view file, int32_t line)
     {
         assert(S && "State cannot be null");
 
+        if (file.empty())
+        {
+            throw RuntimeError("debug_remove_breakpoint: file must not be empty");
+        }
+        if (line <= 0)
+        {
+            throw RuntimeError("debug_remove_breakpoint: line must be positive");
+        }
+
         Breakpoint bp;
-        bp.file = (file != nullptr && *file != '\0') ? gc_new_string(S, file) : nullptr;
+        bp.file = gc_new_string(S, file);
         bp.line = line;
 
         S->debug.breakpoints.erase(bp);
@@ -93,7 +110,7 @@ namespace behl
         return S->debug.enabled;
     }
 
-    bool debug_get_location(State* S, const char** file, int* line, int* column)
+    bool debug_get_location(State* S, std::string_view& file, int& line, int& column)
     {
         assert(S && "State cannot be null");
 
@@ -109,20 +126,9 @@ namespace behl
         }
 
         // PC points at the current instruction (not yet executed during debug callback)
-        if (line)
-        {
-            *line = frame.proto->line_info[frame.pc];
-        }
-
-        if (column && frame.pc < frame.proto->column_info.size())
-        {
-            *column = frame.proto->column_info[frame.pc];
-        }
-
-        if (file)
-        {
-            *file = frame.proto->source_name->data();
-        }
+        line = frame.proto->line_info[frame.pc];
+        column = (frame.pc < frame.proto->column_info.size()) ? frame.proto->column_info[frame.pc] : 0;
+        file = frame.proto->source_name->view();
 
         return true;
     }

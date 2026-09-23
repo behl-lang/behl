@@ -106,7 +106,10 @@ namespace behl
         AutoVector<PendingDefer> pending_defers;
         uint32_t defer_count{};
         size_t loop_floor{};
-        AutoHashMap<std::string_view, size_t, StringHash, StringEq> upvalue_indices;
+        AutoHashMap<std::string_view, size_t, StringHash32, StringEq> upvalue_indices;
+        AutoHashMap<Value, ConstIndex, ValueHash, ValueEq> int_const_indices;
+        AutoHashMap<Value, ConstIndex, ValueHash, ValueEq> fp_const_indices;
+        AutoHashMap<std::string_view, ConstIndex, StringHash32, StringEq> str_const_indices;
         int32_t lastline = 1;
         int32_t lastcolumn = 1;
         uint8_t freereg = 0;
@@ -124,59 +127,80 @@ namespace behl
             , active_defers(state)
             , pending_defers(state)
             , upvalue_indices(state)
+            , int_const_indices(state)
+            , fp_const_indices(state)
+            , str_const_indices(state)
         {
         }
     };
 
-    template<typename Container>
-    static ConstIndex add_constant_impl(CompilerState& C, Container& container, Value v)
+    static SourceLocation get_location(const CompilerState& C);
+
+    static void check_constant_limit(const CompilerState& C, size_t next_index)
     {
-        for (ConstIndex i = 0; i < container.size(); ++i)
+        if (next_index > kMaxConstants)
         {
-            if (container[i] == v)
-            {
-                return i;
-            }
+            throw SyntaxError("too many constants in function", get_location(C));
+        }
+    }
+
+    template<typename Container, typename Index>
+    static ConstIndex add_constant_impl(CompilerState& C, Container& container, Index& lookup, Value v)
+    {
+        if (auto it = lookup.find(v); it != lookup.end())
+        {
+            return it->second;
         }
 
+        check_constant_limit(C, container.size());
         container.push_back(C.S, v);
 
-        return static_cast<ConstIndex>(container.size() - 1);
+        const ConstIndex index = static_cast<ConstIndex>(container.size() - 1);
+        lookup.insert_or_assign(v, index);
+
+        return index;
     }
 
     ConstIndex add_integer_constant(CompilerState& C, Integer val)
     {
-        return add_constant_impl(C, C.current_proto->int_constants, Value(val));
+        return add_constant_impl(C, C.current_proto->int_constants, C.int_const_indices, Value(val));
     }
 
     ConstIndex add_fp_constant(CompilerState& C, FP val)
     {
-        return add_constant_impl(C, C.current_proto->fp_constants, Value(val));
+        return add_constant_impl(C, C.current_proto->fp_constants, C.fp_const_indices, Value(val));
     }
 
     static ConstIndex add_string_constant(CompilerState& C, std::string_view str)
     {
-        for (ConstIndex i = 0; i < C.current_proto->str_constants.size(); ++i)
+        if (auto it = C.str_const_indices.find(str); it != C.str_const_indices.end())
         {
-            auto& const_val = C.current_proto->str_constants[i];
-            assert(const_val.is_string());
-
-            auto* const_str = const_val.get_string();
-            if (const_str->view() == str)
-            {
-                return i;
-            }
+            assert(C.current_proto->str_constants[it->second].is_string());
+            return it->second;
         }
+
+        check_constant_limit(C, C.current_proto->str_constants.size());
 
         auto* string = gc_new_string(C.S, str);
         C.current_proto->str_constants.push_back(C.S, Value(string));
 
-        return static_cast<ConstIndex>(C.current_proto->str_constants.size() - 1);
+        const ConstIndex index = static_cast<ConstIndex>(C.current_proto->str_constants.size() - 1);
+        C.str_const_indices.insert_or_assign(string->view(), index);
+
+        return index;
     }
 
     static SourceLocation get_location(const CompilerState& C)
     {
         return SourceLocation(C.current_proto->source_name, C.lastline, C.lastcolumn);
+    }
+
+    static void check_vararg_allowed(const CompilerState& C)
+    {
+        if (!C.current_proto->is_vararg)
+        {
+            throw SyntaxError("cannot use '...' outside a vararg function", get_location(C));
+        }
     }
 
     static Reg alloc_reg(CompilerState& C)
@@ -238,6 +262,29 @@ namespace behl
         C.current_proto->code.push_back(C.S, std::move(instr));
         C.current_proto->line_info.push_back(C.S, line >= 0 ? line : C.lastline);
         C.current_proto->column_info.push_back(C.S, column >= 0 ? column : C.lastcolumn);
+    }
+
+    static constexpr ConstIndex kNarrowConstLimit = 511;
+
+    static Reg load_int_constant(CompilerState& C, ConstIndex k)
+    {
+        const Reg reg = alloc_reg(C);
+        emit(C, make_op_loadi(reg, k), C.lastline);
+        return reg;
+    }
+
+    static Reg load_fp_constant(CompilerState& C, ConstIndex k)
+    {
+        const Reg reg = alloc_reg(C);
+        emit(C, make_op_loadf(reg, k), C.lastline);
+        return reg;
+    }
+
+    static Reg load_str_constant(CompilerState& C, ConstIndex k)
+    {
+        const Reg reg = alloc_reg(C);
+        emit(C, make_op_loads(reg, k), C.lastline);
+        return reg;
     }
 
     static void enter_scope(CompilerState& C)
@@ -672,6 +719,11 @@ namespace behl
 
     void VisitorAdapter::visit(const AstVararg&)
     {
+        if (!C.current_proto->is_vararg)
+        {
+            throw SyntaxError("cannot use '...' outside a vararg function", get_location(C));
+        }
+
         const auto reg = get_target_reg();
         emit(C, make_op_vararg(reg, 0), C.lastline);
     }
@@ -885,7 +937,28 @@ namespace behl
                 {
                     const auto k = add_integer_constant(C, rhs_int->value);
 
-                    if (node.op == TokenType::kLt)
+                    if (k > kNarrowConstLimit)
+                    {
+                        const Reg k_reg = load_int_constant(C, k);
+                        if (node.op == TokenType::kLt)
+                        {
+                            emit(C, make_op_ge(lreg, k_reg), C.lastline);
+                        }
+                        else if (node.op == TokenType::kLe)
+                        {
+                            emit(C, make_op_gt(lreg, k_reg), C.lastline);
+                        }
+                        else if (node.op == TokenType::kGt)
+                        {
+                            emit(C, make_op_le(lreg, k_reg), C.lastline);
+                        }
+                        else if (node.op == TokenType::kGe)
+                        {
+                            emit(C, make_op_lt(lreg, k_reg), C.lastline);
+                        }
+                        free_reg(C, k_reg);
+                    }
+                    else if (node.op == TokenType::kLt)
                     {
                         emit(C, make_op_gei(lreg, k), C.lastline);
                     }
@@ -924,7 +997,28 @@ namespace behl
 
                 auto const k = add_fp_constant(C, rhs_fp->value);
 
-                if (node.op == TokenType::kLt)
+                if (k > kNarrowConstLimit)
+                {
+                    const Reg k_reg = load_fp_constant(C, k);
+                    if (node.op == TokenType::kLt)
+                    {
+                        emit(C, make_op_ge(lreg, k_reg), C.lastline);
+                    }
+                    else if (node.op == TokenType::kLe)
+                    {
+                        emit(C, make_op_gt(lreg, k_reg), C.lastline);
+                    }
+                    else if (node.op == TokenType::kGt)
+                    {
+                        emit(C, make_op_le(lreg, k_reg), C.lastline);
+                    }
+                    else if (node.op == TokenType::kGe)
+                    {
+                        emit(C, make_op_lt(lreg, k_reg), C.lastline);
+                    }
+                    free_reg(C, k_reg);
+                }
+                else if (node.op == TokenType::kLt)
                 {
                     emit(C, make_op_gef(lreg, k), C.lastline);
                 }
@@ -1011,7 +1105,17 @@ namespace behl
             else
             {
                 const auto k = add_integer_constant(C, rhs_int->value);
-                emit(C, make_op_addki(result_reg, left_reg, k), C.lastline);
+                if (k <= kNarrowConstLimit)
+                {
+                    emit(C, make_op_addki(result_reg, left_reg, k), C.lastline);
+                }
+                else
+                {
+                    const Reg k_reg = load_int_constant(C, k);
+                    emit(C, make_op_add(result_reg, left_reg, k_reg), C.lastline);
+                    emit(C, make_op_mmadd(result_reg, left_reg, k_reg), C.lastline);
+                    free_reg(C, k_reg);
+                }
             }
             if (left_free)
             {
@@ -1029,7 +1133,17 @@ namespace behl
             target_reg = saved_target;
             Reg result_reg = get_target_reg();
             const auto k = add_string_constant(C, rhs_str->view());
-            emit(C, make_op_addks(result_reg, left_reg, k), C.lastline);
+            if (k <= kNarrowConstLimit)
+            {
+                emit(C, make_op_addks(result_reg, left_reg, k), C.lastline);
+            }
+            else
+            {
+                const Reg k_reg = load_str_constant(C, k);
+                emit(C, make_op_add(result_reg, left_reg, k_reg), C.lastline);
+                emit(C, make_op_mmadd(result_reg, left_reg, k_reg), C.lastline);
+                free_reg(C, k_reg);
+            }
             if (left_free)
             {
                 free_reg(C, left_reg);
@@ -1046,7 +1160,17 @@ namespace behl
             target_reg = saved_target;
             Reg result_reg = get_target_reg();
             const auto k = add_fp_constant(C, rhs_fp->value);
-            emit(C, make_op_addkf(result_reg, left_reg, k), C.lastline);
+            if (k <= kNarrowConstLimit)
+            {
+                emit(C, make_op_addkf(result_reg, left_reg, k), C.lastline);
+            }
+            else
+            {
+                const Reg k_reg = load_fp_constant(C, k);
+                emit(C, make_op_add(result_reg, left_reg, k_reg), C.lastline);
+                emit(C, make_op_mmadd(result_reg, left_reg, k_reg), C.lastline);
+                free_reg(C, k_reg);
+            }
             if (left_free)
             {
                 free_reg(C, left_reg);
@@ -1070,7 +1194,17 @@ namespace behl
             else
             {
                 const auto k = add_integer_constant(C, rhs_int->value);
-                emit(C, make_op_subki(result_reg, left_reg, k), C.lastline);
+                if (k <= kNarrowConstLimit)
+                {
+                    emit(C, make_op_subki(result_reg, left_reg, k), C.lastline);
+                }
+                else
+                {
+                    const Reg k_reg = load_int_constant(C, k);
+                    emit(C, make_op_sub(result_reg, left_reg, k_reg), C.lastline);
+                    emit(C, make_op_mmsub(result_reg, left_reg, k_reg), C.lastline);
+                    free_reg(C, k_reg);
+                }
             }
             if (left_free)
             {
@@ -1088,7 +1222,17 @@ namespace behl
             target_reg = saved_target;
             Reg result_reg = get_target_reg();
             const auto k = add_fp_constant(C, rhs_fp->value);
-            emit(C, make_op_subkf(result_reg, left_reg, k), C.lastline);
+            if (k <= kNarrowConstLimit)
+            {
+                emit(C, make_op_subkf(result_reg, left_reg, k), C.lastline);
+            }
+            else
+            {
+                const Reg k_reg = load_fp_constant(C, k);
+                emit(C, make_op_sub(result_reg, left_reg, k_reg), C.lastline);
+                emit(C, make_op_mmsub(result_reg, left_reg, k_reg), C.lastline);
+                free_reg(C, k_reg);
+            }
             if (left_free)
             {
                 free_reg(C, left_reg);
@@ -1185,7 +1329,28 @@ namespace behl
             {
                 const auto k = add_integer_constant(C, rhs_int->value);
 
-                if (node.op == TokenType::kLt)
+                if (k > kNarrowConstLimit)
+                {
+                    const Reg k_reg = load_int_constant(C, k);
+                    if (node.op == TokenType::kLt)
+                    {
+                        emit(C, make_op_lt(left_reg, k_reg), C.lastline);
+                    }
+                    else if (node.op == TokenType::kLe)
+                    {
+                        emit(C, make_op_le(left_reg, k_reg), C.lastline);
+                    }
+                    else if (node.op == TokenType::kGt)
+                    {
+                        emit(C, make_op_gt(left_reg, k_reg), C.lastline);
+                    }
+                    else if (node.op == TokenType::kGe)
+                    {
+                        emit(C, make_op_ge(left_reg, k_reg), C.lastline);
+                    }
+                    free_reg(C, k_reg);
+                }
+                else if (node.op == TokenType::kLt)
                 {
                     emit(C, make_op_lti(left_reg, k), C.lastline);
                 }
@@ -1227,7 +1392,28 @@ namespace behl
 
             const auto k = add_fp_constant(C, rhs_fp->value);
 
-            if (node.op == TokenType::kLt)
+            if (k > kNarrowConstLimit)
+            {
+                const Reg k_reg = load_fp_constant(C, k);
+                if (node.op == TokenType::kLt)
+                {
+                    emit(C, make_op_lt(left_reg, k_reg), C.lastline);
+                }
+                else if (node.op == TokenType::kLe)
+                {
+                    emit(C, make_op_le(left_reg, k_reg), C.lastline);
+                }
+                else if (node.op == TokenType::kGt)
+                {
+                    emit(C, make_op_gt(left_reg, k_reg), C.lastline);
+                }
+                else if (node.op == TokenType::kGe)
+                {
+                    emit(C, make_op_ge(left_reg, k_reg), C.lastline);
+                }
+                free_reg(C, k_reg);
+            }
+            else if (node.op == TokenType::kLt)
             {
                 emit(C, make_op_ltf(left_reg, k), C.lastline);
             }
@@ -1419,7 +1605,15 @@ namespace behl
     void VisitorAdapter::visit(const AstUnOp& node)
     {
         Reg result_reg = get_target_reg();
+
+        const bool saved_compile_for_jump = compile_for_jump;
+        size_t* const saved_jump_patch = jump_patch_location;
+        compile_for_jump = false;
+        jump_patch_location = nullptr;
         node.expr->accept(*this);
+        compile_for_jump = saved_compile_for_jump;
+        jump_patch_location = saved_jump_patch;
+
         Reg expr_reg = C.freereg - 1;
         Instruction instr;
         switch (node.op)
@@ -1695,6 +1889,7 @@ namespace behl
         {
             // Use VARARG to push varargs onto stack starting after regular args
             Reg vararg_dest = arg_base + static_cast<Reg>(regular_args);
+            check_vararg_allowed(C);
             emit(C, make_op_vararg(vararg_dest, 0), C.lastline); // 0 means "all remaining varargs"
 
             // Call with kMultArgs (variable number of args from stack)
@@ -1767,6 +1962,8 @@ namespace behl
         const auto reg = get_target_reg();
         uint8_t array_hint = 0;
         uint8_t hash_hint = 0;
+        uint32_t array_total = 0;
+        uint32_t hash_total = 0;
         // Count array vs hash fields
         for (AstNode* n = node.first_field; n; n = n->next_child)
         {
@@ -1774,15 +1971,50 @@ namespace behl
             if (!field->key)
             {
                 ++array_hint;
+                ++array_total;
             }
             else
             {
                 ++hash_hint;
+                ++hash_total;
             }
         }
         emit(C, make_op_newtable(reg, array_hint, hash_hint), C.lastline);
-        Reg temp_reg = alloc_reg(C);
+
+        const uint32_t window = array_total < kFieldsPerFlush ? array_total : kFieldsPerFlush;
+        const uint32_t list_base = static_cast<uint32_t>(reg) + 1U;
+        const bool batched = array_total != 0 && hash_total == 0 && list_base >= C.freereg
+            && list_base >= C.min_freereg && list_base + window <= kMaxRegisters
+            && array_total <= kFieldsPerFlush * 256U;
+
+        if (batched)
+        {
+            C.freereg = static_cast<Reg>(list_base);
+            if (C.freereg > C.current_proto->max_stack_size)
+            {
+                C.current_proto->max_stack_size = C.freereg;
+            }
+        }
+
         uint32_t array_idx = 0; // Start from 0
+        uint32_t pending = 0;
+
+        auto flush_list = [&]()
+        {
+            if (pending == 0)
+            {
+                return;
+            }
+            const uint32_t batch = (array_idx - pending) / kFieldsPerFlush;
+            emit(C, make_op_setlist(reg, static_cast<uint8_t>(pending), static_cast<uint8_t>(batch)), C.lastline);
+            pending = 0;
+            C.freereg = static_cast<Reg>(list_base);
+            if (C.freereg > C.current_proto->max_stack_size)
+            {
+                C.current_proto->max_stack_size = C.freereg;
+            }
+        };
+
         for (AstNode* n = node.first_field; n; n = n->next_child)
         {
             auto* field = static_cast<TableField*>(n);
@@ -1822,9 +2054,33 @@ namespace behl
                             "Table constructor: vararg expansion (...) must be the last element", get_location(C));
                     }
 
+                    flush_list();
+
                     // Use VARARGEXPAND to copy varargs directly into table
+                    check_vararg_allowed(C);
                     emit(C, make_op_varargexpand(reg, static_cast<uint8_t>(array_idx)), C.lastline);
                     break;
+                }
+                else if (batched)
+                {
+                    field->value->accept(*this);
+                    const Reg val_reg = static_cast<Reg>(C.freereg - 1);
+                    const Reg dest_reg = static_cast<Reg>(list_base + pending);
+                    if (val_reg != dest_reg)
+                    {
+                        emit(C, make_op_move(dest_reg, val_reg), C.lastline);
+                    }
+                    C.freereg = static_cast<Reg>(dest_reg + 1);
+                    if (C.freereg > C.current_proto->max_stack_size)
+                    {
+                        C.current_proto->max_stack_size = C.freereg;
+                    }
+                    ++pending;
+                    ++array_idx;
+                    if (pending == kFieldsPerFlush)
+                    {
+                        flush_list();
+                    }
                 }
                 else
                 {
@@ -1840,7 +2096,7 @@ namespace behl
                 }
             }
         }
-        free_reg(C, temp_reg);
+        flush_list();
         C.freereg = reg + 1;
         if (C.freereg < C.min_freereg)
         {
@@ -2190,6 +2446,7 @@ namespace behl
                     {
                         alloc_reg(C);
                     }
+                    check_vararg_allowed(C);
                     emit(C, make_op_vararg(result_base, static_cast<uint8_t>(var_count)), C.lastline);
                 }
 
@@ -2488,20 +2745,26 @@ namespace behl
                         make_op_addimm(
                             static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), static_cast<int32_t>(rhs_int->value)),
                         compound_line, compound_column);
+                    return;
                 }
-                else
+
+                const auto k = add_integer_constant(C, rhs_int->value);
+                if (k <= kNarrowConstLimit)
                 {
-                    const auto k = add_integer_constant(C, rhs_int->value);
                     emit(C, make_op_addki(static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), k), compound_line,
                         compound_column);
+                    return;
                 }
-                return;
             }
             if (auto* rhs_fp = node.expr->try_as<AstFP>())
             {
                 const auto k = add_fp_constant(C, rhs_fp->value);
-                emit(C, make_op_addkf(static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), k), compound_line, compound_column);
-                return;
+                if (k <= kNarrowConstLimit)
+                {
+                    emit(C, make_op_addkf(static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), k), compound_line,
+                        compound_column);
+                    return;
+                }
             }
         }
 
@@ -2796,6 +3059,7 @@ namespace behl
             {
                 // Locals are consecutive registers, so VARARG fills them directly,
                 // copying the available varargs and nil-padding the rest.
+                check_vararg_allowed(C);
                 emit(C, make_op_vararg(new_locals[0].reg, static_cast<uint8_t>(new_locals.size())), C.lastline);
 
                 C.freereg = locals_end;
@@ -3154,33 +3418,34 @@ namespace behl
         leave_scope(C);
     }
 
-    void VisitorAdapter::visit(const AstForC& node)
+    static void compile_for_c(CompilerState& C, VisitorAdapter& visitor, const AstNode* init, const AstNode* condition,
+        const AstNode* update, const AstBlock* block)
     {
         enter_scope(C);
 
-        if (node.init)
+        if (init)
         {
-            node.init->accept(*this);
+            init->accept(visitor);
         }
 
         size_t loop_start = C.current_proto->code.size();
 
         size_t exit_jmp = 0;
-        if (node.condition)
+        if (condition)
         {
-            compile_for_jump = true;
-            jump_patch_location = &exit_jmp;
-            node.condition->accept(*this);
-            compile_for_jump = false;
-            jump_patch_location = nullptr;
+            visitor.compile_for_jump = true;
+            visitor.jump_patch_location = &exit_jmp;
+            condition->accept(visitor);
+            visitor.compile_for_jump = false;
+            visitor.jump_patch_location = nullptr;
         }
 
         // Push loop context for break/continue tracking
         C.loop_stack.emplace_back(C.S, current_scope_level(C));
 
-        if (node.block)
+        if (block)
         {
-            node.block->accept(*this);
+            block->accept(visitor);
         }
 
         // Continue jumps should jump to the update statement (or loop start if no update)
@@ -3190,12 +3455,12 @@ namespace behl
             C.current_proto->code[pos] = make_op_jmp(static_cast<int32_t>(continue_target - pos - 1));
         }
 
-        if (node.update)
+        if (update)
         {
             Reg before_freereg = C.freereg;
-            node.update->accept(*this);
+            update->accept(visitor);
 
-            if (node.update->type != AstNodeType::kAssign && C.freereg > before_freereg)
+            if (update->type != AstNodeType::kAssign && C.freereg > before_freereg)
             {
                 C.freereg = before_freereg;
             }
@@ -3203,7 +3468,7 @@ namespace behl
 
         emit(C, make_op_jmp(static_cast<int32_t>(loop_start - C.current_proto->code.size() - 1)), C.lastline);
 
-        if (node.condition)
+        if (condition)
         {
             C.current_proto->code[exit_jmp] = make_op_jmp(static_cast<int32_t>(C.current_proto->code.size() - exit_jmp - 1));
         }
@@ -3221,9 +3486,30 @@ namespace behl
         leave_scope(C);
     }
 
+    void VisitorAdapter::visit(const AstForC& node)
+    {
+        compile_for_c(C, *this, node.init, node.condition, node.update, node.block);
+    }
+
+    static bool is_loop_invariant_operand(CompilerState& C, const AstNode* operand)
+    {
+        if (!operand || operand->type == AstNodeType::kInteger || operand->type == AstNodeType::kFP)
+        {
+            return true;
+        }
+        const auto* ident = operand->try_as<AstIdent>();
+        return ident && resolve_local(C, ident->name->view()) != kInvalidLocal;
+    }
+
     void VisitorAdapter::visit(const AstForCNumeric& node)
     {
         // Compile optimized numeric C-style for loop using FORPREP/FORLOOP
+
+        if (!is_loop_invariant_operand(C, node.end) || !is_loop_invariant_operand(C, node.step))
+        {
+            compile_for_c(C, *this, node.original->init, node.original->condition, node.original->update, node.block);
+            return;
+        }
 
         enter_scope(C);
         Reg base = alloc_reg(C);
@@ -3232,61 +3518,35 @@ namespace behl
         Reg limit_reg = alloc_reg(C);
         Reg step_reg = alloc_reg(C);
         Reg internal_reg = alloc_reg(C);
+        Reg mode_reg = alloc_reg(C);
 
         // Compile start value
         node.start->accept(*this);
         emit(C, make_op_move(base, static_cast<Reg>(C.freereg - 1)), C.lastline);
         free_reg(C, C.freereg - 1);
 
-        // Compile end value
-        // For non-inclusive comparisons (<, >), adjust the limit by 1
-        if (node.inclusive)
-        {
-            // For <= or >=, use the end value directly
-            node.end->accept(*this);
-            emit(C, make_op_move(limit_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
-            free_reg(C, C.freereg - 1);
-        }
-        else
-        {
-            // For < or >, adjust the limit by +/-1 to make it inclusive for FORLOOP
-            node.end->accept(*this);
-            Reg end_reg = C.freereg - 1;
-            if (node.ascending)
-            {
-                // For i < end, convert to i <= (end - 1)
-                emit(C, make_op_subimm(limit_reg, end_reg, 1), C.lastline);
-            }
-            else
-            {
-                // For i > end, convert to i >= (end + 1)
-                emit(C, make_op_addimm(limit_reg, end_reg, 1), C.lastline);
-            }
-            free_reg(C, end_reg);
-        }
+        node.end->accept(*this);
+        emit(C, make_op_move(limit_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
+        free_reg(C, C.freereg - 1);
 
         // Compile step value
         if (node.step)
         {
             node.step->accept(*this);
-            Reg step_value_reg = C.freereg - 1;
-
-            // If descending, negate the step value
-            if (!node.ascending)
-            {
-                emit(C, make_op_unm(step_reg, step_value_reg), C.lastline);
-            }
-            else
-            {
-                emit(C, make_op_move(step_reg, step_value_reg), C.lastline);
-            }
-            free_reg(C, step_value_reg);
+            emit(C, make_op_move(step_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
+            free_reg(C, C.freereg - 1);
         }
         else
         {
-            // Implicit step: 1 for ascending, -1 for descending
-            const auto k = add_integer_constant(C, node.ascending ? 1 : -1);
-            emit(C, make_op_loadi(step_reg, k), C.lastline);
+            emit(C, make_op_loadi(step_reg, add_integer_constant(C, 1)), C.lastline);
+        }
+
+        const int32_t mode = (node.ascending ? 0 : kForModeDescending) | (node.inclusive ? kForModeInclusive : 0);
+        emit(C, make_op_loadimm(mode_reg, mode), C.lastline);
+
+        if (C.freereg > C.min_freereg)
+        {
+            C.min_freereg = C.freereg;
         }
 
         size_t prep_pc = C.current_proto->code.size();
@@ -3322,6 +3582,7 @@ namespace behl
         C.loop_stack.pop_back();
 
         leave_scope(C);
+        free_reg(C, mode_reg);
         free_reg(C, internal_reg);
         free_reg(C, step_reg);
         free_reg(C, limit_reg);
@@ -3551,6 +3812,7 @@ namespace behl
                 {
                     // Emit VARARG to push varargs onto stack
                     Reg vararg_dest = static_cast<Reg>(func_reg + 1 + arg_regs.size());
+                    check_vararg_allowed(C);
                     emit(C, make_op_vararg(vararg_dest, 0), C.lastline);
 
                     // Tailcall with kMultArgs (variable args from stack)
@@ -3670,6 +3932,7 @@ namespace behl
                 }
 
                 Reg vararg_pos = first_return_reg + static_cast<Reg>(result_regs.size());
+                check_vararg_allowed(C);
                 emit(C, make_op_vararg(vararg_pos, 0), C.lastline);
                 emit_return_with_defers(C, first_return_reg, static_cast<uint8_t>(kMultRet));
             }
@@ -3919,6 +4182,9 @@ namespace behl
         C.parent = nullptr;
         C.freereg = 1;
         C.min_freereg = 1;
+
+        C.current_proto->is_vararg = true;
+        emit(C, make_op_varargprep(0), C.lastline);
 
         enter_scope(C);
         VisitorAdapter V(C);

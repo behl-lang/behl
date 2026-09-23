@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class OperatorTest : public ::testing::Test
+class OperatorTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(OperatorTest, ExecuteArithmetic)
+TEST_P(OperatorTest, ExecuteArithmetic)
 {
     constexpr std::string_view code = R"(
         return 10 + 5
@@ -28,7 +31,7 @@ TEST_F(OperatorTest, ExecuteArithmetic)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(OperatorTest, NumberAdditionStillWorks)
+TEST_P(OperatorTest, NumberAdditionStillWorks)
 {
     constexpr std::string_view code = R"(
         return 1 + 2 + 3
@@ -39,7 +42,7 @@ TEST_F(OperatorTest, NumberAdditionStillWorks)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(OperatorTest, CompoundAssignmentPlusEquals)
+TEST_P(OperatorTest, CompoundAssignmentPlusEquals)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -52,7 +55,7 @@ TEST_F(OperatorTest, CompoundAssignmentPlusEquals)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(OperatorTest, CompoundAssignmentMinusEquals)
+TEST_P(OperatorTest, CompoundAssignmentMinusEquals)
 {
     constexpr std::string_view code = R"(
         let x = 20
@@ -65,7 +68,7 @@ TEST_F(OperatorTest, CompoundAssignmentMinusEquals)
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
 
-TEST_F(OperatorTest, CompoundAssignmentStarEquals)
+TEST_P(OperatorTest, CompoundAssignmentStarEquals)
 {
     constexpr std::string_view code = R"(
         let x = 6
@@ -78,7 +81,7 @@ TEST_F(OperatorTest, CompoundAssignmentStarEquals)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(OperatorTest, CompoundAssignmentSlashEquals)
+TEST_P(OperatorTest, CompoundAssignmentSlashEquals)
 {
     constexpr std::string_view code = R"(
         let x = 100
@@ -91,7 +94,7 @@ TEST_F(OperatorTest, CompoundAssignmentSlashEquals)
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
 
-TEST_F(OperatorTest, CompoundAssignmentPercentEquals)
+TEST_P(OperatorTest, CompoundAssignmentPercentEquals)
 {
     constexpr std::string_view code = R"(
         let x = 17
@@ -104,7 +107,7 @@ TEST_F(OperatorTest, CompoundAssignmentPercentEquals)
     ASSERT_EQ(behl::to_integer(S, -1), 2);
 }
 
-TEST_F(OperatorTest, IncrementOperator)
+TEST_P(OperatorTest, IncrementOperator)
 {
     constexpr std::string_view code = R"(
         let x = 5
@@ -117,7 +120,7 @@ TEST_F(OperatorTest, IncrementOperator)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(OperatorTest, DecrementOperator)
+TEST_P(OperatorTest, DecrementOperator)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -130,7 +133,7 @@ TEST_F(OperatorTest, DecrementOperator)
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
 
-TEST_F(OperatorTest, IncrementInLoop)
+TEST_P(OperatorTest, IncrementInLoop)
 {
     constexpr std::string_view code = R"(
         let sum = 0
@@ -145,7 +148,7 @@ TEST_F(OperatorTest, IncrementInLoop)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(OperatorTest, CompoundAssignmentChained)
+TEST_P(OperatorTest, CompoundAssignmentChained)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -160,7 +163,7 @@ TEST_F(OperatorTest, CompoundAssignmentChained)
     ASSERT_EQ(behl::to_integer(S, -1), 24);
 }
 
-TEST_F(OperatorTest, IncrementGlobal)
+TEST_P(OperatorTest, IncrementGlobal)
 {
     constexpr std::string_view code = R"(
         g = 5
@@ -173,7 +176,7 @@ TEST_F(OperatorTest, IncrementGlobal)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(OperatorTest, DecrementGlobal)
+TEST_P(OperatorTest, DecrementGlobal)
 {
     constexpr std::string_view code = R"(
         g = 10
@@ -186,7 +189,7 @@ TEST_F(OperatorTest, DecrementGlobal)
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
 
-TEST_F(OperatorTest, LogicalNotOperator)
+TEST_P(OperatorTest, LogicalNotOperator)
 {
     constexpr std::string_view code = R"(
         let a = true
@@ -199,7 +202,7 @@ TEST_F(OperatorTest, LogicalNotOperator)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorTest, LogicalNotOnFalse)
+TEST_P(OperatorTest, LogicalNotOnFalse)
 {
     constexpr std::string_view code = R"(
         return !false
@@ -210,7 +213,7 @@ TEST_F(OperatorTest, LogicalNotOnFalse)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorTest, LogicalNotOnNil)
+TEST_P(OperatorTest, LogicalNotOnNil)
 {
     constexpr std::string_view code = R"(
         return !nil
@@ -221,7 +224,7 @@ TEST_F(OperatorTest, LogicalNotOnNil)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(OperatorTest, LogicalNotOnNumber)
+TEST_P(OperatorTest, LogicalNotOnNumber)
 {
     constexpr std::string_view code = R"(
         return !0
@@ -231,3 +234,6 @@ TEST_F(OperatorTest, LogicalNotOnNumber)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, OperatorTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

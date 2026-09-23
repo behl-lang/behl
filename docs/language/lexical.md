@@ -55,17 +55,19 @@ Reserved keywords cannot be used as identifiers:
 ```
 let const function return
 if else elseif
-while for in
+while for foreach in
 true false nil
-break continue
+break continue defer
+module export local
 ```
 
-### Context-Sensitive Keywords
+That is the complete list of 20 reserved words. All of them are recognised by the lexer and none can be used as an identifier.
 
-Some identifiers have special meaning in specific contexts but can be used as variable names:
+`local` is reserved but no parser rule consumes it, so it is currently unusable: it is neither a declaration form nor a valid variable name.
 
-- `defer` - Statement keyword, but can be a variable name
-- `import` - Function name, can be shadowed
+### Not Keywords
+
+- `import` - a regular function name, so it can be shadowed
 
 ## Whitespace
 
@@ -93,7 +95,7 @@ for(let i=0;i<10;i++){print(i);}
 
 ## Semicolons
 
-Semicolons are **optional** in Behl. The language supports automatic semicolon insertion:
+Semicolons are **optional** in Behl. There is no automatic semicolon insertion: the parser simply does not require a `;` to terminate a statement, and consumes one only if it happens to be there.
 
 ```cpp
 // With semicolons
@@ -109,4 +111,38 @@ Both styles work. Semicolons are helpful for clarity when putting multiple state
 
 ```cpp
 let x = 10; let y = 20; print(x + y)
+```
+
+The one exception is the `module` declaration, whose semicolon is required:
+
+```cpp
+module;   // required, 'module' alone is an error
+```
+
+## Literals
+
+### Strings
+
+String literals may be delimited by double or single quotes:
+
+```cpp
+let a = "double quoted";
+let b = 'single quoted';
+```
+
+### Numbers
+
+Decimal and hexadecimal integer literals are supported. There is no binary (`0b`) literal form:
+
+```cpp
+let dec = 255;
+let hex = 0xFF;
+let hex2 = 0xff;
+```
+
+Floating point literals may omit the leading zero:
+
+```cpp
+let half = .5;
+let also = 0.5;
 ```

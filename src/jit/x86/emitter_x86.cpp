@@ -137,6 +137,13 @@ namespace behl
         emit32(imm);
     }
 
+    void X86Emitter::mov32(Mem dst, GpReg src)
+    {
+        emit_rex_opt(reg_ext(src), mem_index_ext(dst), reg_ext(dst.base));
+        emit8(0x89);
+        emit_modrm_mem(reg_low(src), dst);
+    }
+
     void X86Emitter::movups(XmmReg dst, Mem src)
     {
         emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));
@@ -698,6 +705,17 @@ namespace behl
         }
         emit8(0xFF);
         emit_modrm(0b11, 2, reg_low(reg));
+    }
+
+    void X86Emitter::jmp(GpReg reg)
+    {
+        if (reg_ext(reg))
+        {
+            assert(mode64_ && "extended registers unavailable in 32 bit mode");
+            emit8(0x41);
+        }
+        emit8(0xFF);
+        emit_modrm(0b11, 4, reg_low(reg));
     }
 
     void X86Emitter::ret()

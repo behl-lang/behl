@@ -78,7 +78,7 @@ let output = flag ? {x = 1} : "not found"
 
 ## Nested Ternary
 
-Ternary operators can be nested for multiple conditions:
+Ternary operators can be nested in the **false branch** only. The true branch is parsed at a precedence above the ternary, so a bare `?` there is a syntax error. Wrap it in parentheses if you need it:
 
 ```cpp
 let x = 5
@@ -87,13 +87,19 @@ let size = x > 10 ? "large" : x > 5 ? "medium" : "small"
 
 // More readable with parentheses
 let size = x > 10 ? "large" : (x > 5 ? "medium" : "small")
+
+// Syntax error: bare nested ternary in the true branch
+// let y = a ? b ? c : d : e
+
+// OK: parenthesised
+let y = a ? (b ? c : d) : e
 ```
 
 **Warning**: Deeply nested ternary operators can be hard to read. Consider using if/else for complex logic:
 
 ```cpp
 // Hard to read
-let result = a ? b ? c ? d : e : f : g
+let result = a ? (b ? (c ? d : e) : f) : g
 
 // Better
 let result
@@ -181,7 +187,7 @@ let status = isActive ? "on" : "off"
 let category = age >= 18 ? "adult" : age >= 13 ? "teen" : "child"
 
 // Avoid: Too complex
-let x = a ? b ? c ? d : e : f ? g : h : i ? j : k
+let x = a ? (b ? (c ? d : e) : (f ? g : h)) : (i ? j : k)
 
 // Better: Use if/else
 let x

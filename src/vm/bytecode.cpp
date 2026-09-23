@@ -262,22 +262,22 @@ namespace behl
                 opcode_str = behl::format("{:<9} R{} K{}", meta.name, instr.b(), instr.c());
                 break;
             case OpCode::kOpLTImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpGeImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpLEImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpGtImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpEqImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpNeImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpTest:
                 opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), (instr.b() ? "invert" : "normal"));

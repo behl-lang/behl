@@ -1,9 +1,10 @@
 #include "behl/behl.hpp"
+#include "state.hpp"
 
 #include <gtest/gtest.h>
 #include <string>
 
-class ToStringTest : public ::testing::Test
+class ToStringTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -11,6 +12,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_lib_core(S);
     }
@@ -25,7 +27,7 @@ protected:
     }
 };
 
-TEST_F(ToStringTest, ToString_Nil)
+TEST_P(ToStringTest, ToString_Nil)
 {
     constexpr std::string_view code = R"(
         let x = nil;
@@ -37,7 +39,7 @@ TEST_F(ToStringTest, ToString_Nil)
     EXPECT_EQ(to_string(S, -1), "nil");
 }
 
-TEST_F(ToStringTest, ToString_BooleanTrue)
+TEST_P(ToStringTest, ToString_BooleanTrue)
 {
     constexpr std::string_view code = R"(
         return tostring(true);
@@ -48,7 +50,7 @@ TEST_F(ToStringTest, ToString_BooleanTrue)
     EXPECT_EQ(to_string(S, -1), "true");
 }
 
-TEST_F(ToStringTest, ToString_BooleanFalse)
+TEST_P(ToStringTest, ToString_BooleanFalse)
 {
     constexpr std::string_view code = R"(
         return tostring(false);
@@ -59,7 +61,7 @@ TEST_F(ToStringTest, ToString_BooleanFalse)
     EXPECT_EQ(to_string(S, -1), "false");
 }
 
-TEST_F(ToStringTest, ToString_Integer)
+TEST_P(ToStringTest, ToString_Integer)
 {
     constexpr std::string_view code = R"(
         return tostring(42);
@@ -70,7 +72,7 @@ TEST_F(ToStringTest, ToString_Integer)
     EXPECT_EQ(to_string(S, -1), "42");
 }
 
-TEST_F(ToStringTest, ToString_NegativeInteger)
+TEST_P(ToStringTest, ToString_NegativeInteger)
 {
     constexpr std::string_view code = R"(
         return tostring(-123);
@@ -81,7 +83,7 @@ TEST_F(ToStringTest, ToString_NegativeInteger)
     EXPECT_EQ(to_string(S, -1), "-123");
 }
 
-TEST_F(ToStringTest, ToString_Float)
+TEST_P(ToStringTest, ToString_Float)
 {
     constexpr std::string_view code = R"(
         return tostring(3.14159);
@@ -93,7 +95,7 @@ TEST_F(ToStringTest, ToString_Float)
     EXPECT_NE(std::string(result).find("3.14"), std::string_view::npos);
 }
 
-TEST_F(ToStringTest, ToString_NegativeFloat)
+TEST_P(ToStringTest, ToString_NegativeFloat)
 {
     constexpr std::string_view code = R"(
         return tostring(-2.718);
@@ -105,7 +107,7 @@ TEST_F(ToStringTest, ToString_NegativeFloat)
     EXPECT_NE(std::string(result).find("-2.7"), std::string_view::npos);
 }
 
-TEST_F(ToStringTest, ToString_String)
+TEST_P(ToStringTest, ToString_String)
 {
     constexpr std::string_view code = R"(
         return tostring("hello");
@@ -116,7 +118,7 @@ TEST_F(ToStringTest, ToString_String)
     EXPECT_EQ(to_string(S, -1), "hello");
 }
 
-TEST_F(ToStringTest, ToString_EmptyString)
+TEST_P(ToStringTest, ToString_EmptyString)
 {
     constexpr std::string_view code = R"(
         return tostring("");
@@ -127,7 +129,7 @@ TEST_F(ToStringTest, ToString_EmptyString)
     EXPECT_EQ(to_string(S, -1), "");
 }
 
-TEST_F(ToStringTest, ToString_Function)
+TEST_P(ToStringTest, ToString_Function)
 {
     constexpr std::string_view code = R"(
         function foo() {}
@@ -140,7 +142,7 @@ TEST_F(ToStringTest, ToString_Function)
     EXPECT_NE(result.find("function:"), std::string_view::npos);
 }
 
-TEST_F(ToStringTest, ToString_CFunction)
+TEST_P(ToStringTest, ToString_CFunction)
 {
     constexpr std::string_view code = R"(
         return tostring(print);
@@ -152,7 +154,7 @@ TEST_F(ToStringTest, ToString_CFunction)
     EXPECT_NE(result.find("cfunction:"), std::string_view::npos);
 }
 
-TEST_F(ToStringTest, ToString_Table)
+TEST_P(ToStringTest, ToString_Table)
 {
     constexpr std::string_view code = R"(
         let t = {1, 2, 3};
@@ -165,7 +167,7 @@ TEST_F(ToStringTest, ToString_Table)
     EXPECT_NE(result.find("table:"), std::string_view::npos);
 }
 
-TEST_F(ToStringTest, ToString_EmptyTable)
+TEST_P(ToStringTest, ToString_EmptyTable)
 {
     constexpr std::string_view code = R"(
         let t = {};
@@ -178,7 +180,7 @@ TEST_F(ToStringTest, ToString_EmptyTable)
     EXPECT_NE(result.find("table:"), std::string_view::npos);
 }
 
-TEST_F(ToStringTest, ToString_TableWithMetamethod)
+TEST_P(ToStringTest, ToString_TableWithMetamethod)
 {
     constexpr std::string_view code = R"(
         let t = {value = 42};
@@ -196,7 +198,7 @@ TEST_F(ToStringTest, ToString_TableWithMetamethod)
     EXPECT_EQ(to_string(S, -1), "custom:42");
 }
 
-TEST_F(ToStringTest, ToString_TableWithMetamethodReturningNumber)
+TEST_P(ToStringTest, ToString_TableWithMetamethodReturningNumber)
 {
     constexpr std::string_view code = R"(
         let t = {};
@@ -214,7 +216,7 @@ TEST_F(ToStringTest, ToString_TableWithMetamethodReturningNumber)
     EXPECT_EQ(to_string(S, -1), "123");
 }
 
-TEST_F(ToStringTest, ToString_TableWithMetamethodReturningNil)
+TEST_P(ToStringTest, ToString_TableWithMetamethodReturningNil)
 {
     constexpr std::string_view code = R"(
         let t = {};
@@ -232,7 +234,7 @@ TEST_F(ToStringTest, ToString_TableWithMetamethodReturningNil)
     EXPECT_EQ(to_string(S, -1), "nil");
 }
 
-TEST_F(ToStringTest, ToString_ZeroInteger)
+TEST_P(ToStringTest, ToString_ZeroInteger)
 {
     constexpr std::string_view code = R"(
         return tostring(0);
@@ -243,7 +245,7 @@ TEST_F(ToStringTest, ToString_ZeroInteger)
     EXPECT_EQ(to_string(S, -1), "0");
 }
 
-TEST_F(ToStringTest, ToString_ZeroFloat)
+TEST_P(ToStringTest, ToString_ZeroFloat)
 {
     constexpr std::string_view code = R"(
         return tostring(0.0);
@@ -255,7 +257,7 @@ TEST_F(ToStringTest, ToString_ZeroFloat)
     EXPECT_TRUE(result == "0" || result == "0.0" || result == "0.000000");
 }
 
-TEST_F(ToStringTest, ToString_LargeInteger)
+TEST_P(ToStringTest, ToString_LargeInteger)
 {
     constexpr std::string_view code = R"(
         return tostring(9223372036854775807);
@@ -266,7 +268,7 @@ TEST_F(ToStringTest, ToString_LargeInteger)
     EXPECT_EQ(to_string(S, -1), "9223372036854775807");
 }
 
-TEST_F(ToStringTest, ToString_SmallFloat)
+TEST_P(ToStringTest, ToString_SmallFloat)
 {
     constexpr std::string_view code = R"(
         return tostring(0.0001);
@@ -277,7 +279,7 @@ TEST_F(ToStringTest, ToString_SmallFloat)
     EXPECT_EQ(to_string(S, -1), "0.0001");
 }
 
-TEST_F(ToStringTest, ToString_MultipleValues)
+TEST_P(ToStringTest, ToString_MultipleValues)
 {
     constexpr std::string_view code = R"(
         let a = tostring(1);
@@ -291,7 +293,7 @@ TEST_F(ToStringTest, ToString_MultipleValues)
     EXPECT_EQ(to_string(S, -1), "123");
 }
 
-TEST_F(ToStringTest, ToString_InExpression)
+TEST_P(ToStringTest, ToString_InExpression)
 {
     constexpr std::string_view code = R"(
         let result = "Value: " + tostring(42) + "!";
@@ -303,7 +305,7 @@ TEST_F(ToStringTest, ToString_InExpression)
     EXPECT_EQ(to_string(S, -1), "Value: 42!");
 }
 
-TEST_F(ToStringTest, ToString_InLoop)
+TEST_P(ToStringTest, ToString_InLoop)
 {
     constexpr std::string_view code = R"(
         let result = "";
@@ -318,7 +320,7 @@ TEST_F(ToStringTest, ToString_InLoop)
     EXPECT_EQ(to_string(S, -1), "012");
 }
 
-TEST_F(ToStringTest, ToString_NestedCalls)
+TEST_P(ToStringTest, ToString_NestedCalls)
 {
     constexpr std::string_view code = R"(
         return tostring(tostring(42));
@@ -328,3 +330,6 @@ TEST_F(ToStringTest, ToString_NestedCalls)
     EXPECT_TRUE(is_string(S, -1));
     EXPECT_EQ(to_string(S, -1), "42");
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, ToStringTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -1,15 +1,18 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
 namespace behl
 {
-    class GCTest : public ::testing::Test
+    class GCTest : public ::testing::TestWithParam<bool>
     {
     protected:
         State* S;
         void SetUp() override
         {
             S = new_state();
+            S->jit_enabled = GetParam();
             load_stdlib(S);
         }
         void TearDown() override
@@ -18,7 +21,7 @@ namespace behl
         }
     };
 
-    TEST_F(GCTest, CollectGarbageFreesUnreachableObjects)
+    TEST_P(GCTest, CollectGarbageFreesUnreachableObjects)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -45,7 +48,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ReachableObjectsNotCollected)
+    TEST_P(GCTest, ReachableObjectsNotCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -66,7 +69,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, UpvaluesPreservedAcrossCollection)
+    TEST_P(GCTest, UpvaluesPreservedAcrossCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -93,7 +96,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MultipleClosuresShareUpvalue)
+    TEST_P(GCTest, MultipleClosuresShareUpvalue)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -126,7 +129,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableWithCircularReferenceCollected)
+    TEST_P(GCTest, TableWithCircularReferenceCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -153,7 +156,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, StringInterningSurvivesCollection)
+    TEST_P(GCTest, StringInterningSurvivesCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -175,7 +178,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, NestedUpvaluesPreserved)
+    TEST_P(GCTest, NestedUpvaluesPreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -207,7 +210,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableInClosurePreserved)
+    TEST_P(GCTest, TableInClosurePreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -230,7 +233,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, LargeObjectAllocationAndCollection)
+    TEST_P(GCTest, LargeObjectAllocationAndCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -259,7 +262,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, IncrementalGCMakesProgress)
+    TEST_P(GCTest, IncrementalGCMakesProgress)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -283,7 +286,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCDuringTableConstruction)
+    TEST_P(GCTest, GCDuringTableConstruction)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -306,7 +309,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ClosureArraySurvivesCollection)
+    TEST_P(GCTest, ClosureArraySurvivesCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -337,7 +340,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TemporaryClosuresCollected)
+    TEST_P(GCTest, TemporaryClosuresCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -365,7 +368,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MutuallyRecursiveClosuresPreserved)
+    TEST_P(GCTest, MutuallyRecursiveClosuresPreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -395,7 +398,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableMetatablePreservedDuringGC)
+    TEST_P(GCTest, TableMetatablePreservedDuringGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -415,7 +418,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, FunctionPrototypesReusedCorrectly)
+    TEST_P(GCTest, FunctionPrototypesReusedCorrectly)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -439,7 +442,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCThresholdCanBeAdjusted)
+    TEST_P(GCTest, GCThresholdCanBeAdjusted)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -462,7 +465,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, EmptyTableStillCollected)
+    TEST_P(GCTest, EmptyTableStillCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -483,7 +486,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCDuringRecursion)
+    TEST_P(GCTest, GCDuringRecursion)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -508,7 +511,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MultipleGCCyclesStable)
+    TEST_P(GCTest, MultipleGCCyclesStable)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -529,7 +532,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCCountAllReportsCorrectly)
+    TEST_P(GCTest, GCCountAllReportsCorrectly)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -545,7 +548,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, FreedObjectsReportedCorrectly)
+    TEST_P(GCTest, FreedObjectsReportedCorrectly)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -564,7 +567,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCPhaseReturnsValidValue)
+    TEST_P(GCTest, GCPhaseReturnsValidValue)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -582,7 +585,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ComplexNestedStructurePreserved)
+    TEST_P(GCTest, ComplexNestedStructurePreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -610,7 +613,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, FunctionArgumentsNotPrematurelyCollected)
+    TEST_P(GCTest, FunctionArgumentsNotPrematurelyCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -630,7 +633,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableArrayResizeDoesntLeak)
+    TEST_P(GCTest, TableArrayResizeDoesntLeak)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -657,7 +660,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ClosureModifyingUpvalueAcrossGC)
+    TEST_P(GCTest, ClosureModifyingUpvalueAcrossGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -685,7 +688,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GlobalsNotCollectedDuringAgressiveGC)
+    TEST_P(GCTest, GlobalsNotCollectedDuringAgressiveGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -711,7 +714,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, DeepCallStackWithGC)
+    TEST_P(GCTest, DeepCallStackWithGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -734,7 +737,7 @@ namespace behl
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MultipleStringConcatenationsWithGC)
+    TEST_P(GCTest, MultipleStringConcatenationsWithGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -756,5 +759,246 @@ namespace behl
         ASSERT_NO_THROW(call(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
+
+    TEST_P(GCTest, ReparentingDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) {
+                    t[i] = {id = b * 100 + i}
+                }
+                buckets[b] = t
+            }
+
+            let dst = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            dst[moved] = o
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let o = dst[k]
+                if (o == nil || o.id != ids[k]) { corrupt = corrupt + 1 }
+            }
+
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no objects were reparented during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects were swept while still referenced";
+    }
+
+    TEST_P(GCTest, RawsetDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+            const table = import("table")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {id = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let dst = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            table.rawset(dst, moved, o)
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let o = dst[k]
+                if (o == nil || o.id != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "nothing was rawset during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while referenced through rawset";
+    }
+
+    TEST_P(GCTest, ClosedUpvalueDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            function capture(o) { return function() { return o.id } }
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {id = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let fns = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            fns[moved] = capture(o)
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let f = fns[k]
+                if (f == nil || f() != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no upvalues were closed during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while held by a closed upvalue";
+    }
+
+    TEST_P(GCTest, MetatableAssignedDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {tag = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let holders = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let mt = src[ii]
+                        if (mt != nil) {
+                            let h = {}
+                            setmetatable(h, mt)
+                            holders[moved] = h
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let mt = getmetatable(holders[k])
+                if (mt == nil || mt.tag != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no metatables were assigned during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "metatable swept while still attached";
+    }
+
+    INSTANTIATE_TEST_SUITE_P(Mode, GCTest, ::testing::Bool(),
+        [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
 } // namespace behl

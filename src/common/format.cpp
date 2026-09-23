@@ -5,6 +5,7 @@ namespace behl
     std::string vformat(std::string_view fmt, const std::vector<format_arg>& args)
     {
         std::string result;
+        result.reserve(fmt.size());
         size_t i = 0;
         size_t arg_index = 0;
 
@@ -91,7 +92,7 @@ namespace behl
                     throw std::runtime_error("not enough arguments for format string");
                 }
 
-                result += format_value(args[actual_arg_index], spec);
+                format_value_to(result, args[actual_arg_index], spec);
 
                 i = brace_pos + 1;
             }

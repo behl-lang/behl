@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <cstdint>
 
@@ -94,8 +94,14 @@ namespace behl
     uint32_t BEHL_CALLCONV jit_op_testset(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_forprep(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_forloop(State* S, uint32_t raw, uint32_t pc_next) noexcept;
+    uint32_t BEHL_CALLCONV jit_op_vararg(State* S, uint32_t raw, uint32_t pc_next) noexcept;
+    uint32_t BEHL_CALLCONV jit_op_varargprep(State* S, uint32_t raw, uint32_t pc_next) noexcept;
+    uint32_t BEHL_CALLCONV jit_op_varargexpand(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_tailcall(State* S, uint32_t raw, uint32_t pc_next) noexcept;
+
+    uintptr_t BEHL_CALLCONV jit_call_setup(State* S, uint32_t raw, uint32_t pc_next) noexcept;
+    uint32_t BEHL_CALLCONV jit_call_push(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_closure(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_return(State* S, uint32_t raw, uint32_t pc_next) noexcept;
     uint32_t BEHL_CALLCONV jit_op_return0(State* S, uint32_t raw, uint32_t pc_next) noexcept;

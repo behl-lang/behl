@@ -6,11 +6,11 @@
 #include "frame.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "types.hpp"
 #include "value.hpp"
-#include "vm/integer_ops.hpp"
+#include "common/arithmetic.hpp"
 #include "vm_detail.hpp"
 #include "vm_metatable.hpp"
 #include "vm_upvalues.hpp"
@@ -24,7 +24,7 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
     // Error Throwing Functions
 
-    [[noreturn]] BEHL_NOINLINE inline void throw_bad_arith(
+    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_arith(
         const Value& a, const Value& b, const CallFrame& frame, const char* op_name = nullptr)
     {
         const auto loc = get_current_location(frame);
@@ -43,7 +43,7 @@ namespace behl
         throw TypeError(msg, loc);
     }
 
-    [[noreturn]] BEHL_NOINLINE inline void throw_bad_arith(const Value& a, const CallFrame& frame)
+    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_arith(const Value& a, const CallFrame& frame)
     {
         const auto loc = get_current_location(frame);
         const auto msg = behl::format<"attempt to perform arithmetic on a {} value">(a.get_type_string());
@@ -56,7 +56,7 @@ namespace behl
 
     // Try to call arithmetic metamethod
     template<MetaMethodType MMIndex>
-    BEHL_FORCEINLINE Value try_arith_metamethod(State* S, const Value& a, const Value& b)
+    BEHL_INLINE Value try_arith_metamethod(State* S, const Value& a, const Value& b)
     {
         // Check left operand first
         Value mm = metatable_get_method<MMIndex>(a);
@@ -78,7 +78,7 @@ namespace behl
 
     // Try to call unary metamethod
     template<MetaMethodType MMIndex>
-    BEHL_FORCEINLINE Value try_unary_metamethod(State* S, const Value& a)
+    BEHL_INLINE Value try_unary_metamethod(State* S, const Value& a)
     {
         Value mm = metatable_get_method<MMIndex>(a);
         if (!mm.has_value())
@@ -146,7 +146,7 @@ namespace behl
         {
             if constexpr (std::is_same_v<T, Integer>)
             {
-                return int_op::add(a, b);
+                return arithmetic::add(a, b);
             }
             else
             {
@@ -162,7 +162,7 @@ namespace behl
         {
             if constexpr (std::is_same_v<T, Integer>)
             {
-                return int_op::sub(a, b);
+                return arithmetic::sub(a, b);
             }
             else
             {
@@ -178,7 +178,7 @@ namespace behl
         {
             if constexpr (std::is_same_v<T, Integer>)
             {
-                return int_op::mul(a, b);
+                return arithmetic::mul(a, b);
             }
             else
             {
@@ -212,7 +212,7 @@ namespace behl
                 {
                     throw TypeError("attempt to perform 'n%0'", get_current_location(frame));
                 }
-                return a % b;
+                return arithmetic::mod(a, b);
             }
         }
     };
@@ -222,14 +222,7 @@ namespace behl
         template<typename T>
         BEHL_FORCEINLINE auto operator()(T a, T b) const
         {
-            if constexpr (std::is_same_v<T, FP>)
-            {
-                return std::pow(a, b);
-            }
-            else
-            {
-                return static_cast<Integer>(std::pow(static_cast<FP>(a), static_cast<FP>(b)));
-            }
+            return arithmetic::pow(a, b);
         }
     };
 
@@ -237,7 +230,7 @@ namespace behl
     // Core Arithmetic Operations
 
     template<MetaMethodType MMIndex, bool AsFloat, typename Op>
-    BEHL_FORCEINLINE void numeric_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_INLINE void numeric_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         const uint16_t type_pair = make_type_pair(a, b);
 
@@ -313,12 +306,12 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
     // Increment/Decrement Helpers
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     bool increment_value(State* S, Value& value)
     {
         if (value.is_integer()) [[likely]]
         {
-            value.update(int_op::inc(value.get_integer()));
+            value.update(arithmetic::inc(value.get_integer()));
             return true;
         }
 
@@ -343,12 +336,12 @@ namespace behl
         return false;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     bool decrement_value(State* S, Value& value)
     {
         if (value.is_integer())
         {
-            value.update(int_op::dec(value.get_integer()));
+            value.update(arithmetic::dec(value.get_integer()));
             return true;
         }
 
@@ -395,7 +388,7 @@ namespace behl
     }
 
     template<bool AsFloat, typename Op>
-    BEHL_FORCEINLINE bool try_numeric_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_INLINE bool try_numeric_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         switch (make_type_pair(a, b))
         {
@@ -457,7 +450,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_add_fast(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
     {
         const Value& lhs = get_register(S, frame, b);
@@ -496,7 +489,7 @@ namespace behl
         frame.pc++;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_add_ks(State* S, CallFrame& frame, Reg a, Reg b, ConstIndex k)
     {
         const Value& lhs = get_register(S, frame, b);
@@ -516,7 +509,7 @@ namespace behl
         gc_step(S);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_add(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
     {
         const Value& lhs = get_register(S, frame, b);
@@ -550,7 +543,7 @@ namespace behl
         numeric_binop<MetaMethodType::kAdd, false>(S, a, lhs, rhs, frame, NumericAddOp{});
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_add_imm(State* S, CallFrame& frame, Reg a, Reg b, int32_t imm)
     {
         const Value& lhs = get_register(S, frame, b);
@@ -558,7 +551,7 @@ namespace behl
         if (lhs.is_integer())
         {
             Value& dst = get_register(S, frame, a);
-            dst.emplace<Integer>(int_op::add(lhs.get_integer(), imm));
+            dst.emplace<Integer>(arithmetic::add(lhs.get_integer(), imm));
         }
         else if (lhs.is_fp())
         {
@@ -580,7 +573,7 @@ namespace behl
         return numeric_binop<MetaMethodType::kMod, false>(S, a, lhs, rhs, frame, NumericModOp{ frame });
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_unm(State* S, CallFrame& frame, Reg a, Reg b)
     {
         Value& val = get_register(S, frame, b);
@@ -589,7 +582,7 @@ namespace behl
         if (val.is_integer())
         {
             auto i = val.get_integer();
-            dst.emplace<Integer>(int_op::neg(i));
+            dst.emplace<Integer>(arithmetic::neg(i));
             return;
         }
         if (val.is_fp())
@@ -624,7 +617,7 @@ namespace behl
         throw_bad_arith(reg, frame);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_inc_global(State* S, CallFrame& frame, uint32_t k)
     {
         const Value& key = get_string_constant(frame.proto, k);
@@ -651,7 +644,7 @@ namespace behl
         throw TypeError("attempt to perform arithmetic on a nil value", get_current_location(frame));
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_inc_upvalue(State* S, CallFrame& frame, Reg a)
     {
         const auto& upvalue_indices = S->stack[frame.base].get_closure()->upvalue_indices;
@@ -680,7 +673,7 @@ namespace behl
         throw_bad_arith(reg, frame);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_dec_global(State* S, CallFrame& frame, uint32_t k)
     {
         const Value& key = get_string_constant(frame.proto, k);
@@ -707,7 +700,7 @@ namespace behl
         throw TypeError("attempt to perform arithmetic on a nil value", get_current_location(frame));
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_dec_upvalue(State* S, CallFrame& frame, Reg a)
     {
         const auto& upvalue_indices = S->stack[frame.base].get_closure()->upvalue_indices;

@@ -28,7 +28,7 @@ namespace behl
         if constexpr (kGCLoggingEnabled)
         {
             std::string type_info;
-            switch (obj->type)
+            switch (obj->get_header().type)
             {
                 case GCType::kString:
                 {
@@ -46,7 +46,7 @@ namespace behl
                     }
                     else
                     {
-                        type_info = behl::format<"Table[arr={}, hash={}}]">(table->array.size(), table->hash.size());
+                        type_info = behl::format<"Table[arr={}, hash={}]">(table->array.size(), table->hash.size());
                     }
                     break;
                 }
@@ -63,11 +63,12 @@ namespace behl
                     break;
                 }
                 default:
-                    type_info = behl::format<"Unknown[type={}]">(obj->type);
+                    type_info = behl::format<"Unknown[type={}]">(static_cast<int>(obj->get_header().type));
                     break;
             }
 
-            return behl::format<"{{ color={}, {:p} {} }}">(to_string(obj->color), static_cast<const void*>(obj), type_info);
+            return behl::format<"{{ color={}, {:p} {} }}">(
+                to_string(obj->get_header().color), static_cast<const void*>(obj), type_info);
         }
         else
         {
@@ -140,10 +141,10 @@ namespace behl
     {
         auto* obj = mem_create<T>(S);
 
-        obj->type = T::kObjectType;
-        obj->next = nullptr;
-        obj->prev = nullptr;
-        obj->color = GCColor::kBlack; // New objects are black (survive current cycle)
+        obj->header.type = T::kObjectType;
+        obj->header.next = nullptr;
+        obj->header.prev = nullptr;
+        obj->header.color = GCColor::kBlack; // New objects are black (survive current cycle)
 
         S->gc.gc_all_objects.append(obj);
 
@@ -161,8 +162,8 @@ namespace behl
             new_obj = static_cast<GCTable*>(S->gc.gc_table_pool.pop_front());
             S->gc.gc_all_objects.append(new_obj);
 
-            assert(new_obj->type == GCType::kTable);
-            new_obj->color = GCColor::kBlack;
+            assert(new_obj->header.type == GCType::kTable);
+            new_obj->header.color = GCColor::kBlack;
 
             new_obj->metatable = nullptr;
             new_obj->array.reserve(S, initial_array_capacity);
@@ -202,7 +203,7 @@ namespace behl
             size_t smallest_capacity_distance = std::numeric_limits<size_t>::max();
             [[maybe_unused]] size_t search_iterations = 0;
 
-            for (auto* candidate = S->gc.gc_string_pool.head(); candidate != nullptr; candidate = candidate->next)
+            for (auto* candidate = S->gc.gc_string_pool.head(); candidate != nullptr; candidate = candidate->get_header().next)
             {
                 auto* other = static_cast<GCString*>(candidate);
 
@@ -250,8 +251,8 @@ namespace behl
                 S->gc.gc_string_pool.remove(new_obj);
                 S->gc.gc_all_objects.append(new_obj);
 
-                assert(new_obj->type == GCType::kString);
-                new_obj->color = GCColor::kBlack;
+                assert(new_obj->header.type == GCType::kString);
+                new_obj->header.color = GCColor::kBlack;
 
                 // Zero out the buffer if SSO to avoid comparing garbage bytes
                 if (new_obj->is_sso())
@@ -277,7 +278,7 @@ namespace behl
                     new_obj->storage.heap.len = total_size_required;
                 }
 
-                new_obj->str_hash = string_hash32(new_obj->view());
+                new_obj->header.object_hash = StringHash32{}(new_obj->view());
 
                 gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -312,12 +313,12 @@ namespace behl
                 offset += s.size();
             }
 
+            new_obj->header.add_flag(GCOFlags::kHeapString);
             new_obj->storage.heap.ptr = heap_data;
             new_obj->storage.heap.len = total_size_required;
-            new_obj->storage.heap.flag = GCString::kHeapFlag;
         }
 
-        new_obj->str_hash = string_hash32(new_obj->view());
+        new_obj->header.object_hash = StringHash32{}(new_obj->view());
 
         gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -365,8 +366,8 @@ namespace behl
             new_obj = static_cast<GCClosure*>(S->gc.gc_closure_pool.pop_front());
             S->gc.gc_all_objects.append(new_obj);
 
-            assert(new_obj->type == GCType::kClosure);
-            new_obj->color = GCColor::kBlack;
+            assert(new_obj->header.type == GCType::kClosure);
+            new_obj->header.color = GCColor::kBlack;
         }
         else
         {
@@ -530,10 +531,10 @@ namespace behl
 
         S->gc.gc_all_objects.remove(obj);
 
-        obj->color = GCColor::kFree;
+        obj->get_header().color = GCColor::kFree;
         // poolable = false;
 
-        switch (obj->type)
+        switch (obj->get_header().type)
         {
             case GCType::kString:
                 destroy_string(S, static_cast<GCString*>(obj), poolable);
@@ -559,18 +560,24 @@ namespace behl
 
     static void mark_gray(State* S, GCObject* obj)
     {
-        if (obj->color == GCColor::kWhite)
+        GCOHeader& header = obj->get_header();
+        if (header.color == GCColor::kWhite)
         {
-            obj->color = GCColor::kGray;
+            header.color = GCColor::kGray;
             gc_log("mark_gray: {}", gc_object_to_string(obj));
             // Push to front of gray list
-            obj->gray_next = S->gc.gc_gray_list;
+            header.gray_next = S->gc.gc_gray_list;
             S->gc.gc_gray_list = obj;
         }
         else
         {
-            gc_log("mark_gray SKIP (already {}): {}", obj->color, gc_object_to_string(obj));
+            gc_log("mark_gray SKIP (already {}): {}", header.color, gc_object_to_string(obj));
         }
+    }
+
+    void gc_barrier_slow(State* S, GCObject* stored) noexcept
+    {
+        mark_gray(S, stored);
     }
 
     static void mark_value(State* S, const Value& val)
@@ -684,9 +691,9 @@ namespace behl
     static void blacken_object(State* S, GCObject* obj)
     {
         gc_log("blacken_object: {}", gc_object_to_string(obj));
-        obj->color = GCColor::kBlack;
+        obj->get_header().color = GCColor::kBlack;
 
-        switch (obj->type)
+        switch (obj->get_header().type)
         {
             case GCType::kTable:
                 blacken_table(S, static_cast<GCTable*>(obj));
@@ -733,11 +740,11 @@ namespace behl
         // Turn all black objects white
         size_t white_count = 0;
         size_t black_kept = 0;
-        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
         {
-            if (obj->color == GCColor::kBlack)
+            if (obj->get_header().color == GCColor::kBlack)
             {
-                obj->color = GCColor::kWhite;
+                obj->get_header().color = GCColor::kWhite;
                 white_count++;
                 gc_log("  Turned BLACK->WHITE: {}", gc_object_to_string(obj));
 
@@ -860,7 +867,7 @@ namespace behl
 
         // Count gray list size for logging
         size_t gray_count = 0;
-        for (GCObject* obj = S->gc.gc_gray_list; obj; obj = obj->gray_next)
+        for (GCObject* obj = S->gc.gc_gray_list; obj; obj = obj->get_header().gray_next)
         {
             gray_count++;
         }
@@ -877,8 +884,8 @@ namespace behl
         {
             // Pop from front of gray list
             GCObject* obj = S->gc.gc_gray_list;
-            S->gc.gc_gray_list = obj->gray_next;
-            obj->gray_next = nullptr; // Clear the link
+            S->gc.gc_gray_list = obj->get_header().gray_next;
+            obj->get_header().gray_next = nullptr; // Clear the link
 
             blacken_object(S, obj);
             ++work_done;
@@ -891,9 +898,10 @@ namespace behl
             gc_log("Queueing userdata with finalizers");
 
             size_t queued_count = 0;
-            for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+            for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
             {
-                if (obj->color == GCColor::kWhite && obj->type == GCType::kUserdata)
+                if (obj->get_header().color == GCColor::kWhite && obj->get_header().type == GCType::kUserdata
+                    && !obj->get_header().has_flag(GCOFlags::kFinalized))
                 {
                     auto* userdata = static_cast<UserdataData*>(obj);
                     if (userdata->metatable != nullptr)
@@ -908,7 +916,7 @@ namespace behl
                             }
                             // Mark both the userdata AND its metatable to keep them alive
                             mark_gray(S, userdata);
-                            if (userdata->metatable->color == GCColor::kWhite)
+                            if (userdata->metatable->header.color == GCColor::kWhite)
                             {
                                 mark_gray(S, userdata->metatable);
                             }
@@ -1066,9 +1074,9 @@ namespace behl
         while (S->gc.gc_work_current && work_done < work_limit)
         {
             GCObject* obj = S->gc.gc_work_current;
-            GCObject* next = obj->next;
+            GCObject* next = obj->get_header().next;
 
-            if (obj->color == GCColor::kWhite)
+            if (obj->get_header().color == GCColor::kWhite)
             {
                 gc_log("Sweep: Checking WHITE object: {}", gc_object_to_string(obj));
 
@@ -1119,6 +1127,9 @@ namespace behl
             UserdataData* userdata = S->gc.gc_finalize_queue.back();
             S->gc.gc_finalize_queue.pop_back();
 
+            userdata->header.color = GCColor::kWhite;
+            userdata->header.add_flag(GCOFlags::kFinalized);
+
             // Call __gc metamethod
             if (userdata->metatable != nullptr)
             {
@@ -1130,10 +1141,6 @@ namespace behl
                     metatable_call_method(S, gc_method, Value(userdata));
                 }
             }
-
-            // Mark userdata WHITE so it will be collected in the next GC cycle
-            // (it was kept BLACK to survive this cycle's sweep)
-            userdata->color = GCColor::kWhite;
 
             gc_log("Marked finalized userdata {:p} WHITE for next cycle", static_cast<const void*>(userdata));
             ++work_done;
@@ -1187,28 +1194,8 @@ namespace behl
 
     // ===== Main GC Entry Point =====
 
-    void gc_step(State* S)
+    static void gc_step_impl(State* S)
     {
-        // Don't run if GC is paused
-        if (S->gc.gc_paused)
-        {
-            return;
-        }
-
-        // Guard against re-entrant GC (e.g., during finalizers)
-        if (S->gc.gc_running)
-        {
-            return;
-        }
-
-        const bool cycle_active = (S->gc.gc_phase != GCPhase::kIdle);
-        if (!cycle_active && S->gc.gc_debt <= 0)
-        {
-            return;
-        }
-
-        S->gc.gc_running = true;
-
         if constexpr (kGCLoggingEnabled)
         {
             static size_t call_count = 0;
@@ -1232,10 +1219,10 @@ namespace behl
                 size_t black_count = 0;
                 size_t white_count = 0;
                 size_t grey_count = 0;
-                for (auto* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+                for (auto* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
                 {
                     count++;
-                    switch (obj->color)
+                    switch (obj->get_header().color)
                     {
                         case GCColor::kBlack:
                             black_count++;
@@ -1310,8 +1297,40 @@ namespace behl
 
         gc_log("gc_step complete: debt={}, phase={}, total_bytes={}", S->gc.gc_debt, static_cast<int>(S->gc.gc_phase),
             S->gc.gc_total_bytes);
+    }
 
-        // Clear running flag
+    void gc_step(State* S)
+    {
+        // Don't run if GC is paused
+        if (S->gc.gc_paused)
+        {
+            return;
+        }
+
+        // Guard against re-entrant GC (e.g., during finalizers)
+        if (S->gc.gc_running)
+        {
+            return;
+        }
+
+        const bool cycle_active = (S->gc.gc_phase != GCPhase::kIdle);
+        if (!cycle_active && S->gc.gc_debt <= 0)
+        {
+            return;
+        }
+
+        S->gc.gc_running = true;
+
+        try
+        {
+            gc_step_impl(S);
+        }
+        catch (...)
+        {
+            S->gc.gc_running = false;
+            throw;
+        }
+
         S->gc.gc_running = false;
     }
 
@@ -1338,6 +1357,14 @@ namespace behl
 
     void gc_collect(State* S)
     {
+        // Requests made from inside a finalizer are ignored
+        if (S->gc.gc_running)
+        {
+            return;
+        }
+
+        S->gc.gc_running = true;
+
         gc_log("===== FULL COLLECTION STARTED =====");
 
         // Completely reset GC state for a fresh cycle
@@ -1346,15 +1373,25 @@ namespace behl
         S->gc.gc_finalize_queue.clear();
         S->gc.gc_work_current = nullptr;
 
-        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
         {
-            obj->color = GCColor::kBlack;
+            obj->get_header().color = GCColor::kBlack;
         }
 
-        // Start a new cycle
-        gc_start_cycle(S);
-        gc_advance_cycles(S);
-        gc_destroy_pools(S);
+        try
+        {
+            // Start a new cycle
+            gc_start_cycle(S);
+            gc_advance_cycles(S);
+            gc_destroy_pools(S);
+        }
+        catch (...)
+        {
+            S->gc.gc_running = false;
+            throw;
+        }
+
+        S->gc.gc_running = false;
 
         gc_log("===== FULL COLLECTION COMPLETE: phase={} =====", static_cast<int>(S->gc.gc_phase));
     }

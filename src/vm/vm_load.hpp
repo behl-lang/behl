@@ -2,7 +2,7 @@
 
 #include "bytecode.hpp"
 #include "frame.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"

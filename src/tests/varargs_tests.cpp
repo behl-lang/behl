@@ -1,7 +1,10 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 
-class VarargsTest : public ::testing::Test
+class VarargsTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +12,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_lib_core(S);
     }
 
@@ -18,7 +22,7 @@ protected:
     }
 };
 
-TEST_F(VarargsTest, PureVarargsFunction)
+TEST_P(VarargsTest, PureVarargsFunction)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -32,7 +36,7 @@ TEST_F(VarargsTest, PureVarargsFunction)
     EXPECT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(VarargsTest, VarargsWithValues)
+TEST_P(VarargsTest, VarargsWithValues)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -46,7 +50,7 @@ TEST_F(VarargsTest, VarargsWithValues)
     EXPECT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(VarargsTest, MixedParamsAndVarargs)
+TEST_P(VarargsTest, MixedParamsAndVarargs)
 {
     constexpr std::string_view code = R"(
         function test(a, b, ...) {
@@ -60,7 +64,7 @@ TEST_F(VarargsTest, MixedParamsAndVarargs)
     EXPECT_EQ(behl::to_integer(S, -1), 6); // 1 + 2 + 3 (count of varargs)
 }
 
-TEST_F(VarargsTest, MixedParamsAndVarargsValues)
+TEST_P(VarargsTest, MixedParamsAndVarargsValues)
 {
     constexpr std::string_view code = R"(
         function test(a, b, ...) {
@@ -74,7 +78,7 @@ TEST_F(VarargsTest, MixedParamsAndVarargsValues)
     EXPECT_EQ(behl::to_integer(S, -1), 63); // 1 + 2 + 10 + 20 + 30
 }
 
-TEST_F(VarargsTest, NoVarargsPassed)
+TEST_P(VarargsTest, NoVarargsPassed)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -88,7 +92,7 @@ TEST_F(VarargsTest, NoVarargsPassed)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(VarargsTest, NoVarargsPassedWithParams)
+TEST_P(VarargsTest, NoVarargsPassedWithParams)
 {
     constexpr std::string_view code = R"(
         function test(a, b, ...) {
@@ -102,7 +106,7 @@ TEST_F(VarargsTest, NoVarargsPassedWithParams)
     EXPECT_EQ(behl::to_integer(S, -1), 30); // 10 + 20 + 0
 }
 
-TEST_F(VarargsTest, VarargsMixedTypes)
+TEST_P(VarargsTest, VarargsMixedTypes)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -116,7 +120,7 @@ TEST_F(VarargsTest, VarargsMixedTypes)
     EXPECT_EQ(behl::to_string(S, -1), "integer,string,boolean");
 }
 
-TEST_F(VarargsTest, MultipleVarargCalls)
+TEST_P(VarargsTest, MultipleVarargCalls)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -131,7 +135,7 @@ TEST_F(VarargsTest, MultipleVarargCalls)
     EXPECT_EQ(behl::to_integer(S, -1), 6); // 3 + 3
 }
 
-TEST_F(VarargsTest, VarargsInNestedFunction)
+TEST_P(VarargsTest, VarargsInNestedFunction)
 {
     constexpr std::string_view code = R"(
         function outer(...) {
@@ -148,7 +152,7 @@ TEST_F(VarargsTest, VarargsInNestedFunction)
     EXPECT_EQ(behl::to_integer(S, -1), 30);
 }
 
-TEST_F(VarargsTest, VarargsForwarding)
+TEST_P(VarargsTest, VarargsForwarding)
 {
     constexpr std::string_view code = R"(
         function inner(...) {
@@ -166,7 +170,7 @@ TEST_F(VarargsTest, VarargsForwarding)
     EXPECT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(VarargsTest, VarargsWithStringValues)
+TEST_P(VarargsTest, VarargsWithStringValues)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -180,7 +184,7 @@ TEST_F(VarargsTest, VarargsWithStringValues)
     EXPECT_EQ(behl::to_string(S, -1), "Hello World");
 }
 
-TEST_F(VarargsTest, VarargsTableIteration)
+TEST_P(VarargsTest, VarargsTableIteration)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -198,7 +202,7 @@ TEST_F(VarargsTest, VarargsTableIteration)
     EXPECT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(VarargsTest, VarargsWithSingleElement)
+TEST_P(VarargsTest, VarargsWithSingleElement)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -212,7 +216,7 @@ TEST_F(VarargsTest, VarargsWithSingleElement)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(VarargsTest, VarargsManyArguments)
+TEST_P(VarargsTest, VarargsManyArguments)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -226,7 +230,7 @@ TEST_F(VarargsTest, VarargsManyArguments)
     EXPECT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(VarargsTest, VarargsWithNilValues)
+TEST_P(VarargsTest, VarargsWithNilValues)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -240,7 +244,7 @@ TEST_F(VarargsTest, VarargsWithNilValues)
     EXPECT_EQ(behl::to_string(S, -1), "nil,integer,nil");
 }
 
-TEST_F(VarargsTest, VarargsDirectForwarding)
+TEST_P(VarargsTest, VarargsDirectForwarding)
 {
     constexpr std::string_view code = R"(
         function inner(...) {
@@ -257,7 +261,7 @@ TEST_F(VarargsTest, VarargsDirectForwarding)
     EXPECT_EQ(behl::to_integer(S, -1), 4);
 }
 
-TEST_F(VarargsTest, VarargsDirectForwardingWithPrefix)
+TEST_P(VarargsTest, VarargsDirectForwardingWithPrefix)
 {
     constexpr std::string_view code = R"(
         function inner(a, b, ...) {
@@ -274,7 +278,7 @@ TEST_F(VarargsTest, VarargsDirectForwardingWithPrefix)
     EXPECT_EQ(behl::to_integer(S, -1), 303); // 100 + 200 + 3
 }
 
-TEST_F(VarargsTest, MultiAssignFromVarargsExact)
+TEST_P(VarargsTest, MultiAssignFromVarargsExact)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -288,7 +292,7 @@ TEST_F(VarargsTest, MultiAssignFromVarargsExact)
     EXPECT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(VarargsTest, MultiAssignFromVarargsNilPadded)
+TEST_P(VarargsTest, MultiAssignFromVarargsNilPadded)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -302,7 +306,7 @@ TEST_F(VarargsTest, MultiAssignFromVarargsNilPadded)
     EXPECT_EQ(behl::to_string(S, -1), "integer,nil,nil");
 }
 
-TEST_F(VarargsTest, MultiAssignFromVarargsTruncated)
+TEST_P(VarargsTest, MultiAssignFromVarargsTruncated)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -316,7 +320,7 @@ TEST_F(VarargsTest, MultiAssignFromVarargsTruncated)
     EXPECT_EQ(behl::to_integer(S, -1), 30);
 }
 
-TEST_F(VarargsTest, MultiAssignWithParamsAndVarargs)
+TEST_P(VarargsTest, MultiAssignWithParamsAndVarargs)
 {
     constexpr std::string_view code = R"(
         function test(p, ...) {
@@ -330,7 +334,7 @@ TEST_F(VarargsTest, MultiAssignWithParamsAndVarargs)
     EXPECT_EQ(behl::to_integer(S, -1), 31);
 }
 
-TEST_F(VarargsTest, SingleAssignFromVarargs)
+TEST_P(VarargsTest, SingleAssignFromVarargs)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -344,7 +348,7 @@ TEST_F(VarargsTest, SingleAssignFromVarargs)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(VarargsTest, SingleAssignFromVarargsNoneIsNil)
+TEST_P(VarargsTest, SingleAssignFromVarargsNoneIsNil)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -358,7 +362,7 @@ TEST_F(VarargsTest, SingleAssignFromVarargsNoneIsNil)
     EXPECT_EQ(behl::to_string(S, -1), "nil");
 }
 
-TEST_F(VarargsTest, ReassignFromVarargs)
+TEST_P(VarargsTest, ReassignFromVarargs)
 {
     constexpr std::string_view code = R"(
         function test(...) {
@@ -374,7 +378,7 @@ TEST_F(VarargsTest, ReassignFromVarargs)
     EXPECT_EQ(behl::to_integer(S, -1), 12);
 }
 
-TEST_F(VarargsTest, ReturnVarargsAll)
+TEST_P(VarargsTest, ReturnVarargsAll)
 {
     constexpr std::string_view code = R"(
         function inner(...) {
@@ -391,7 +395,7 @@ TEST_F(VarargsTest, ReturnVarargsAll)
     EXPECT_EQ(behl::to_integer(S, -1), 60);
 }
 
-TEST_F(VarargsTest, ReturnPrefixThenVarargs)
+TEST_P(VarargsTest, ReturnPrefixThenVarargs)
 {
     constexpr std::string_view code = R"(
         function inner(...) {
@@ -408,7 +412,7 @@ TEST_F(VarargsTest, ReturnPrefixThenVarargs)
     EXPECT_EQ(behl::to_integer(S, -1), 31); // 1 + 10 + 20
 }
 
-TEST_F(VarargsTest, ReturnPrefixThenVarargsEmpty)
+TEST_P(VarargsTest, ReturnPrefixThenVarargsEmpty)
 {
     constexpr std::string_view code = R"(
         function inner(...) {
@@ -425,7 +429,7 @@ TEST_F(VarargsTest, ReturnPrefixThenVarargsEmpty)
     EXPECT_EQ(behl::to_string(S, -1), "integer,nil");
 }
 
-TEST_F(VarargsTest, ReturnVarargsTruncatedWhenNotLast)
+TEST_P(VarargsTest, ReturnVarargsTruncatedWhenNotLast)
 {
     constexpr std::string_view code = R"(
         function inner(...) {
@@ -441,3 +445,132 @@ TEST_F(VarargsTest, ReturnVarargsTruncatedWhenNotLast)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 109); // 10 (... truncated to first) + 99
 }
+
+TEST_P(VarargsTest, VarargInNonVarargFunctionIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function plain() {
+            let args = {...};
+            return #args;
+        }
+        return plain();
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_P(VarargsTest, VarargInNonVarargFunctionWithParamsIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function plain(a, b) {
+            return (...);
+        }
+        return plain(1, 2);
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_P(VarargsTest, VarargInNestedNonVarargFunctionIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function outer(...) {
+            function inner() {
+                let args = {...};
+                return #args;
+            }
+            return inner();
+        }
+        return outer(1, 2, 3);
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_P(VarargsTest, VarargAtTopLevelIsEmptyWithoutArguments)
+{
+    constexpr std::string_view code = R"(
+        let args = {...};
+        return #args;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(VarargsTest, MainChunkReceivesArgumentsAsVarargs)
+{
+    constexpr std::string_view code = R"(
+        let args = {...};
+        return #args;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    behl::push_string(S, "alpha");
+    behl::push_string(S, "beta");
+    behl::push_string(S, "gamma");
+    ASSERT_NO_THROW(behl::call(S, 3, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_P(VarargsTest, MainChunkArgumentValuesAreReadable)
+{
+    constexpr std::string_view code = R"(
+        let a, b = ...;
+        return a + "/" + b;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    behl::push_string(S, "first");
+    behl::push_string(S, "second");
+    ASSERT_NO_THROW(behl::call(S, 2, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "first/second");
+}
+
+TEST_P(VarargsTest, VarargAsCallArgumentInNonVarargFunctionIsRejected)
+{
+    constexpr std::string_view code = R"(
+        function sink(a) {
+            return a;
+        }
+        function plain() {
+            return sink(...);
+        }
+        return plain();
+    )";
+    EXPECT_THROW(behl::load_string(S, code), behl::BehlException);
+}
+
+TEST_P(VarargsTest, VarargInNestedVarargFunctionIsAccepted)
+{
+    constexpr std::string_view code = R"(
+        function outer(...) {
+            function inner(...) {
+                let args = {...};
+                return #args;
+            }
+            return inner(7, 8);
+        }
+        return outer(1, 2, 3);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_P(VarargsTest, NonVarargCallAfterVarargCallIsNotCorrupted)
+{
+    constexpr std::string_view code = R"(
+        function eats(a, ...) {
+            let args = {...};
+            return #args;
+        }
+        function plain() {
+            return 0;
+        }
+        let first = eats(1, 2, 3, 4, 5, 6);
+        let second = plain();
+        return first + second;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 5);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, VarargsTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -1,15 +1,19 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 
 namespace behl
 {
-    class StringFormatTest : public ::testing::Test
+    class StringFormatTest : public ::testing::TestWithParam<bool>
     {
     protected:
         State* S;
         void SetUp() override
         {
             S = new_state();
+            S->jit_enabled = GetParam();
             load_stdlib(S);
         }
         void TearDown() override
@@ -18,7 +22,7 @@ namespace behl
         }
     };
 
-    TEST_F(StringFormatTest, BasicFormatting)
+    TEST_P(StringFormatTest, BasicFormatting)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -31,7 +35,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Value: 42, Name: test");
     }
 
-    TEST_F(StringFormatTest, FloatPrecision)
+    TEST_P(StringFormatTest, FloatPrecision)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -44,7 +48,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Pi: 3.14");
     }
 
-    TEST_F(StringFormatTest, HexFormatting)
+    TEST_P(StringFormatTest, HexFormatting)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -57,7 +61,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Hex: 0xFF");
     }
 
-    TEST_F(StringFormatTest, PaddedFormatting)
+    TEST_P(StringFormatTest, PaddedFormatting)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -70,7 +74,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Padded:    42");
     }
 
-    TEST_F(StringFormatTest, EscapedBraces)
+    TEST_P(StringFormatTest, EscapedBraces)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -83,7 +87,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Braces: { and }");
     }
 
-    TEST_F(StringFormatTest, MultipleArguments)
+    TEST_P(StringFormatTest, MultipleArguments)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -99,7 +103,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Alice is 30 years old with score 95.5");
     }
 
-    TEST_F(StringFormatTest, MetatableToString)
+    TEST_P(StringFormatTest, MetatableToString)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -120,7 +124,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Location: Point(10, 20)");
     }
 
-    TEST_F(StringFormatTest, ExplicitIndexing)
+    TEST_P(StringFormatTest, ExplicitIndexing)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -133,7 +137,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "a b c");
     }
 
-    TEST_F(StringFormatTest, ReorderedArguments)
+    TEST_P(StringFormatTest, ReorderedArguments)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -146,7 +150,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "third first second");
     }
 
-    TEST_F(StringFormatTest, RepeatedArguments)
+    TEST_P(StringFormatTest, RepeatedArguments)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -159,7 +163,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "echo echo echo");
     }
 
-    TEST_F(StringFormatTest, IndexWithFormatSpec)
+    TEST_P(StringFormatTest, IndexWithFormatSpec)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -172,7 +176,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "3.14 and FF");
     }
 
-    TEST_F(StringFormatTest, ReuseWithDifferentSpecs)
+    TEST_P(StringFormatTest, ReuseWithDifferentSpecs)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -185,7 +189,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "Decimal: 42, Hex: 2A, Padded:    42");
     }
 
-    TEST_F(StringFormatTest, MixedAutoAndExplicitIndexing)
+    TEST_P(StringFormatTest, MixedAutoAndExplicitIndexing)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -198,7 +202,7 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "second comes after first");
     }
 
-    TEST_F(StringFormatTest, IndexWithAlignment)
+    TEST_P(StringFormatTest, IndexWithAlignment)
     {
         constexpr std::string_view code = R"(
             const string = import("string");
@@ -210,5 +214,165 @@ namespace behl
         ASSERT_NO_THROW(call(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "test             test    test   ");
     }
+
+    TEST_P(StringFormatTest, RejectsOversizedWidth)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:99999999999}", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsOversizedPrecision)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.99999999999}", 1.5);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsOversizedWidthArgumentIndex)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:{99999999999}}", 1, 2);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsOversizedPrecisionArgumentIndex)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.{99999999999}}", 1.5, 2);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, RejectsWidthJustPastTheLimit)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:65537}", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, AcceptsWidthAtTheLimit)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return #string.format("{:65536}", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_integer(S, -1), 65536);
+    }
+
+    TEST_P(StringFormatTest, OrdinaryWidthsStillWork)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("[{:>5}]", 42) + string.format("[{:.2f}]", 1.239);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "[   42][1.24]");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionOnLargeMagnitudes)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.5f}", 1000000000000000000.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "1000000000000000000.00000");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionBeyondDoubleResolutionPadsWithZeros)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.20f}", 1.5);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "1.50000000000000000000");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionAtTheWidthLimitIsAllDigits)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            let s = string.format("{:.400f}", 1.5);
+            let ok = true;
+            for (let i = 0; i < #s; i++) {
+                let c = string.byte(s, i);
+                if (!((c >= 48 && c <= 57) || c == 46)) { ok = false }
+            }
+            return ok && #s == 402 && string.byte(s, 0) == 49 && string.byte(s, 2) == 53;
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_TRUE(to_boolean(S, -1));
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionOnUnrepresentableMagnitudeFallsBackToShortest)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.2f}", 100000000000000000000.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "1e+20");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionHandlesNonFiniteValues)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.3f}", 1.0 / 0.0) + "|" + string.format("{:.3f}", 0.0 - 1.0 / 0.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "inf|-inf");
+    }
+
+    TEST_P(StringFormatTest, FixedPrecisionOnNegativeLargeMagnitude)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:.2f}", 0.0 - 1000000000000000000.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "-1000000000000000000.00");
+    }
+
+    INSTANTIATE_TEST_SUITE_P(Mode, StringFormatTest, ::testing::Bool(),
+        [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
 } // namespace behl

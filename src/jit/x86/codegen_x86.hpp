@@ -22,6 +22,7 @@ namespace behl
             , last_pos_(state)
             , fuse_load_(state)
             , loop_header_(state)
+            , label_flow_(state)
             , var_reg_(state)
             , var_reg2_(state)
             , var_f64_(state)
@@ -80,6 +81,13 @@ namespace behl
         void emit_prologue();
         void emit_epilogue(uint32_t result_code);
         void emit_helper_call(const CgOp& op);
+        void emit_tail_jump_native(const CgOp& op);
+        void emit_call_fast(const CgOp& op);
+        void emit_frame_push_fast(const CgOp& op);
+        void emit_tail_frame_fast(const CgOp& op);
+        void emit_return_fast(const CgOp& op);
+        void emit_return_self_site(const CgOp& op);
+        void emit_return_dispatch(const CgOp& op);
         void emit_branch_i64_imm(const CgOp& op);
         void emit_const_f64(const CgOp& op);
         void alloc_i64(uint32_t var);
@@ -90,12 +98,17 @@ namespace behl
         GpReg gp(uint32_t var) const;
         GpReg gp_hi(uint32_t var) const;
         XmmReg xmm(uint32_t var) const;
-        Label label(uint32_t id) const noexcept;
+        Label label(uint32_t id) noexcept;
+        void bind_label(uint32_t id);
+
+        static constexpr uint8_t kFlowEdgeInvalid = 1;
+        static constexpr uint8_t kFlowAssumedValid = 2;
 
         X86Emitter e_;
         AutoVector<uint32_t> last_pos_;
         AutoVector<bool> fuse_load_;
         AutoVector<bool> loop_header_;
+        AutoVector<uint8_t> label_flow_;
         AutoVector<uint8_t> var_reg_;
         AutoVector<uint8_t> var_reg2_;
         AutoVector<bool> var_f64_;
@@ -109,6 +122,7 @@ namespace behl
         uint32_t gp_used_{};
         uint32_t xmm_used_{};
         bool base_valid_{};
+        bool reachable_{};
         bool fused_active_{};
         uint32_t fused_var_{};
         int32_t fused_slot_{};

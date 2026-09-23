@@ -19,21 +19,6 @@
 #    include "aarch64/codegen_aarch64.hpp"
 #endif
 
-#if BEHL_PLATFORM_WINDOWS
-#    ifndef WIN32_LEAN_AND_MEAN
-#        define WIN32_LEAN_AND_MEAN
-#    endif
-#    ifndef NOMINMAX
-#        define NOMINMAX
-#    endif
-#    include <Windows.h>
-#else
-#    include <sys/mman.h>
-#    if defined(__APPLE__)
-#        include <pthread.h>
-#    endif
-#endif
-
 namespace behl
 {
     struct JitChunk
@@ -65,153 +50,6 @@ namespace behl
     static constexpr size_t kJitAllocAlign = 16;
     static constexpr size_t kJitHeaderSize = 16;
     static constexpr size_t kJitMinSplit = 64;
-
-#if BEHL_PLATFORM_WINDOWS && defined(_WIN64)
-#    if BEHL_JIT_AARCH64
-    static constexpr uintptr_t kNearWindow = uintptr_t{ 128 } << 20;
-#    else
-    static constexpr uintptr_t kNearWindow = uintptr_t{ 2 } << 30;
-#    endif
-
-    static uintptr_t jit_image_base() noexcept
-    {
-        HMODULE image = nullptr;
-        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                reinterpret_cast<LPCWSTR>(&jit_image_base), &image)
-            || image == nullptr)
-        {
-            return 0;
-        }
-        return reinterpret_cast<uintptr_t>(image);
-    }
-
-    using VirtualAlloc2Fn = PVOID(WINAPI*)(HANDLE, PVOID, SIZE_T, ULONG, ULONG, MEM_EXTENDED_PARAMETER*, ULONG);
-
-    static const VirtualAlloc2Fn virtual_alloc2 = []() noexcept -> VirtualAlloc2Fn {
-        const HMODULE kernelbase = GetModuleHandleW(L"kernelbase.dll");
-        if (kernelbase == nullptr)
-        {
-            return nullptr;
-        }
-        return reinterpret_cast<VirtualAlloc2Fn>(reinterpret_cast<void (*)()>(GetProcAddress(kernelbase, "VirtualAlloc2")));
-    }();
-
-    static void* jit_alloc_via_valloc2(uintptr_t base, size_t size) noexcept
-    {
-        if (virtual_alloc2 == nullptr)
-        {
-            return nullptr;
-        }
-
-        MEM_ADDRESS_REQUIREMENTS requirements{};
-        requirements.LowestStartingAddress = reinterpret_cast<PVOID>(base);
-        requirements.HighestEndingAddress = reinterpret_cast<PVOID>(base + kNearWindow - 1);
-
-        MEM_EXTENDED_PARAMETER param{};
-        param.Type = MemExtendedParameterAddressRequirements;
-        param.Pointer = &requirements;
-
-        return virtual_alloc2(GetCurrentProcess(), nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE, &param, 1);
-    }
-
-    static void* jit_alloc_via_query_walk(uintptr_t base, size_t size) noexcept
-    {
-        SYSTEM_INFO si{};
-        GetSystemInfo(&si);
-        const uintptr_t granularity = si.dwAllocationGranularity;
-        const uintptr_t limit = base + kNearWindow;
-
-        uintptr_t addr = (base + granularity - 1) & ~(granularity - 1);
-
-        while (addr < limit)
-        {
-            MEMORY_BASIC_INFORMATION mbi{};
-            if (VirtualQuery(reinterpret_cast<LPCVOID>(addr), &mbi, sizeof(mbi)) == 0)
-            {
-                break;
-            }
-
-            const auto region_base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
-            const uintptr_t region_end = region_base + mbi.RegionSize;
-
-            if (mbi.State == MEM_FREE)
-            {
-                const uintptr_t candidate = (region_base + granularity - 1) & ~(granularity - 1);
-                if (candidate >= addr && candidate + size <= region_end && candidate + size <= limit)
-                {
-                    void* mem = VirtualAlloc(
-                        reinterpret_cast<LPVOID>(candidate), size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-                    if (mem != nullptr)
-                    {
-                        return mem;
-                    }
-                }
-            }
-
-            const uintptr_t next = (region_end + granularity - 1) & ~(granularity - 1);
-            if (next <= addr)
-            {
-                break;
-            }
-            addr = next;
-        }
-
-        return nullptr;
-    }
-
-    static void* jit_alloc_near_image(size_t size) noexcept
-    {
-        const uintptr_t base = jit_image_base();
-        if (base == 0)
-        {
-            return nullptr;
-        }
-
-        if (void* mem = jit_alloc_via_valloc2(base, size); mem != nullptr)
-        {
-            return mem;
-        }
-
-        return jit_alloc_via_query_walk(base, size);
-    }
-#endif
-
-    static void* jit_os_alloc(size_t size) noexcept
-    {
-#if BEHL_PLATFORM_WINDOWS
-#    if defined(_WIN64)
-        void* near_mem = jit_alloc_near_image(size);
-        if (near_mem != nullptr)
-        {
-            return near_mem;
-        }
-#    endif
-        return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-#else
-        int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-#    if defined(__APPLE__)
-        flags |= MAP_JIT;
-#    endif
-        void* mem = mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC, flags, -1, 0);
-        return (mem == MAP_FAILED) ? nullptr : mem;
-#endif
-    }
-
-    static void jit_write_protect([[maybe_unused]] bool executable) noexcept
-    {
-#if defined(__APPLE__) && defined(__aarch64__)
-        pthread_jit_write_protect_np(executable ? 1 : 0);
-#endif
-    }
-
-    static void jit_os_free(void* mem, [[maybe_unused]] size_t size) noexcept
-    {
-#if BEHL_PLATFORM_WINDOWS
-        VirtualFree(mem, 0, MEM_RELEASE);
-#else
-        munmap(mem, size);
-#endif
-    }
 
     bool jit_supported() noexcept
     {
@@ -290,7 +128,7 @@ namespace behl
                 arena.free_blocks.pop_back();
             }
 
-            jit_write_protect(false);
+            platform::exec_write_protect(false);
             std::memcpy(base, &block_total, sizeof(block_total));
             return base + kJitHeaderSize;
         }
@@ -309,7 +147,7 @@ namespace behl
             }
 
             const size_t chunk_size = (total > kJitChunkSize) ? total : kJitChunkSize;
-            void* mem = jit_os_alloc(chunk_size);
+            void* mem = platform::exec_alloc(chunk_size);
             if (mem == nullptr)
             {
                 return nullptr;
@@ -320,7 +158,7 @@ namespace behl
         JitChunk& chunk = arena.chunks.back();
         uint8_t* base = chunk.base + chunk.used;
         chunk.used += total;
-        jit_write_protect(false);
+        platform::exec_write_protect(false);
         std::memcpy(base, &total, sizeof(total));
 
         return base + kJitHeaderSize;
@@ -328,18 +166,14 @@ namespace behl
 
     void jit_exec_commit(void* mem, size_t size)
     {
-        jit_write_protect(true);
-#if BEHL_PLATFORM_WINDOWS
-        FlushInstructionCache(GetCurrentProcess(), mem, size);
-#else
-        __builtin___clear_cache(static_cast<char*>(mem), static_cast<char*>(mem) + size);
-#endif
+        platform::exec_write_protect(true);
+        platform::exec_flush_icache(mem, size);
     }
 
     void jit_clear_cache(State* S) noexcept
     {
 #if BEHL_JIT_SUPPORTED
-        for (GCObject* obj = S->gc.gc_all_objects.head(); obj != nullptr; obj = obj->next)
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj != nullptr; obj = obj->get_header().next)
         {
             if (obj->is_proto())
             {
@@ -371,7 +205,7 @@ namespace behl
 
         for (JitChunk& chunk : S->jit_arena->chunks)
         {
-            jit_os_free(chunk.base, chunk.size);
+            platform::exec_free(chunk.base, chunk.size);
         }
 
         mem_destroy(S, S->jit_arena);

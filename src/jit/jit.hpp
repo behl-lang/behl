@@ -2,7 +2,7 @@
 
 #include "behl/export.hpp"
 #include "gc/gco_proto.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 
 #include <cstddef>
@@ -49,14 +49,18 @@ namespace behl
     constexpr uint32_t kJitTailReturned = 0xFFFFFFFDu;
     constexpr uint32_t kJitCallPushed = 0xFFFFFFFCu;
 
+    constexpr uintptr_t kJitSetupDecline = 0;
+    constexpr uintptr_t kJitSetupError = 1;
+    constexpr uintptr_t kJitSetupPushedOther = 2;
+
     constexpr size_t kJitNestLimit = 150;
     constexpr size_t kJitMaxCallDepth = 1000000;
 
-    BEHL_API_INTERNAL bool jit_supported() noexcept;
+    bool jit_supported() noexcept;
 
-    BEHL_API_INTERNAL JitEntry jit_compile(State* S, const GCProto* proto);
+    JitEntry jit_compile(State* S, const GCProto* proto);
 
-    BEHL_API_INTERNAL void jit_release(State* S, JitEntry entry) noexcept;
+    void jit_release(State* S, JitEntry entry) noexcept;
 
     bool jit_run_or_compile(State* S, const GCProto* proto);
 

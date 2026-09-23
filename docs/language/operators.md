@@ -23,7 +23,7 @@ nav_order: 4
 | `+` | Addition | `5 + 3` → `8` |
 | `-` | Subtraction | `5 - 3` → `2` |
 | `*` | Multiplication | `5 * 3` → `15` |
-| `/` | Division | `5 / 2` → `2.5` |
+| `/` | Division (always float) | `5 / 2` → `2.5` |
 | `%` | Modulo | `5 % 2` → `1` |
 | `**` | Power | `2 ** 3` → `8` |
 | `-` | Unary negation | `-5` → `-5` |
@@ -40,12 +40,14 @@ let power = 2 ** 10;   // 1024
 let neg = -42;         // -42
 ```
 
-### Integer vs Float Division
+### Division Always Produces a Float
+
+`/` never performs integer division. Both operands are converted to floats, so the result is a float even when the division is exact:
 
 ```cpp
-let a = 10 / 2;  // 5 (integer - exact division)
-let b = 10 / 3;  // 3.333... (float - inexact)
-let c = 5.0 / 2; // 2.5 (float - operand is float)
+let a = 10 / 2;  // 5.0 (float, not integer 5)
+let b = 10 / 3;  // 3.333... (float)
+let c = 5.0 / 2; // 2.5 (float)
 ```
 
 ## Comparison Operators
@@ -62,7 +64,7 @@ let c = 5.0 / 2; // 2.5 (float - operand is float)
 ### Examples
 
 ```cpp
-let a = 5, b = 10;
+let a, b = 5, 10;
 
 print(a == b);  // false
 print(a != b);  // true
@@ -152,13 +154,13 @@ if (nil) { print("Won't print"); }
 ### Examples
 
 ```cpp
-let a = 0b1010;  // 10 in binary
-let b = 0b1100;  // 12 in binary
+let a = 10;  // 1010 in binary
+let b = 12;  // 1100 in binary
 
-print(a & b);    // 0b1000 = 8
-print(a | b);    // 0b1110 = 14
-print(a ^ b);    // 0b0110 = 6
-print(~a);       // 0b...11110101 = -11
+print(a & b);    // 8
+print(a | b);    // 14
+print(a ^ b);    // 6
+print(~a);       // -11
 
 // Shifts
 let x = 1 << 3;  // 8 (1 * 2^3)
@@ -169,11 +171,11 @@ let y = 16 >> 2; // 4 (16 / 2^2)
 
 ```cpp
 // Flags
-const FLAG_A = 1 << 0;  // 0b0001
-const FLAG_B = 1 << 1;  // 0b0010
-const FLAG_C = 1 << 2;  // 0b0100
+const FLAG_A = 1 << 0;  // 1 (bit 0)
+const FLAG_B = 1 << 1;  // 2 (bit 1)
+const FLAG_C = 1 << 2;  // 4 (bit 2)
 
-let flags = FLAG_A | FLAG_C;  // 0b0101
+let flags = FLAG_A | FLAG_C;  // 5 (bits 0 and 2)
 let hasA = (flags & FLAG_A) != 0;  // true
 let hasB = (flags & FLAG_B) != 0;  // false
 ```
@@ -185,18 +187,18 @@ From highest to lowest precedence:
 | Level | Operators | Description |
 |-------|-----------|-------------|
 | 1 | `()` | Parentheses (grouping) |
-| 2 | `!`, `~`, `-` (unary) | Unary operators |
+| 2 | `!`, `~`, `-`, `#` (unary) | Unary operators |
 | 3 | `**` | Power (right-associative) |
 | 4 | `*`, `/`, `%` | Multiplicative |
 | 5 | `+`, `-` | Additive |
 | 6 | `<<`, `>>` | Shift |
-| 7 | `<`, `<=`, `>`, `>=` | Relational |
-| 8 | `==`, `!=` | Equality |
-| 9 | `&` | Bitwise AND |
-| 10 | `^` | Bitwise XOR |
-| 11 | <code>&#124;</code> | Bitwise OR |
-| 12 | `&&` | Logical AND |
-| 13 | <code>&#124;&#124;</code> | Logical OR |
+| 7 | `&` | Bitwise AND |
+| 8 | `^` | Bitwise XOR |
+| 9 | <code>&#124;</code> | Bitwise OR |
+| 10 | `<`, `<=`, `>`, `>=`, `==`, `!=` | Comparison (relational and equality share one level) |
+| 11 | `&&` | Logical AND |
+| 12 | <code>&#124;&#124;</code> | Logical OR |
+| 13 | `?:` | Ternary conditional (right-associative) |
 
 ### Examples
 
@@ -221,11 +223,8 @@ let c = (2 ** 3) ** 2;  // 64
 | `x *= y` | `x = x * y` |
 | `x /= y` | `x = x / y` |
 | `x %= y` | `x = x % y` |
-| `x &= y` | `x = x & y` |
-| <code>x &#124;= y</code> | <code>x = x &#124; y</code> |
-| `x ^= y` | `x = x ^ y` |
-| `x <<= y` | `x = x << y` |
-| `x >>= y` | `x = x >> y` |
+
+There are no bitwise compound assignments: `&=`, `|=`, `^=`, `<<=` and `>>=` do not exist. Write `x = x & y` instead.
 
 ### Examples
 
@@ -233,47 +232,48 @@ let c = (2 ** 3) ** 2;  // 64
 let x = 10;
 x += 5;   // x = 15
 x *= 2;   // x = 30
-x /= 3;   // x = 10
-x %= 7;   // x = 3
+x /= 3;   // x = 10.0 (division always yields a float)
+x %= 7;   // x = 3.0 (still a float)
 ```
 
 ## Increment/Decrement Operators
 
 | Operator | Description |
 |----------|-------------|
-| `x++` | Post-increment: use then add |
-| `++x` | Pre-increment: add then use |
-| `x--` | Post-decrement: use then subtract |
-| `--x` | Pre-decrement: subtract then use |
+| `x++` | Increment by one |
+| `x--` | Decrement by one |
 
-### Examples
+Only the postfix forms exist. The prefix forms `++x` and `--x` are not parsed at all and are a syntax error.
+
+`x++` and `x--` are **statements**, not expressions. They produce no value, so they cannot appear inside a larger expression:
 
 ```cpp
 let i = 5;
 
-// Post-increment
-let a = i++;  // a = 5, i = 6
+i++;          // OK: statement
+i--;          // OK: statement
 
-// Pre-increment
-let b = ++i;  // b = 7, i = 7
+// let a = i++;   // Syntax error: not an expression
+// let b = ++i;   // Syntax error: prefix form does not exist
+```
 
-// Post-decrement
-let c = i--;  // c = 7, i = 6
+The left-hand side may be an identifier, an index, or a member:
 
-// Pre-decrement
-let d = --i;  // d = 5, i = 5
+```cpp
+let t = {0, 0};
+t[0]++;
 ```
 
 ### In Loops
+
+The other place `++` and `--` are accepted is the update slot of a C-style `for` loop:
 
 ```cpp
 for (let i = 0; i < 10; i++) {   // i++ increments after each iteration
     print(i);
 }
 
-for (let i = 0; i < 10; ++i) {   // ++i also works, same effect in for loop
-    print(i);
-}
+// for (let i = 0; i < 10; ++i)  // Syntax error: prefix form does not exist
 ```
 
 ## Operator Overloading

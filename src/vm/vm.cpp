@@ -1,6 +1,7 @@
 #include "vm.hpp"
 
 #include "bytecode.hpp"
+#include "common/arithmetic.hpp"
 #include "config_internal.hpp"
 #include "gc/gc.hpp"
 #include "gc/gc_object.hpp"
@@ -9,11 +10,11 @@
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
 #include "gc/gco_userdata.hpp"
-#include "platform.hpp"
+#include "jit/jit.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "state_debug.hpp"
 #include "value.hpp"
-#include "vm/integer_ops.hpp"
 #include "vm_arithmetic.hpp"
 #include "vm_bitwise.hpp"
 #include "vm_controlflow.hpp"
@@ -26,127 +27,11 @@
 #include "vm_table.hpp"
 #include "vm_upvalues.hpp"
 
-#include "jit/jit.hpp"
-
 #include <behl/exceptions.hpp>
 #include <cassert>
 
 namespace behl
 {
-    BEHL_FORCEINLINE
-    static void handler_varargprep(State* S, CallFrame& frame, uint8_t num_params)
-    {
-        // Calculate how many extra args were passed
-        const auto total_args = frame_header(S, frame).top - frame.base - 1;
-        const auto num_varargs = (total_args > num_params) ? (total_args - num_params) : 0;
-
-        frame_header(S, frame).num_varargs = num_varargs;
-
-        if (num_varargs == 0)
-        {
-            return;
-        }
-
-        // Before: [func, p0, p1, v0, v1, v2]
-        // After:  [func, p0, p1, v0, v1, v2, func_copy, p0_copy, p1_copy]
-        //                                    ^
-        //                                    new base
-        // Varargs are still at their original positions, accessible at base - num_varargs
-
-        const auto old_base = frame.base;
-        const auto new_base = old_base + total_args + 1; // Move base past all args
-
-        // Ensure stack has room for copies
-        const auto required_size = new_base + 1 + num_params + frame.proto->max_stack_size;
-        if (S->stack.size() < required_size)
-        {
-            S->stack.resize(S, required_size, Value{});
-        }
-
-        // Copy function to new position (at frame.top, which is after all args)
-        S->stack[new_base] = S->stack[old_base];
-
-        // Copy fixed params to new positions
-        for (uint32_t i = 0; i < num_params; ++i)
-        {
-            S->stack[new_base + 1 + i] = S->stack[old_base + 1 + i];
-        }
-
-        // Update frame pointers. call_pos is left untouched: it marks where the caller
-        // expects results, which stays at the original call site even though the locals
-        // base moves past the varargs.
-        frame.base = new_base;
-        frame_header(S, frame).top = new_base + 1 + num_params;
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_vararg(State* S, CallFrame& frame, Reg a, uint8_t num)
-    {
-        const auto num_varargs = frame_header(S, frame).num_varargs;
-
-        // Varargs are at: base - num_varargs ... base - 1
-        const auto vararg_start = frame.base - num_varargs;
-        const auto dest = frame.base + a;
-
-        // num == 0 requests all varargs (multret) and extends top so a following call
-        // or table constructor can consume them. num > 0 requests exactly that many
-        // values, nil-padding when fewer were passed and leaving top untouched.
-        if (num == 0)
-        {
-            const auto target_end = dest + num_varargs;
-            if (target_end > S->stack.size())
-            {
-                S->stack.resize(S, target_end);
-            }
-
-            for (uint32_t i = 0; i < num_varargs; ++i)
-            {
-                S->stack[dest + i] = S->stack[vararg_start + i];
-            }
-
-            frame_header(S, frame).top = target_end;
-            return;
-        }
-
-        const auto want = static_cast<uint32_t>(num);
-        const auto target_end = dest + want;
-        if (target_end > S->stack.size())
-        {
-            S->stack.resize(S, target_end);
-        }
-
-        const auto copy_count = (num_varargs < want) ? num_varargs : want;
-        for (uint32_t i = 0; i < copy_count; ++i)
-        {
-            S->stack[dest + i] = S->stack[vararg_start + i];
-        }
-        for (uint32_t i = copy_count; i < want; ++i)
-        {
-            S->stack[dest + i].set_nil();
-        }
-    }
-
-    BEHL_FORCEINLINE
-    static void handler_varargexpand(State* S, CallFrame& frame, Reg table_reg, uint32_t start_idx)
-    {
-        const auto num_varargs = frame_header(S, frame).num_varargs;
-
-        // Get the table
-        Value& table = get_register(S, frame, table_reg);
-        assert(table.is_table() && "VARARGEXPAND: table_reg must contain a table");
-
-        // Varargs are at: base - num_varargs ... base - 1
-        const auto vararg_start = frame.base - num_varargs;
-
-        // Copy each vararg directly into the table array
-        for (uint32_t i = 0; i < num_varargs; ++i)
-        {
-            const Value key = Value(static_cast<int64_t>(start_idx + i));
-            const Value& val = S->stack[vararg_start + i];
-            setfield_impl(S, frame, table, key, val);
-        }
-    }
-
     inline static void execute_native(State* S, const Value& func_value, int num_args, int nresults)
     {
         auto& stack = S->stack;
@@ -177,8 +62,15 @@ namespace behl
         CallFrame* frame = &callstack.back();
         const Instruction* code = frame->proto->code.data();
 
+        const auto invalidate_frame = [&]() {
+            frame = &callstack.back();
+            code = frame->proto->code.data();
+        };
+
         for (;;)
         {
+            assert(frame == &callstack.back() && "opcode re-entered the VM without refreshing the frame pointer");
+
             if constexpr (TDebugMode)
             {
                 DebugEvent dv = DebugEvent::Paused;
@@ -197,8 +89,7 @@ namespace behl
                 }
 
                 // Refresh frame pointer, may have invalidated due to debug functions.
-                frame = &callstack.back();
-                code = frame->proto->code.data();
+                invalidate_frame();
             }
 
             const Instruction instr = code[frame->pc];
@@ -212,39 +103,39 @@ namespace behl
             {
                 case OpCode::kOpMove:
                     handler_move(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpLoadI:
                     handler_loadi(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpLoadF:
                     handler_loadf(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpLoadS:
                     handler_loadk(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpLoadBool:
                     handler_loadbool(S, *frame, instr.a(), instr.bool_value(), instr.skip_next());
-                    break;
+                    continue;
                 case OpCode::kOpLoadNil:
                     handler_loadnil(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpLoadImm:
                     handler_load_imm(S, *frame, instr.a(), instr.signed_immediate());
-                    break;
+                    continue;
 
                 case OpCode::kOpGetGlobal:
                     handler_getglobal(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
                 case OpCode::kOpSetGlobal:
                     handler_setglobal(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
 
                 case OpCode::kOpGetUpval:
                     handler_getupval(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpSetUpval:
                     handler_setupval(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
 
                 case OpCode::kOpGetField:
                     handler_getfield(S, *frame, instr.a(), instr.b(), instr.c());
@@ -270,7 +161,7 @@ namespace behl
                     break;
                 case OpCode::kOpSetList:
                     handler_setlist(S, *frame, instr.a(), instr.b(), instr.c());
-                    break;
+                    continue;
 
                 case OpCode::kOpSelf:
                     handler_self(S, *frame, instr.a(), instr.b(), instr.c());
@@ -386,16 +277,16 @@ namespace behl
                     break;
                 case OpCode::kOpDefer:
                     handler_defer(S, *frame, instr.a());
-                    break;
+                    continue;
                 case OpCode::kOpDeferCall:
                     handler_defercall(S, *frame, instr.a());
-                    break;
+                    continue;
                 case OpCode::kOpEndDefer:
                     handler_enddefer(S, *frame, instr.a());
-                    break;
+                    continue;
                 case OpCode::kOpSaveRet:
                     handler_saveret(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
                 case OpCode::kOpRetSaved:
                     if (!handler_retsaved(S, *frame, entry_call_depth))
                     {
@@ -405,9 +296,8 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
                 case OpCode::kOpEndUnwind:
                     return;
                 case OpCode::kOpMMAdd:
@@ -456,92 +346,92 @@ namespace behl
                     break;
 
                 case OpCode::kOpEq:
-                    handler_cmp<MetaMethodType::kEq, CmpEqOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpNe:
-                    handler_cmp<MetaMethodType::kEq, CmpNeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpLt:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpGe:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpLe:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpGt:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
 
                 case OpCode::kOpLTI:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGEI:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpLEI:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGTI:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_const_int>(
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_const_int>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpLTF:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGEF:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpLEF:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
                 case OpCode::kOpGTF:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_const_fp>(
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_const_fp>(
                         S, *frame, instr.b(), instr.small_const_index());
                     break;
 
                 case OpCode::kOpLTImm:
-                    handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpGeImm:
-                    handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpLEImm:
-                    handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpGtImm:
-                    handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpEqImm:
-                    handler_cmp<MetaMethodType::kEq, CmpEqOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpNeImm:
-                    handler_cmp<MetaMethodType::kEq, CmpNeOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
 
                 case OpCode::kOpTest:
                     handler_test(S, *frame, instr.a(), instr.b() != 0);
-                    break;
+                    continue;
                 case OpCode::kOpTestSet:
                     handler_testset(S, *frame, instr.a(), instr.b(), instr.c() != 0);
-                    break;
+                    continue;
 
                 case OpCode::kOpJmp:
                     handler_jmp(*frame, instr.jump_offset());
-                    break;
+                    continue;
 
                 case OpCode::kOpForPrep:
                     handler_forprep(S, *frame, instr.a(), instr.signed_offset());
@@ -552,14 +442,14 @@ namespace behl
 
                 case OpCode::kOpClosure:
                     handler_closure(S, *frame, instr.a(), instr.const_or_proto_index());
-                    break;
+                    continue;
 
                 case OpCode::kOpCall:
                 {
                     const bool self_call = instr.flag_bit();
-                    frame = handler_call(S, *frame, instr.a(), instr.b(), instr.c(), self_call);
-                    code = frame->proto->code.data();
-                    break;
+                    handler_call(S, *frame, instr.a(), instr.b(), instr.c(), self_call);
+                    invalidate_frame();
+                    continue;
                 }
 
                 case OpCode::kOpTailCall:
@@ -571,9 +461,8 @@ namespace behl
                     {
                         return;
                     }
-                    frame = &callstack.back();
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpReturn:
                     if (!handler_return(S, *frame, instr.a(), instr.b(), entry_call_depth))
@@ -584,9 +473,8 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpReturn0:
                     if (!handler_return0(S, *frame, entry_call_depth))
@@ -597,9 +485,8 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpReturn1:
                     if (!handler_return1(S, *frame, instr.a(), entry_call_depth))
@@ -610,17 +497,16 @@ namespace behl
                     {
                         return;
                     }
-                    --frame;
-                    code = frame->proto->code.data();
-                    break;
+                    invalidate_frame();
+                    continue;
 
                 case OpCode::kOpVararg:
                     handler_vararg(S, *frame, instr.a(), instr.b());
-                    break;
+                    continue;
 
                 case OpCode::kOpVarargPrep:
                     handler_varargprep(S, *frame, instr.a());
-                    break;
+                    continue;
 
                 case OpCode::kOpVarargExpand:
                     handler_varargexpand(S, *frame, instr.a(), instr.b());
@@ -632,6 +518,8 @@ namespace behl
                     break;
 #endif
             }
+
+            frame = &callstack.back();
         }
     }
 
@@ -654,7 +542,7 @@ namespace behl
         const auto* proto = closure_data->proto;
         const auto nres = (nresults == kMultRet) ? static_cast<uint8_t>(kMultRet) : static_cast<uint8_t>(nresults);
         setup_call_frame(S, proto, new_base, num_args, new_base, nres);
-        prepare_call(S, proto->max_stack_size, new_base, num_args);
+        prepare_call(S, proto->max_stack_size, new_base, num_args, proto->num_params);
 
 #if BEHL_JIT_SUPPORTED
         if constexpr (!TDebugMode)

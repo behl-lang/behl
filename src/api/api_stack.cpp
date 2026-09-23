@@ -60,7 +60,7 @@ namespace behl
         }
         else
         {
-            size_t to_pop = static_cast<size_t>(-n);
+            size_t to_pop = static_cast<size_t>(-static_cast<int64_t>(n));
             if (to_pop > current_size)
             {
                 new_size = base;
@@ -78,10 +78,12 @@ namespace behl
     {
         assert(S != nullptr && "State can not be null");
 
-        const auto count = static_cast<size_t>(n);
-        assert(count <= S->stack.size() && "Pop count exceeds stack size");
+        if (n <= 0)
+        {
+            return;
+        }
 
-        S->stack.resize(S, S->stack.size() - count);
+        set_top(S, -n);
     }
 
     void dup(State* S, int32_t idx)

@@ -2,7 +2,7 @@
 
 #include "config_internal.hpp"
 #include "gc/gco_string.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <behl/config.hpp>
 #include <behl/types.hpp>
@@ -12,6 +12,7 @@
 #include <functional>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 
 namespace behl
 {
@@ -487,10 +488,6 @@ namespace behl
             return static_cast<int32_t>(sizeof(Value));
         }
 
-#if defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
-#endif
         static constexpr int32_t type_offset()
         {
             return static_cast<int32_t>(offsetof(Value, type_));
@@ -500,9 +497,6 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(Value, int_));
         }
-#if defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#endif
 
     private:
         Type type_;
@@ -519,6 +513,8 @@ namespace behl
             alignas(8) CFunction cfunction_;
         };
     };
+
+    static_assert(std::is_standard_layout_v<Value>);
 
     struct ValueHash
     {

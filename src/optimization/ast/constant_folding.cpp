@@ -1,6 +1,7 @@
 #include "constant_folding.hpp"
 
 #include "ast/ast_transformer.hpp"
+#include "common/arithmetic.hpp"
 #include "common/print.hpp"
 #include "config_internal.hpp"
 
@@ -49,18 +50,21 @@ namespace behl
                 switch (node->op)
                 {
                     case TokenType::kPlus:
-                        result = left_int->value + right_int->value;
+                        result = arithmetic::add(left_int->value, right_int->value);
                         break;
                     case TokenType::kMinus:
-                        result = left_int->value - right_int->value;
+                        result = arithmetic::sub(left_int->value, right_int->value);
                         break;
                     case TokenType::kStar:
-                        result = left_int->value * right_int->value;
+                        result = arithmetic::mul(left_int->value, right_int->value);
+                        break;
+                    case TokenType::kPower:
+                        result = arithmetic::pow(left_int->value, right_int->value);
                         break;
                     case TokenType::kPercent:
                         if (right_int->value != 0)
                         {
-                            result = left_int->value % right_int->value;
+                            result = arithmetic::mod(left_int->value, right_int->value);
                         }
                         else
                         {
@@ -77,10 +81,10 @@ namespace behl
                         result = left_int->value ^ right_int->value;
                         break;
                     case TokenType::kBShl:
-                        result = left_int->value << right_int->value;
+                        result = arithmetic::shl(left_int->value, right_int->value);
                         break;
                     case TokenType::kBShr:
-                        result = left_int->value >> right_int->value;
+                        result = arithmetic::shr(left_int->value, right_int->value);
                         break;
                     default:
                         can_fold = false;
@@ -123,7 +127,7 @@ namespace behl
                         }
                         break;
                     case TokenType::kPower:
-                        result = std::pow(left_val, right_val);
+                        result = arithmetic::pow(left_val, right_val);
                         break;
                     case TokenType::kPlus:
                         if (left_float || right_float)
@@ -169,10 +173,10 @@ namespace behl
                     }
                     changed = true;
                     // If result is whole number and both inputs were int, keep as int
-                    if (left_int && right_int && std::floor(result) == result && result >= static_cast<FP>(INT64_MIN)
-                        && result <= static_cast<FP>(INT64_MAX))
+                    Integer folded_int = 0;
+                    if (left_int && right_int && std::floor(result) == result && arithmetic::try_from_fp(result, folded_int))
                     {
-                        auto* folded = holder.make<AstInt>(static_cast<Integer>(result));
+                        auto* folded = holder.make<AstInt>(folded_int);
                         folded->line = node->line;
                         folded->column = node->column;
                         return folded;
@@ -200,10 +204,10 @@ namespace behl
                     if constexpr (kOptimizationPassDebug)
                     {
                         fold_count++;
-                        println("      Folding unary minus int (-{}) -> {}", int_node->value, -int_node->value);
+                        println("      Folding unary minus int (-{}) -> {}", int_node->value, arithmetic::neg(int_node->value));
                     }
                     changed = true;
-                    auto* folded = holder.make<AstInt>(-int_node->value);
+                    auto* folded = holder.make<AstInt>(arithmetic::neg(int_node->value));
                     folded->line = node->line;
                     folded->column = node->column;
                     return folded;

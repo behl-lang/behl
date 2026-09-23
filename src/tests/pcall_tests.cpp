@@ -1,9 +1,11 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 #include <string>
 using namespace behl;
 
-class PCallTest : public ::testing::Test
+class PCallTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S;
@@ -11,6 +13,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         load_stdlib(S);
         set_top(S, 0);
@@ -22,7 +25,7 @@ protected:
     }
 };
 
-TEST_F(PCallTest, SuccessfulCall)
+TEST_P(PCallTest, SuccessfulCall)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -42,7 +45,7 @@ TEST_F(PCallTest, SuccessfulCall)
     ASSERT_EQ(to_integer(S, -1), 30);
 }
 
-TEST_F(PCallTest, ErrorHandling)
+TEST_P(PCallTest, ErrorHandling)
 {
     constexpr std::string_view code = R"(
         function failing_func() {
@@ -66,7 +69,7 @@ TEST_F(PCallTest, ErrorHandling)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, MultipleReturnValues)
+TEST_P(PCallTest, MultipleReturnValues)
 {
     constexpr std::string_view code = R"(
         function multi_return(a, b, c) {
@@ -99,7 +102,7 @@ TEST_F(PCallTest, MultipleReturnValues)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, NoArguments)
+TEST_P(PCallTest, NoArguments)
 {
     constexpr std::string_view code = R"(
         function get_value() {
@@ -120,7 +123,7 @@ TEST_F(PCallTest, NoArguments)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, RuntimeTypeError)
+TEST_P(PCallTest, RuntimeTypeError)
 {
     constexpr std::string_view code = R"(
         function type_error() {
@@ -142,7 +145,7 @@ TEST_F(PCallTest, RuntimeTypeError)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, DivisionByZero)
+TEST_P(PCallTest, DivisionByZero)
 {
     constexpr std::string_view code = R"(
         function div_zero() {
@@ -159,7 +162,7 @@ TEST_F(PCallTest, DivisionByZero)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ClosureCall)
+TEST_P(PCallTest, ClosureCall)
 {
     constexpr std::string_view code = R"(
         function make_adder(x) {
@@ -183,7 +186,7 @@ TEST_F(PCallTest, ClosureCall)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, CFunctionCall)
+TEST_P(PCallTest, CFunctionCall)
 {
     constexpr std::string_view code = R"(
         success, result = pcall(typeof, 42);
@@ -203,7 +206,7 @@ TEST_F(PCallTest, CFunctionCall)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, NestedPCall)
+TEST_P(PCallTest, NestedPCall)
 {
     constexpr std::string_view code = R"(
         function inner() {
@@ -234,7 +237,7 @@ TEST_F(PCallTest, NestedPCall)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ReturnsNil)
+TEST_P(PCallTest, ReturnsNil)
 {
     constexpr std::string_view code = R"(
         function returns_nil() {
@@ -255,7 +258,7 @@ TEST_F(PCallTest, ReturnsNil)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ReturnsNothing)
+TEST_P(PCallTest, ReturnsNothing)
 {
     constexpr std::string_view code = R"(
         function returns_nothing() {
@@ -275,7 +278,7 @@ TEST_F(PCallTest, ReturnsNothing)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, NonCallableError)
+TEST_P(PCallTest, NonCallableError)
 {
     constexpr std::string_view code = R"(
         success, err = pcall(42);
@@ -285,7 +288,7 @@ TEST_F(PCallTest, NonCallableError)
     EXPECT_ANY_THROW(call(S, 0, 0));
 }
 
-TEST_F(PCallTest, CallableTable)
+TEST_P(PCallTest, CallableTable)
 {
     constexpr std::string_view code = R"(
         function try_call_table() {
@@ -307,7 +310,7 @@ TEST_F(PCallTest, CallableTable)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, RecursiveError)
+TEST_P(PCallTest, RecursiveError)
 {
     constexpr std::string_view code = R"(
         function recurse(n) {
@@ -333,7 +336,7 @@ TEST_F(PCallTest, RecursiveError)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ErrorWithCustomMessage)
+TEST_P(PCallTest, ErrorWithCustomMessage)
 {
     constexpr std::string_view code = R"(
         function validate(x) {
@@ -367,7 +370,7 @@ TEST_F(PCallTest, ErrorWithCustomMessage)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ErrorWithFormattedMessage)
+TEST_P(PCallTest, ErrorWithFormattedMessage)
 {
     constexpr std::string_view code = R"(
         function divide(a, b) {
@@ -394,7 +397,7 @@ TEST_F(PCallTest, ErrorWithFormattedMessage)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, MultipleDifferentErrors)
+TEST_P(PCallTest, MultipleDifferentErrors)
 {
     constexpr std::string_view code = R"(
         function err1() { error("error type 1"); }
@@ -426,7 +429,7 @@ TEST_F(PCallTest, MultipleDifferentErrors)
     }
 }
 
-TEST_F(PCallTest, ErrorDoesntAffectState)
+TEST_P(PCallTest, ErrorDoesntAffectState)
 {
     constexpr std::string_view code = R"(
         let counter = 0;
@@ -471,3 +474,6 @@ TEST_F(PCallTest, ErrorDoesntAffectState)
     ASSERT_EQ(to_integer(S, -1), 3);
     pop(S, 1);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, PCallTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

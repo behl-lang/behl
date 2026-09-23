@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class FunctionTest : public ::testing::Test
+class FunctionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(FunctionTest, ExecuteFunctionCall)
+TEST_P(FunctionTest, ExecuteFunctionCall)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -31,7 +34,7 @@ TEST_F(FunctionTest, ExecuteFunctionCall)
     ASSERT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(FunctionTest, GlobalFunctionAcrossLoadStrings)
+TEST_P(FunctionTest, GlobalFunctionAcrossLoadStrings)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -42,7 +45,7 @@ TEST_F(FunctionTest, GlobalFunctionAcrossLoadStrings)
 
     ASSERT_NO_THROW(behl::call(S, 0, 0));
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         return add(2, 3)
     )";
     ASSERT_NO_THROW(behl::load_string(S, code2));
@@ -51,7 +54,7 @@ TEST_F(FunctionTest, GlobalFunctionAcrossLoadStrings)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(FunctionTest, GlobalFunctionOverrideAcrossLoadStrings)
+TEST_P(FunctionTest, GlobalFunctionOverrideAcrossLoadStrings)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -61,7 +64,7 @@ TEST_F(FunctionTest, GlobalFunctionOverrideAcrossLoadStrings)
     ASSERT_NO_THROW(behl::load_string(S, code));
     ASSERT_NO_THROW(behl::call(S, 0, 0));
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         function add(a, b) {
             return a * b
         }
@@ -73,7 +76,7 @@ TEST_F(FunctionTest, GlobalFunctionOverrideAcrossLoadStrings)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
+TEST_P(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -84,7 +87,7 @@ TEST_F(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
     ASSERT_NO_THROW(behl::call(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         return add(2, 3)
     )";
     ASSERT_NO_THROW(behl::load_string(S, code2));
@@ -93,7 +96,7 @@ TEST_F(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
     behl::pop(S, 1);
 
-    const char* code3 = R"(
+    constexpr std::string_view code3 = R"(
         function add(a, b) {
             return a * b
         }
@@ -102,7 +105,7 @@ TEST_F(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
     ASSERT_NO_THROW(behl::call(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 
-    const char* code4 = R"(
+    constexpr std::string_view code4 = R"(
         return add(2, 3)
     )";
     ASSERT_NO_THROW(behl::load_string(S, code4));
@@ -112,7 +115,7 @@ TEST_F(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
     behl::pop(S, 1);
 }
 
-TEST_F(FunctionTest, ClosureCapturesLexicalVar)
+TEST_P(FunctionTest, ClosureCapturesLexicalVar)
 {
     constexpr std::string_view code = R"(
         function make() {
@@ -131,7 +134,7 @@ TEST_F(FunctionTest, ClosureCapturesLexicalVar)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(FunctionTest, ClosureIndependentCounters)
+TEST_P(FunctionTest, ClosureIndependentCounters)
 {
     constexpr std::string_view code = R"(
         function make() {
@@ -151,7 +154,7 @@ TEST_F(FunctionTest, ClosureIndependentCounters)
     ASSERT_EQ(behl::to_integer(S, -1), 4);
 }
 
-TEST_F(FunctionTest, ClosureCapturesArgument)
+TEST_P(FunctionTest, ClosureCapturesArgument)
 {
     constexpr std::string_view code = R"(
         function mk(n) {
@@ -167,7 +170,7 @@ TEST_F(FunctionTest, ClosureCapturesArgument)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(FunctionTest, ExecuteTableFunctionCall)
+TEST_P(FunctionTest, ExecuteTableFunctionCall)
 {
     constexpr std::string_view code = R"(
         let tab = {
@@ -183,7 +186,7 @@ TEST_F(FunctionTest, ExecuteTableFunctionCall)
     ASSERT_EQ(behl::to_integer(S, -1), 2);
 }
 
-TEST_F(FunctionTest, ExecuteMethodCallColonPassesSelf)
+TEST_P(FunctionTest, ExecuteMethodCallColonPassesSelf)
 {
     constexpr std::string_view code = R"(
         let t = { value = 41 }
@@ -198,7 +201,7 @@ TEST_F(FunctionTest, ExecuteMethodCallColonPassesSelf)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(FunctionTest, ExecuteMethodCallDotDoesNotPassSelf)
+TEST_P(FunctionTest, ExecuteMethodCallDotDoesNotPassSelf)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -213,7 +216,7 @@ TEST_F(FunctionTest, ExecuteMethodCallDotDoesNotPassSelf)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(FunctionTest, ExecuteMethodLocalCallColonPassesSelf)
+TEST_P(FunctionTest, ExecuteMethodLocalCallColonPassesSelf)
 {
     constexpr std::string_view code = R"(
         let t = { value = 41 }
@@ -228,7 +231,7 @@ TEST_F(FunctionTest, ExecuteMethodLocalCallColonPassesSelf)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(FunctionTest, ExecuteMethodLocalCallDotDoesNotPassSelf)
+TEST_P(FunctionTest, ExecuteMethodLocalCallDotDoesNotPassSelf)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -243,7 +246,7 @@ TEST_F(FunctionTest, ExecuteMethodLocalCallDotDoesNotPassSelf)
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(FunctionTest, ExecuteLocalFunctionMutualRecursion_EvenOdd)
+TEST_P(FunctionTest, ExecuteLocalFunctionMutualRecursion_EvenOdd)
 {
     constexpr std::string_view code = R"(
         let even
@@ -268,7 +271,7 @@ TEST_F(FunctionTest, ExecuteLocalFunctionMutualRecursion_EvenOdd)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(FunctionTest, UpvalueModificationWhileOnStack)
+TEST_P(FunctionTest, UpvalueModificationWhileOnStack)
 {
     constexpr std::string_view code = R"(
         function outer() {
@@ -287,3 +290,6 @@ TEST_F(FunctionTest, UpvalueModificationWhileOnStack)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, FunctionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

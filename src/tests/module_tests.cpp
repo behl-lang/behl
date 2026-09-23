@@ -1,7 +1,13 @@
-#include <behl/behl.hpp>
-#include <gtest/gtest.h>
+#include "state.hpp"
 
-class ModuleTest : public ::testing::Test
+#include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
+#include <filesystem>
+#include <fstream>
+#include <gtest/gtest.h>
+#include <string>
+
+class ModuleTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +15,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_stdlib(S);
     }
@@ -22,7 +29,7 @@ protected:
     }
 };
 
-TEST_F(ModuleTest, Module_ExportConst)
+TEST_P(ModuleTest, Module_ExportConst)
 {
     constexpr std::string_view code = R"(
         module;
@@ -37,7 +44,7 @@ TEST_F(ModuleTest, Module_ExportConst)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ModuleTest, Module_ExportFunction)
+TEST_P(ModuleTest, Module_ExportFunction)
 {
     constexpr std::string_view code = R"(
         module;
@@ -58,7 +65,7 @@ TEST_F(ModuleTest, Module_ExportFunction)
     EXPECT_EQ(behl::to_integer(S, -1), 8);
 }
 
-TEST_F(ModuleTest, Module_PrivateVariables)
+TEST_P(ModuleTest, Module_PrivateVariables)
 {
     constexpr std::string_view code = R"(
         module;
@@ -88,7 +95,7 @@ TEST_F(ModuleTest, Module_PrivateVariables)
     EXPECT_EQ(behl::to_integer(S, -1), 579);
 }
 
-TEST_F(ModuleTest, Module_NoGlobalAccess)
+TEST_P(ModuleTest, Module_NoGlobalAccess)
 {
     behl::push_integer(S, 999);
     behl::set_global(S, "globalVar");
@@ -103,7 +110,7 @@ TEST_F(ModuleTest, Module_NoGlobalAccess)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-TEST_F(ModuleTest, Module_NoGlobalSet)
+TEST_P(ModuleTest, Module_NoGlobalSet)
 {
     constexpr std::string_view code = R"(
         module;
@@ -114,7 +121,7 @@ TEST_F(ModuleTest, Module_NoGlobalSet)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-TEST_F(ModuleTest, Module_CanUseBuiltins)
+TEST_P(ModuleTest, Module_CanUseBuiltins)
 {
     constexpr std::string_view code = R"(
         module;
@@ -150,7 +157,7 @@ TEST_F(ModuleTest, Module_CanUseBuiltins)
     EXPECT_EQ(behl::to_string(S, -1), "integer");
 }
 
-TEST_F(ModuleTest, Module_StatefulExports)
+TEST_P(ModuleTest, Module_StatefulExports)
 {
     constexpr std::string_view code = R"(
         module;
@@ -193,7 +200,7 @@ TEST_F(ModuleTest, Module_StatefulExports)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(ModuleTest, Module_Empty)
+TEST_P(ModuleTest, Module_Empty)
 {
     constexpr std::string_view code = R"(
         module;
@@ -206,7 +213,7 @@ TEST_F(ModuleTest, Module_Empty)
     EXPECT_FALSE(behl::table_next(S, -2));
 }
 
-TEST_F(ModuleTest, Module_UndefinedVariable)
+TEST_P(ModuleTest, Module_UndefinedVariable)
 {
     constexpr std::string_view code = R"(
         module;
@@ -218,7 +225,7 @@ TEST_F(ModuleTest, Module_UndefinedVariable)
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
 
-TEST_F(ModuleTest, Module_CanAccessStdLib)
+TEST_P(ModuleTest, Module_CanAccessStdLib)
 {
     constexpr std::string_view code = R"(
         module;
@@ -247,7 +254,7 @@ TEST_F(ModuleTest, Module_CanAccessStdLib)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ModuleTest, Module_CannotAccessStdLibWithoutImport)
+TEST_P(ModuleTest, Module_CannotAccessStdLibWithoutImport)
 {
     constexpr std::string_view code = R"(
         module;
@@ -258,3 +265,181 @@ TEST_F(ModuleTest, Module_CannotAccessStdLibWithoutImport)
 
     EXPECT_THROW(behl::load_string(S, code), std::exception);
 }
+
+class ModuleFileTest : public ::testing::TestWithParam<bool>
+{
+protected:
+    behl::State* S = nullptr;
+    std::filesystem::path root;
+
+    void SetUp() override
+    {
+        S = behl::new_state();
+        S->jit_enabled = GetParam();
+        ASSERT_NE(S, nullptr);
+        behl::load_stdlib(S);
+
+        const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        root = std::filesystem::temp_directory_path() / "behl_module_tests" / info->name();
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        std::filesystem::create_directories(root);
+    }
+
+    void TearDown() override
+    {
+        if (S)
+        {
+            behl::close(S);
+        }
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+
+    void write_file(const std::filesystem::path& relative, std::string_view content)
+    {
+        const auto full = root / relative;
+        std::filesystem::create_directories(full.parent_path());
+        std::ofstream out(full);
+        out << content;
+    }
+
+    std::string main_path() const
+    {
+        return (root / "main.behl").string();
+    }
+};
+
+TEST_P(ModuleFileTest, ImportResolvesSiblingOfImporter)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 99;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.VALUE;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 99);
+}
+
+TEST_P(ModuleFileTest, ExportListExportsSeveralNames)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const A = 1;\n"
+        "const B = 2;\n"
+        "const C = 3;\n"
+        "function add(x, y) { return x + y }\n"
+        "export { A, B, C, add };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.A + h.B + h.C + h.add(10, 20);
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 36);
+}
+
+TEST_P(ModuleFileTest, ExportListWithSingleNameWorks)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const ONLY = 42;\n"
+        "export { ONLY };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.ONLY;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 42);
+}
+
+TEST_P(ModuleFileTest, ExportListDoesNotExportOmittedNames)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const SHOWN = 1;\n"
+        "const HIDDEN = 2;\n"
+        "export { SHOWN };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.HIDDEN == nil;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
+TEST_P(ModuleFileTest, ImportResolvesModulesSubdirectoryOfImporter)
+{
+    write_file("modules/helper.behl", "module;\nexport const VALUE = 7;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.VALUE;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7);
+}
+
+TEST_P(ModuleFileTest, ImportResolvesExplicitRelativePath)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 11;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("./helper");
+        return h.VALUE;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 11);
+}
+
+TEST_P(ModuleFileTest, ImportResolvesFromNestedImporter)
+{
+    write_file("nested/helper.behl", "module;\nexport const VALUE = 5;\n");
+    write_file("nested/mid.behl", "module;\nconst h = import(\"helper\");\nexport const DOUBLED = h.VALUE * 2;\n");
+
+    constexpr std::string_view code = R"(
+        const m = import("./nested/mid");
+        return m.DOUBLED;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_P(ModuleFileTest, ImportFailureNamesTheModule)
+{
+    constexpr std::string_view code = R"(
+        const h = import("definitely_absent_module");
+        return 1;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+
+    std::string message;
+    try
+    {
+        behl::call(S, 0, 1);
+    }
+    catch (const behl::BehlException& e)
+    {
+        message = e.what();
+    }
+
+    ASSERT_FALSE(message.empty()) << "expected import of a missing module to throw";
+    EXPECT_NE(message.find("definitely_absent_module"), std::string::npos)
+        << "error message should name the module, got: " << message;
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, ModuleTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
+
+INSTANTIATE_TEST_SUITE_P(Mode, ModuleFileTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

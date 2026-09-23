@@ -1,9 +1,11 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 #include <string>
 
-class RegressionTest : public ::testing::Test
+class RegressionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -11,6 +13,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
     }
 
@@ -20,7 +23,7 @@ protected:
     }
 };
 
-TEST_F(RegressionTest, RecursiveFibonacciDirectExpression)
+TEST_P(RegressionTest, RecursiveFibonacciDirectExpression)
 {
     constexpr std::string_view code = R"(
         function fib(n) { 
@@ -37,7 +40,7 @@ TEST_F(RegressionTest, RecursiveFibonacciDirectExpression)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(RegressionTest, MultipleRecursiveCallsInExpression)
+TEST_P(RegressionTest, MultipleRecursiveCallsInExpression)
 {
     constexpr std::string_view code = R"(
         function test(n) {
@@ -55,7 +58,222 @@ TEST_F(RegressionTest, MultipleRecursiveCallsInExpression)
     ASSERT_EQ(behl::to_integer(S, -1), 27);
 }
 
-TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionDefinition)
+TEST_P(RegressionTest, JitReturnFastDeepRecursionValues)
+{
+    constexpr std::string_view code = R"(
+        function depth(n) {
+            if (n <= 0) { return 7 }
+            return depth(n - 1) + 1
+        }
+        let acc = 0
+        let i = 0
+        while (i < 300) {
+            acc = acc + depth(40)
+            i = i + 1
+        }
+        return acc, depth(40), depth(0), depth(1)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_EQ(behl::to_integer(S, -4), 300 * 47);
+    ASSERT_EQ(behl::to_integer(S, -3), 47);
+    ASSERT_EQ(behl::to_integer(S, -2), 7);
+    ASSERT_EQ(behl::to_integer(S, -1), 8);
+}
+
+TEST_P(RegressionTest, JitReturnFastDistinctValuesPerFrame)
+{
+    constexpr std::string_view code = R"(
+        function leaf(n) { return n * 3 }
+        function mid(n) { return leaf(n) + leaf(n + 1) }
+        function outer(n) { return mid(n) + mid(n + 2) }
+        let acc = 0
+        let i = 0
+        while (i < 400) {
+            acc = outer(i)
+            i = i + 1
+        }
+        return acc, outer(0), outer(1), mid(5), leaf(9)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_EQ(behl::to_integer(S, -5), 3 * (399 + 400 + 401 + 402));
+    ASSERT_EQ(behl::to_integer(S, -4), 3 * (0 + 1 + 2 + 3));
+    ASSERT_EQ(behl::to_integer(S, -3), 3 * (1 + 2 + 3 + 4));
+    ASSERT_EQ(behl::to_integer(S, -2), 3 * (5 + 6));
+    ASSERT_EQ(behl::to_integer(S, -1), 27);
+}
+
+TEST_P(RegressionTest, JitReturnFastWithUpvaluesStillCorrect)
+{
+    constexpr std::string_view code = R"(
+        function make(base) {
+            function inner(n) {
+                if (n <= 0) { return base }
+                return inner(n - 1) + 1
+            }
+            return inner
+        }
+        let f = make(100)
+        let acc = 0
+        let i = 0
+        while (i < 300) {
+            acc = f(10)
+            i = i + 1
+        }
+        return acc, f(0), f(5)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::to_integer(S, -3), 110);
+    ASSERT_EQ(behl::to_integer(S, -2), 100);
+    ASSERT_EQ(behl::to_integer(S, -1), 105);
+}
+
+TEST_P(RegressionTest, JitReturnFastMixedResultCounts)
+{
+    constexpr std::string_view code = R"(
+        function one(n) { return n + 1 }
+        function two(n) { return n + 1, n + 2 }
+        function none(n) { one(n) }
+        let acc = 0
+        let i = 0
+        while (i < 400) {
+            acc = one(i)
+            none(i)
+            let p, q = two(i)
+            acc = acc + p + q
+            i = i + 1
+        }
+        let a, b = two(10)
+        return acc, one(5), a, b
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_EQ(behl::to_integer(S, -4), 400 + (400 + 401));
+    ASSERT_EQ(behl::to_integer(S, -3), 6);
+    ASSERT_EQ(behl::to_integer(S, -2), 11);
+    ASSERT_EQ(behl::to_integer(S, -1), 12);
+}
+
+TEST_P(RegressionTest, MultretTableConstructorFromHotCalls)
+{
+    constexpr std::string_view code = R"(
+        function one(n) { return n + 1 }
+        function none(n) { }
+        let len = 0
+        let last = 0
+        let i = 0
+        while (i < 400) {
+            let t = {one(i), one(i + 1)}
+            len = #t
+            last = t[1]
+            none(i)
+            i = i + 1
+        }
+        let t2 = {one(7), one(8)}
+        return len, last, #t2, t2[0], t2[1]
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_EQ(behl::to_integer(S, -5), 2);
+    ASSERT_EQ(behl::to_integer(S, -4), 401);
+    ASSERT_EQ(behl::to_integer(S, -3), 2);
+    ASSERT_EQ(behl::to_integer(S, -2), 8);
+    ASSERT_EQ(behl::to_integer(S, -1), 9);
+}
+
+TEST_P(RegressionTest, JitTailCallMultArgsSelfRecursion)
+{
+    constexpr std::string_view code = R"(
+        function ack(m, n) {
+            if (m == 0) {
+                return n + 1
+            } elseif (n == 0) {
+                return ack(m - 1, 1)
+            } else {
+                return ack(m - 1, ack(m, n - 1))
+            }
+        }
+        let warm = 0
+        let i = 0
+        while (i < 40) {
+            warm = ack(2, 3)
+            i = i + 1
+        }
+        return warm, ack(0, 0), ack(1, 1), ack(2, 2), ack(3, 3)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_EQ(behl::to_integer(S, -5), 9);
+    ASSERT_EQ(behl::to_integer(S, -4), 1);
+    ASSERT_EQ(behl::to_integer(S, -3), 3);
+    ASSERT_EQ(behl::to_integer(S, -2), 7);
+    ASSERT_EQ(behl::to_integer(S, -1), 61);
+}
+
+TEST_P(RegressionTest, JitNonSelfTailCallFromNestedSelfRecursion)
+{
+    constexpr std::string_view code = R"(
+        function pick(a, b, c) {
+            if (a <= 0) { return b + c }
+            return pick(a - 1, c, b + 1)
+        }
+        function feed(n) {
+            if (n <= 0) { return 100 }
+            let t = feed(n - 1)
+            return pick(2, n, t)
+        }
+        function feedm(n) {
+            if (n <= 0) { return 100 }
+            return pick(2, n, feedm(n - 1))
+        }
+        let acc = 0
+        let accm = 0
+        let i = 0
+        while (i < 200) {
+            acc = feed(6)
+            accm = feedm(6)
+            i = i + 1
+        }
+        return acc, accm, feed(1), feedm(1), feed(0)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_EQ(behl::to_integer(S, -5), 133);
+    ASSERT_EQ(behl::to_integer(S, -4), 133);
+    ASSERT_EQ(behl::to_integer(S, -3), 103);
+    ASSERT_EQ(behl::to_integer(S, -2), 103);
+    ASSERT_EQ(behl::to_integer(S, -1), 100);
+}
+
+TEST_P(RegressionTest, JitReturnFastThroughPcall)
+{
+    constexpr std::string_view code = R"(
+        function leaf(n) {
+            if (n == 13) { error("boom") }
+            return n + 1
+        }
+        function mid(n) { return leaf(n) + 1 }
+        let acc = 0
+        let i = 0
+        while (i < 300) {
+            acc = mid(1)
+            i = i + 1
+        }
+        let ok, val = pcall(mid, 5)
+        let bad, err = pcall(mid, 13)
+        return acc, ok, val, bad
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_EQ(behl::to_integer(S, -4), 3);
+    ASSERT_TRUE(behl::to_boolean(S, -3));
+    ASSERT_EQ(behl::to_integer(S, -2), 7);
+    ASSERT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(RegressionTest, LocalVariableNotCorruptedByFunctionDefinition)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -70,7 +288,7 @@ TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionDefinition)
     ASSERT_EQ(behl::to_integer(S, -1), 10) << "x should remain 10, not be corrupted by function";
 }
 
-TEST_F(RegressionTest, MultipleLocalsNotCorruptedByFunctionDefinition)
+TEST_P(RegressionTest, MultipleLocalsNotCorruptedByFunctionDefinition)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -87,7 +305,7 @@ TEST_F(RegressionTest, MultipleLocalsNotCorruptedByFunctionDefinition)
     ASSERT_EQ(behl::to_integer(S, -1), 60) << "All locals should remain uncorrupted";
 }
 
-TEST_F(RegressionTest, LocalVariableNotCorruptedByExpressionStatement)
+TEST_P(RegressionTest, LocalVariableNotCorruptedByExpressionStatement)
 {
     constexpr std::string_view code = R"(
         let x = 100
@@ -100,7 +318,7 @@ TEST_F(RegressionTest, LocalVariableNotCorruptedByExpressionStatement)
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
-TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionCall)
+TEST_P(RegressionTest, LocalVariableNotCorruptedByFunctionCall)
 {
     constexpr std::string_view code = R"(
         function helper() {
@@ -116,7 +334,7 @@ TEST_F(RegressionTest, LocalVariableNotCorruptedByFunctionCall)
     ASSERT_EQ(behl::to_integer(S, -1), 50);
 }
 
-TEST_F(RegressionTest, LocalInOuterScopeNotCorruptedByNestedFunction)
+TEST_P(RegressionTest, LocalInOuterScopeNotCorruptedByNestedFunction)
 {
     constexpr std::string_view code = R"(
         let outer = 123
@@ -133,7 +351,7 @@ TEST_F(RegressionTest, LocalInOuterScopeNotCorruptedByNestedFunction)
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(RegressionTest, LocalCapturedByClosureNotCorrupted)
+TEST_P(RegressionTest, LocalCapturedByClosureNotCorrupted)
 {
     constexpr std::string_view code = R"(
         let captured = 999
@@ -149,7 +367,7 @@ TEST_F(RegressionTest, LocalCapturedByClosureNotCorrupted)
     ASSERT_EQ(behl::to_integer(S, -1), 999);
 }
 
-TEST_F(RegressionTest, ComplexInterleavingOfLocalsAndFunctions)
+TEST_P(RegressionTest, ComplexInterleavingOfLocalsAndFunctions)
 {
     constexpr std::string_view code = R"(
         let a = 1
@@ -166,7 +384,7 @@ TEST_F(RegressionTest, ComplexInterleavingOfLocalsAndFunctions)
     ASSERT_EQ(behl::to_integer(S, -1), 6) << "All locals should preserve their values";
 }
 
-TEST_F(RegressionTest, LocalNotCorruptedByTableCreation)
+TEST_P(RegressionTest, LocalNotCorruptedByTableCreation)
 {
     constexpr std::string_view code = R"(
         let x = 42
@@ -179,7 +397,7 @@ TEST_F(RegressionTest, LocalNotCorruptedByTableCreation)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(RegressionTest, LocalInConditionalNotCorrupted)
+TEST_P(RegressionTest, LocalInConditionalNotCorrupted)
 {
     constexpr std::string_view code = R"(
         let x = 5
@@ -194,7 +412,7 @@ TEST_F(RegressionTest, LocalInConditionalNotCorrupted)
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(RegressionTest, OriginalBugReportCase)
+TEST_P(RegressionTest, OriginalBugReportCase)
 {
     constexpr std::string_view code = R"(
         let x = 10
@@ -209,7 +427,7 @@ TEST_F(RegressionTest, OriginalBugReportCase)
     ASSERT_EQ(behl::to_integer(S, -1), 18) << "Should compute 5 + 3 + 10 = 18";
 }
 
-TEST_F(RegressionTest, FunctionWithSixParameters)
+TEST_P(RegressionTest, FunctionWithSixParameters)
 {
     constexpr std::string_view code = R"(function sum6(a, b, c, d, e, f) {
             return a + b + c + d + e + f
@@ -222,7 +440,7 @@ TEST_F(RegressionTest, FunctionWithSixParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 21);
 }
 
-TEST_F(RegressionTest, FunctionWithTenParameters)
+TEST_P(RegressionTest, FunctionWithTenParameters)
 {
     constexpr std::string_view code = R"(
         function sum10(a, b, c, d, e, f, g, h, i, j) {
@@ -236,7 +454,7 @@ TEST_F(RegressionTest, FunctionWithTenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(RegressionTest, FunctionWithFifteenParameters)
+TEST_P(RegressionTest, FunctionWithFifteenParameters)
 {
     constexpr std::string_view code = R"(
         function sum15(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) {
@@ -250,7 +468,7 @@ TEST_F(RegressionTest, FunctionWithFifteenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 120);
 }
 
-TEST_F(RegressionTest, RecursiveFunctionWithSixParameters)
+TEST_P(RegressionTest, RecursiveFunctionWithSixParameters)
 {
     constexpr std::string_view code = R"(
         function rec_sum(a, b, c, d, e, depth) {
@@ -267,7 +485,7 @@ TEST_F(RegressionTest, RecursiveFunctionWithSixParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 155);
 }
 
-TEST_F(RegressionTest, RecursiveFunctionWithTenParameters)
+TEST_P(RegressionTest, RecursiveFunctionWithTenParameters)
 {
     constexpr std::string_view code = R"(
         function rec_product(a, b, c, d, e, f, g, h, i, depth) {
@@ -285,7 +503,7 @@ TEST_F(RegressionTest, RecursiveFunctionWithTenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 150);
 }
 
-TEST_F(RegressionTest, TailCallWithSixParameters)
+TEST_P(RegressionTest, TailCallWithSixParameters)
 {
     constexpr std::string_view code = R"(
         function countdown(a, b, c, d, e, n) {
@@ -303,7 +521,7 @@ TEST_F(RegressionTest, TailCallWithSixParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 65);
 }
 
-TEST_F(RegressionTest, TailCallWithTenParameters)
+TEST_P(RegressionTest, TailCallWithTenParameters)
 {
     constexpr std::string_view code = R"(
         function accumulate(a, b, c, d, e, f, g, h, i, n) {
@@ -321,7 +539,7 @@ TEST_F(RegressionTest, TailCallWithTenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 945);
 }
 
-TEST_F(RegressionTest, DeepTailRecursionWithEightParameters)
+TEST_P(RegressionTest, DeepTailRecursionWithEightParameters)
 {
     constexpr std::string_view code = R"(
         function deep_tail(a, b, c, d, e, f, g, depth) {
@@ -338,7 +556,7 @@ TEST_F(RegressionTest, DeepTailRecursionWithEightParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 28);
 }
 
-TEST_F(RegressionTest, NestedCallsWithSevenParameters)
+TEST_P(RegressionTest, NestedCallsWithSevenParameters)
 {
     constexpr std::string_view code = R"(
         function inner(a, b, c) {
@@ -357,7 +575,7 @@ TEST_F(RegressionTest, NestedCallsWithSevenParameters)
     ASSERT_EQ(behl::to_integer(S, -1), 334);
 }
 
-TEST_F(RegressionTest, ManyParametersWithUpvalues)
+TEST_P(RegressionTest, ManyParametersWithUpvalues)
 {
     constexpr std::string_view code = R"(
         function make_adder(base1, base2, base3, base4, base5) {
@@ -376,7 +594,7 @@ TEST_F(RegressionTest, ManyParametersWithUpvalues)
     ASSERT_EQ(behl::to_integer(S, -1), 165);
 }
 
-TEST_F(RegressionTest, RecursionPreservesAllTwelveParameters)
+TEST_P(RegressionTest, RecursionPreservesAllTwelveParameters)
 {
     constexpr std::string_view code = R"(
         function check_params(a, b, c, d, e, f, g, h, i, j, k, depth) {
@@ -404,7 +622,7 @@ TEST_F(RegressionTest, RecursionPreservesAllTwelveParameters)
     ASSERT_TRUE(behl::to_boolean(S, -1)) << "All parameters should be preserved through recursion";
 }
 
-TEST_F(RegressionTest, MixedCallsWithEightParameters)
+TEST_P(RegressionTest, MixedCallsWithEightParameters)
 {
     constexpr std::string_view code = R"(
         function helper(a, b, c) {
@@ -428,7 +646,7 @@ TEST_F(RegressionTest, MixedCallsWithEightParameters)
     ASSERT_TRUE(behl::to_integer(S, -1) > 0) << "Should compute without corruption";
 }
 
-TEST_F(RegressionTest, FunctionCallInIfCondition)
+TEST_P(RegressionTest, FunctionCallInIfCondition)
 {
     constexpr std::string_view code = R"(
         function returns_true() {
@@ -445,7 +663,7 @@ TEST_F(RegressionTest, FunctionCallInIfCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 42) << "Should execute then-block";
 }
 
-TEST_F(RegressionTest, FunctionCallInIfConditionReturnsFalse)
+TEST_P(RegressionTest, FunctionCallInIfConditionReturnsFalse)
 {
     constexpr std::string_view code = R"(
         function returns_false() {
@@ -462,7 +680,7 @@ TEST_F(RegressionTest, FunctionCallInIfConditionReturnsFalse)
     ASSERT_EQ(behl::to_integer(S, -1), 99) << "Should skip then-block";
 }
 
-TEST_F(RegressionTest, MultipleFunctionCallsInIfConditions)
+TEST_P(RegressionTest, MultipleFunctionCallsInIfConditions)
 {
     constexpr std::string_view code = R"(
         function test1() { return true }
@@ -487,7 +705,7 @@ TEST_F(RegressionTest, MultipleFunctionCallsInIfConditions)
     ASSERT_EQ(behl::to_integer(S, -1), 101) << "Should execute test1 and test3 blocks only";
 }
 
-TEST_F(RegressionTest, FunctionCallWithParametersInIfCondition)
+TEST_P(RegressionTest, FunctionCallWithParametersInIfCondition)
 {
     constexpr std::string_view code = R"(
         function check(value) {
@@ -504,7 +722,7 @@ TEST_F(RegressionTest, FunctionCallWithParametersInIfCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(RegressionTest, FunctionCallInWhileCondition)
+TEST_P(RegressionTest, FunctionCallInWhileCondition)
 {
     constexpr std::string_view code = R"(
         let counter = 0
@@ -522,7 +740,7 @@ TEST_F(RegressionTest, FunctionCallInWhileCondition)
     ASSERT_EQ(behl::to_integer(S, -1), 5) << "Should loop until counter reaches 5";
 }
 
-TEST_F(RegressionTest, ErrorColumnNumberForCallToNilValue)
+TEST_P(RegressionTest, ErrorColumnNumberForCallToNilValue)
 {
     constexpr std::string_view code = R"(
         let undefined_func = nil;
@@ -533,7 +751,7 @@ TEST_F(RegressionTest, ErrorColumnNumberForCallToNilValue)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError) << "Call should fail because undefined_func is nil";
 }
 
-TEST_F(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
+TEST_P(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
 {
     std::string code = "function generated(seed, k) {\n    let acc = seed;\n";
     for (int i = 0; i < 512; i++)
@@ -547,3 +765,281 @@ TEST_F(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 2561);
 }
+
+TEST_P(RegressionTest, SelfTailCallPreservesArgumentCount)
+{
+    constexpr std::string_view code = R"(
+        function countdown(n, acc) {
+            if (n <= 0) { return acc; }
+            return countdown(n - 1, acc + n);
+        }
+        return countdown(150, 0);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 11325);
+}
+
+TEST_P(RegressionTest, SelfTailCallArityOneTwoThree)
+{
+    constexpr std::string_view code = R"(
+        function one(n) {
+            if (n <= 0) { return 7; }
+            return one(n - 1);
+        }
+        function two(n, acc) {
+            if (n <= 0) { return acc; }
+            return two(n - 1, acc + 2);
+        }
+        function three(n, acc, step) {
+            if (n <= 0) { return acc; }
+            return three(n - 1, acc + step, step);
+        }
+        return one(60) + two(60, 0) + three(60, 0, 3);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7 + 120 + 180);
+}
+
+TEST_P(RegressionTest, TwoDistinctCallsInOneLoopBody)
+{
+    constexpr std::string_view code = R"(
+        let ping = nil;
+        let pong = nil;
+
+        ping = function(n, acc) {
+            if (n <= 0) { return acc; }
+            return pong(n - 1, acc + n);
+        };
+
+        pong = function(n, acc) {
+            if (n <= 0) { return acc; }
+            return ping(n - 1, acc + n);
+        };
+
+        function selfdown(n, acc) {
+            if (n <= 0) { return acc; }
+            return selfdown(n - 1, acc + n);
+        }
+
+        for (let i = 0; i < 200; i++) {
+            ping(150, 0);
+            selfdown(150, 0);
+        }
+        return ping(150, 0) + selfdown(150, 0);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 11325 + 11325);
+}
+
+TEST_P(RegressionTest, NonTailSelfCallPreservesArgumentCount)
+{
+    constexpr std::string_view code = R"(
+        function sum_to(n) {
+            if (n <= 0) { return 0; }
+            return n + sum_to(n - 1);
+        }
+        function weighted(n, w) {
+            if (n <= 0) { return 0; }
+            return n * w + weighted(n - 1, w);
+        }
+        return sum_to(100) + weighted(100, 2);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 5050 + 10100);
+}
+
+TEST_P(RegressionTest, TopLevelLoopMatchesFunctionLoop)
+{
+    constexpr std::string_view code = R"(
+        function loop_in_function(n) {
+            let sum = 0;
+            for (let i = 0; i < n; i++) {
+                sum = sum + i;
+            }
+            return sum;
+        }
+
+        let from_function = loop_in_function(50000);
+
+        let from_chunk = 0;
+        for (let i = 0; i < 50000; i++) {
+            from_chunk = from_chunk + i;
+        }
+
+        return (from_function == from_chunk) && (from_chunk == 1249975000);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
+TEST_P(RegressionTest, SelfCallLeavesUnpassedParamsNil)
+{
+    constexpr std::string_view code = R"(
+        function dirty(p, q, r, s) {
+            return p + q + r + s;
+        }
+
+        function probe(n, a, b) {
+            if (n <= 0) {
+                if ((b == nil) && (a == 7)) { return 1; }
+                return 0;
+            }
+            dirty(111, 222, 333, 444);
+            let inner = probe(n - 1, 7);
+            return inner;
+        }
+
+        for (let i = 0; i < 50; i++) {
+            probe(20, 7);
+        }
+        return probe(20, 7) == 1;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1)) << "unpassed parameters must read nil after a self call";
+}
+
+TEST_P(RegressionTest, JitSelfCallWithoutInliningKeepsLocals)
+{
+    constexpr std::string_view code = R"(
+        function walk(n, acc) {
+            if (n <= 0) { return acc }
+            let before = n * 3
+            let sub = walk(n - 1, 0)
+            if (sub < 0) { return walk(0, -1) }
+            return before + sub
+        }
+        let total = 0
+        for (let i = 0; i < 200; i++) {
+            total = total + walk(50, 0)
+        }
+        return total, walk(1, 0), walk(0, 9)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::to_integer(S, -3), 200 * 3 * 50 * 51 / 2);
+    ASSERT_EQ(behl::to_integer(S, -2), 3);
+    ASSERT_EQ(behl::to_integer(S, -1), 9);
+}
+
+TEST_P(RegressionTest, JitSelfCallDeepRecursionGrowsStack)
+{
+    constexpr std::string_view code = R"(
+        function walk(n, acc) {
+            if (n <= 0) { return acc }
+            let before = n * 3
+            let sub = walk(n - 1, 0)
+            if (sub < 0) { return walk(0, -1) }
+            return before + sub
+        }
+        function sum(n) {
+            if (n <= 0) { return 0 }
+            return n + sum(n - 1)
+        }
+        return walk(3000, 0), sum(3000)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 3 * 3000 * 3001 / 2);
+    ASSERT_EQ(behl::to_integer(S, -1), 3000 * 3001 / 2);
+}
+
+TEST_P(RegressionTest, JitSelfCallDiscardedResultsBeyondInlineDepth)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        function visit(n) {
+            if (n <= 0) { return }
+            count = count + 1
+            visit(n - 1)
+            visit(n - 1)
+        }
+        for (let i = 0; i < 20; i++) {
+            visit(10)
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 20 * 1023);
+}
+
+TEST_P(RegressionTest, JitSelfCallMultipleResultsBeyondInlineDepth)
+{
+    constexpr std::string_view code = R"(
+        function two(n) {
+            if (n <= 0) { return 1, 2 }
+            let a, b = two(n - 1)
+            return a + 1, b + 2
+        }
+        let x = 0
+        let y = 0
+        for (let i = 0; i < 100; i++) {
+            x, y = two(20)
+        }
+        return x, y
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 21);
+    ASSERT_EQ(behl::to_integer(S, -1), 42);
+}
+
+TEST_P(RegressionTest, JitSelfCallInlinedBodyLocalsAcrossCalls)
+{
+    constexpr std::string_view code = R"(
+        function f(n) {
+            if (n < 2) { return n }
+            let a = n * 10
+            let b = f(n - 1)
+            let c = n * 100
+            let d = f(n - 2)
+            return a + b + c + d - n * 110
+        }
+        let total = 0
+        for (let i = 0; i < 50; i++) {
+            total = total + f(18)
+        }
+        return total, f(10)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 50 * 2584);
+    ASSERT_EQ(behl::to_integer(S, -1), 55);
+}
+
+TEST_P(RegressionTest, JitFusedCompareJumpColdPathWithFloats)
+{
+    constexpr std::string_view code = R"(
+        function fib(n) {
+            if (n < 2) { return n }
+            return fib(n - 1) + fib(n - 2)
+        }
+        function classify(x) {
+            if (x >= 10) { return 1 }
+            if (x != 3) { return 2 }
+            return 3
+        }
+        let total = 0
+        for (let i = 0; i < 30; i++) {
+            total = total + fib(12) + classify(i) + classify(i + 0.5)
+        }
+        return total, fib(12.0), fib(7.5), classify(3), classify(3.0), classify(10.0)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_EQ(behl::to_integer(S, -6), 30 * 144 + (20 * 1 + 9 * 2 + 1 * 3) + (20 * 1 + 10 * 2));
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -5), 144.0);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -4), 23.5);
+    ASSERT_EQ(behl::to_integer(S, -3), 3);
+    ASSERT_EQ(behl::to_integer(S, -2), 3);
+    ASSERT_EQ(behl::to_integer(S, -1), 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, RegressionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -1,21 +1,51 @@
 #pragma once
 
-#include "common/charconv_compat.hpp"
+#include "common/charconv.hpp"
 #include "common/format.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_proto.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_metatable.hpp"
 
 #include <cassert>
-#include <charconv>
 
 namespace behl
 {
 
-    inline SourceLocation get_current_location(const CallFrame& frame)
+    BEHL_FORCEINLINE
+    void gc_barrier(State* S, const GCObject* container, const Value& stored) noexcept
+    {
+        if (!stored.is_gcobject() || container->get_header().color != GCColor::kBlack)
+        {
+            return;
+        }
+
+        GCObject* obj = stored.get_gcobject();
+        if (obj->get_header().color == GCColor::kWhite)
+        {
+            gc_barrier_slow(S, obj);
+        }
+    }
+
+    BEHL_FORCEINLINE
+    void gc_keep_alive(State* S, const Value& stored) noexcept
+    {
+        if (!stored.is_gcobject())
+        {
+            return;
+        }
+
+        GCObject* obj = stored.get_gcobject();
+        if (obj->get_header().color == GCColor::kWhite)
+        {
+            gc_barrier_slow(S, obj);
+        }
+    }
+
+    BEHL_INLINE
+    SourceLocation get_current_location(const CallFrame& frame)
     {
         if (!frame.proto)
         {
@@ -71,7 +101,11 @@ namespace behl
     BEHL_FORCEINLINE
     CallFrameHeader& frame_header(State* S, const CallFrame& frame) noexcept
     {
-        return S->call_headers[static_cast<size_t>(&frame - S->call_stack.data())];
+        const ptrdiff_t index = &frame - S->call_stack.data();
+        assert(S->call_stack.size() == S->call_headers.size() && "frame_header: header array out of step with call stack");
+        assert(index >= 0 && static_cast<size_t>(index) < S->call_stack.size()
+            && "frame_header: frame is not a live call_stack element");
+        return S->call_headers[static_cast<size_t>(index)];
     }
 
     BEHL_FORCEINLINE
@@ -97,7 +131,7 @@ namespace behl
         return Value(obj);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     Value vm_tostring(State* S, const Value& val, const CallFrame& frame)
     {
         const auto type = val.get_type();
@@ -121,7 +155,7 @@ namespace behl
             {
                 double d = val.get_fp();
                 char buffer[64];
-                auto result = behl::to_chars(buffer, buffer + sizeof(buffer), d, std::chars_format::general, 14);
+                auto result = behl::to_chars(buffer, buffer + sizeof(buffer), d);
                 if (result.ec == std::errc{})
                 {
                     return vm_makestring(S, std::string_view(buffer, static_cast<size_t>(result.ptr - buffer)));
@@ -170,7 +204,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     Value vm_tonumber([[maybe_unused]] State* S, const Value& val)
     {
         const auto type = val.get_type();

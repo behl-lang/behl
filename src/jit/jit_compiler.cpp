@@ -21,6 +21,12 @@ namespace behl
     {
         switch (op)
         {
+            case OpCode::kOpVararg:
+                return jit_op_vararg;
+            case OpCode::kOpVarargPrep:
+                return jit_op_varargprep;
+            case OpCode::kOpVarargExpand:
+                return jit_op_varargexpand;
             case OpCode::kOpDefer:
                 return jit_op_defer;
             case OpCode::kOpSaveRet:
@@ -351,8 +357,11 @@ namespace behl
                 , n_(proto->code.size())
                 , jump_targets_(state)
                 , pc_labels_(state)
+                , inline_labels_(state)
                 , cold_blocks_(state)
                 , resume_pcs_(state)
+                , bound_labels_(state)
+                , fused_jmp_stubs_(state)
                 , state_(state)
             {
             }
@@ -412,6 +421,11 @@ namespace behl
 
             void bind(uint32_t label, bool is_join)
             {
+                if (label >= bound_labels_.size())
+                {
+                    bound_labels_.resize(static_cast<size_t>(label) + 1, false);
+                }
+                bound_labels_[label] = true;
                 CgOp& op = push(CgOpKind::kBind);
                 op.label = label;
                 op.flag = is_join;
@@ -424,7 +438,7 @@ namespace behl
                 {
                     return false;
                 }
-                cb.resume = pc_labels_[static_cast<size_t>(pcn) + 1];
+                cb.resume = (*labels_)[static_cast<size_t>(pcn) + 1];
                 return true;
             }
 
@@ -546,6 +560,232 @@ namespace behl
                 op.label = on_eq;
             }
 
+            void tail_jump_native(uint32_t on_fail)
+            {
+                CgOp& op = push(CgOpKind::kTailJumpNative);
+                op.label = on_fail;
+            }
+
+            void call_fast(uint32_t raw, uint32_t pcn, uint32_t on_fail, uint32_t on_done, bool is_self_call)
+            {
+                CgOp& op = push(CgOpKind::kCallFast);
+                op.raw = raw;
+                op.pcn = pcn;
+                op.label = on_fail;
+                op.label2 = on_done;
+                op.var = err_;
+                op.var2 = call_stub_;
+                op.slot = static_cast<int32_t>(entry_label_);
+                op.flag = is_self_call;
+            }
+
+            bool can_inline_self_call(const Instruction& ins) const
+            {
+                if (!inline_allowed_ || inline_depth_ >= kInlineMaxDepth)
+                {
+                    return false;
+                }
+                if (!ins.flag_bit() || ins.b() == static_cast<uint8_t>(kMultArgs))
+                {
+                    return false;
+                }
+                return true;
+            }
+
+            void emit_inline_self_call(const Instruction& ins, uint32_t pcn)
+            {
+                const uint32_t cont = new_label();
+
+                const uint32_t slow = new_label();
+                const uint32_t ready = new_label();
+                frame_push_fast(ins, pcn, slow);
+                jump(ready);
+                bind(slow, true);
+                helper_call(jit_call_push, ins.raw, pcn);
+                push(CgOpKind::kSyncFrame);
+                bind(ready, false);
+
+                AutoVector<uint32_t> site_labels(state_);
+                site_labels.reserve(n_);
+                for (uint32_t pc = 0; pc < n_; ++pc)
+                {
+                    site_labels.push_back(new_label());
+                }
+
+                const uint32_t saved_return = inline_return_label_;
+                const int32_t saved_base_delta = inline_base_delta_;
+                const uint32_t saved_nresults = inline_nresults_;
+                AutoVector<uint32_t>* saved_labels = labels_;
+
+                inline_return_label_ = cont;
+                inline_base_delta_ = static_cast<int32_t>(ins.a()) * static_cast<int32_t>(sizeof(Value));
+                inline_nresults_ = ins.c();
+                labels_ = &site_labels;
+                ++inline_depth_;
+
+                for (uint32_t pc = 0; pc < n_; ++pc)
+                {
+                    bind(site_labels[pc], jump_targets_[pc]);
+                    if (!compile_op(pc, proto_->code[pc]))
+                    {
+                        failed_ = true;
+                        break;
+                    }
+                }
+
+                --inline_depth_;
+                labels_ = saved_labels;
+                inline_base_delta_ = saved_base_delta;
+                inline_nresults_ = saved_nresults;
+                inline_return_label_ = saved_return;
+
+                bind(cont, false);
+                add_resume_pc(pcn);
+            }
+
+            void frame_push_fast(const Instruction& ins, uint32_t pcn, uint32_t on_slow)
+            {
+                CgOp& op = push(CgOpKind::kFramePushFast);
+                op.slot = ins.a();
+                op.var = static_cast<uint32_t>(ins.b() - 1);
+                op.var2 = ins.c();
+                op.imm = static_cast<int64_t>(reinterpret_cast<uintptr_t>(proto_));
+                op.label = on_slow;
+                op.pcn = pcn;
+            }
+
+            void tail_frame_fast(const Instruction& ins, uint32_t pcn, uint32_t on_slow)
+            {
+                const bool mult_args = ins.b() == static_cast<uint8_t>(kMultArgs);
+                CgOp& op = push(CgOpKind::kTailFrameFast);
+                op.slot = ins.a();
+                op.var = mult_args ? 0u : static_cast<uint32_t>(ins.b() - 1);
+                op.flag = mult_args;
+                op.imm = static_cast<int64_t>(reinterpret_cast<uintptr_t>(proto_));
+                op.label = on_slow;
+                op.pcn = pcn;
+            }
+
+            void add_resume_pc(uint32_t pcn)
+            {
+                for (const uint32_t existing : resume_pcs_)
+                {
+                    if (existing == pcn)
+                    {
+                        return;
+                    }
+                }
+                resume_pcs_.push_back(pcn);
+            }
+
+            void return_self_sites(int32_t slot, uint32_t moved)
+            {
+                for (uint32_t pc = 0; pc < n_; ++pc)
+                {
+                    const Instruction call = proto_->code[pc];
+                    if (call.op() == OpCode::kOpClosure)
+                    {
+                        const uint32_t proto_idx = call.const_or_proto_index();
+                        if (proto_idx < proto_->protos.size())
+                        {
+                            pc += static_cast<uint32_t>(proto_->protos[proto_idx]->upvalue_names.size());
+                        }
+                        continue;
+                    }
+                    if (call.op() != OpCode::kOpCall || !call.flag_bit() || call.b() == static_cast<uint8_t>(kMultArgs))
+                    {
+                        continue;
+                    }
+                    const uint32_t nresults = call.c();
+                    if (nresults != moved && nresults != static_cast<uint32_t>(kMultRet))
+                    {
+                        continue;
+                    }
+                    if (!valid_pc(static_cast<int64_t>(pc) + 1))
+                    {
+                        continue;
+                    }
+
+                    const uint32_t next = new_label();
+                    CgOp& site = push(CgOpKind::kReturnSelfSite);
+                    site.slot = slot;
+                    site.var = moved;
+                    site.var2 = proto_->max_stack_size;
+                    site.imm = static_cast<int64_t>(reinterpret_cast<uintptr_t>(proto_));
+                    site.raw = call.a();
+                    site.pcn = pc + 1;
+                    site.label = next;
+                    site.label2 = pc_labels_[pc + 1];
+                    bind(next, true);
+                }
+            }
+
+            bool can_fuse_jmp(uint32_t pcn) const
+            {
+                return static_cast<size_t>(pcn) + 1 < n_ && proto_->code[pcn].op() == OpCode::kOpJmp;
+            }
+
+            void return_fixed(const Instruction& ins, uint32_t pcn, int32_t slot, uint32_t moved, JitOpFn slow_fn)
+            {
+                if (proto_->has_upvalues)
+                {
+                    helper_call(slow_fn, ins.raw, pcn);
+                    if (inline_depth_ > 0)
+                    {
+                        push(CgOpKind::kSyncFrame);
+                        jump(inline_return_label_);
+                        return;
+                    }
+                    return_dispatch();
+                    return;
+                }
+
+                if (inline_depth_ == 0 && !proto_->is_vararg)
+                {
+                    return_self_sites(slot, moved);
+                }
+
+                const uint32_t slow = new_label();
+                CgOp& fast = push(CgOpKind::kReturnFast);
+                fast.slot = slot;
+                fast.var = moved;
+                fast.label = slow;
+                fast.pcn = pcn;
+
+                if (inline_depth_ > 0)
+                {
+                    if (!proto_->is_vararg && (inline_nresults_ == moved || inline_nresults_ == static_cast<uint32_t>(kMultRet)))
+                    {
+                        fast.flag = true;
+                        fast.imm = inline_base_delta_;
+                        fast.var2 = proto_->max_stack_size;
+                    }
+                    CgOp& adjust = push(CgOpKind::kSyncFrame);
+                    adjust.flag = true;
+                    adjust.imm = -inline_base_delta_;
+                    jump(inline_return_label_);
+                    bind(slow, true);
+                    helper_call(slow_fn, ins.raw, pcn);
+                    push(CgOpKind::kSyncFrame);
+                    jump(inline_return_label_);
+                    return;
+                }
+
+                const uint32_t joined = new_label();
+                jump(joined);
+                bind(slow, true);
+                helper_call(slow_fn, ins.raw, pcn);
+                bind(joined, true);
+                return_dispatch();
+            }
+
+            void return_dispatch()
+            {
+                CgOp& op = push(CgOpKind::kReturnDispatch);
+                op.label = entry_label_;
+                op.label2 = ret_stub_;
+            }
+
             uint32_t helper_call(JitOpFn fn, uint32_t raw, uint32_t pcn)
             {
                 CgOp& op = push(CgOpKind::kHelperCall);
@@ -569,12 +809,23 @@ namespace behl
             size_t n_;
             AutoVector<bool> jump_targets_;
             AutoVector<uint32_t> pc_labels_;
+            AutoVector<uint32_t>* labels_ = &pc_labels_;
+            static constexpr uint32_t kInlineMaxDepth = 4;
+            AutoVector<uint32_t> inline_labels_;
+            uint32_t inline_depth_{};
+            uint32_t inline_return_label_{};
+            int32_t inline_base_delta_{};
+            uint32_t inline_nresults_{};
+            bool inline_allowed_{};
             AutoVector<ColdBlock> cold_blocks_;
             uint32_t err_{};
             uint32_t ret_stub_{};
             uint32_t tail_stub_{};
             uint32_t call_stub_{};
+            uint32_t entry_label_{};
             AutoVector<uint32_t> resume_pcs_;
+            AutoVector<bool> bound_labels_;
+            AutoVector<std::pair<uint32_t, uint32_t>> fused_jmp_stubs_;
             State* state_{};
             size_t entry_dispatch_at_{};
             bool failed_{};
@@ -648,7 +899,11 @@ namespace behl
                     {
                         CgCmp cmp{};
                         JitOpFn fn = nullptr;
-                        if (branch_helper(ins.op()) != nullptr || imm_cmp_info(ins.op(), cmp, fn))
+                        if (imm_cmp_info(ins.op(), cmp, fn) && can_fuse_jmp(pcn))
+                        {
+                            mark(static_cast<int64_t>(pcn) + 1);
+                        }
+                        else if (branch_helper(ins.op()) != nullptr || imm_cmp_info(ins.op(), cmp, fn))
                         {
                             mark(pcn);
                             mark(static_cast<int64_t>(pcn) + 1);
@@ -688,11 +943,31 @@ namespace behl
                 }
             }
 
+            uint32_t stubs[4];
+            uint32_t stub_targets[4];
+            size_t stub_count = 0;
             for (size_t i = 0; i + 1 < count; ++i)
             {
-                branch_var_eq_u32(result, static_cast<uint32_t>(targets[i]), pc_labels_[static_cast<size_t>(targets[i])]);
+                const uint32_t target = (*labels_)[static_cast<size_t>(targets[i])];
+                if (target < bound_labels_.size() && bound_labels_[target])
+                {
+                    stubs[stub_count] = new_label();
+                    stub_targets[stub_count] = target;
+                    branch_var_eq_u32(result, static_cast<uint32_t>(targets[i]), stubs[stub_count]);
+                    ++stub_count;
+                }
+                else
+                {
+                    branch_var_eq_u32(result, static_cast<uint32_t>(targets[i]), target);
+                }
             }
-            jump(pc_labels_[static_cast<size_t>(targets[count - 1])]);
+            jump((*labels_)[static_cast<size_t>(targets[count - 1])]);
+
+            for (size_t i = 0; i < stub_count; ++i)
+            {
+                bind(stubs[i], true);
+                jump(stub_targets[i]);
+            }
         }
 
         bool AbstractCompiler::defer_return_dispatch(uint32_t block, uint32_t result)
@@ -720,9 +995,9 @@ namespace behl
 
             for (size_t i = 0; i + 1 < targets.size(); ++i)
             {
-                branch_var_eq_u32(result, targets[i], pc_labels_[targets[i]]);
+                branch_var_eq_u32(result, targets[i], (*labels_)[targets[i]]);
             }
-            jump(pc_labels_[targets.back()]);
+            jump((*labels_)[targets.back()]);
 
             return true;
         }
@@ -745,7 +1020,7 @@ namespace behl
                     {
                         return false;
                     }
-                    jump(pc_labels_[static_cast<size_t>(target)]);
+                    jump((*labels_)[static_cast<size_t>(target)]);
                     break;
                 }
 
@@ -814,7 +1089,20 @@ namespace behl
                     cb.resume = cb.entry;
                     guard_tag(ins.a(), Type::kInteger, cb.entry);
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.a());
-                    branch_i64_imm(v, ins.signed_immediate(), invert(cmp), pc_labels_[pcn + 1]);
+                    if (can_fuse_jmp(pcn) && !jump_targets_[pcn])
+                    {
+                        const int64_t target = static_cast<int64_t>(pcn) + 1 + proto_->code[pcn].jump_offset();
+                        if (!valid_pc(target))
+                        {
+                            return false;
+                        }
+                        branch_i64_imm(v, ins.signed_immediate(), cmp, (*labels_)[static_cast<size_t>(target)]);
+                        fused_jmp_stubs_.push_back({ (*labels_)[pcn], (*labels_)[static_cast<size_t>(target)] });
+                        cold_blocks_.push_back(cb);
+                        ++pc;
+                        break;
+                    }
+                    branch_i64_imm(v, ins.signed_immediate(), invert(cmp), (*labels_)[pcn + 1]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -1016,7 +1304,10 @@ namespace behl
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.b());
                     const uint32_t cnt = load(CgOpKind::kLoadI64, ins.c());
-                    arith(is_shl ? CgOpKind::kShlI64 : CgOpKind::kShrI64, v, cnt);
+                    CgOp& shift_op = push(is_shl ? CgOpKind::kShlI64 : CgOpKind::kShrI64);
+                    shift_op.var = v;
+                    shift_op.var2 = cnt;
+                    shift_op.label = cb.entry;
                     store(CgOpKind::kStoreI64, ins.a(), v);
                     store_tag(ins.a(), Type::kInteger);
                     jump(cb.resume);
@@ -1114,8 +1405,8 @@ namespace behl
                         return false;
                     }
                     const bool inv = ins.b() != 0;
-                    const uint32_t taken = pc_labels_[pcn];
-                    const uint32_t skip = pc_labels_[pcn + 1];
+                    const uint32_t taken = (*labels_)[pcn];
+                    const uint32_t skip = (*labels_)[pcn + 1];
                     branch_truthy(ins.a(), inv ? skip : taken, inv ? taken : skip);
                     break;
                 }
@@ -1128,13 +1419,13 @@ namespace behl
                     }
                     const bool inv = ins.c() != 0;
                     const uint32_t copy_label = new_label();
-                    const uint32_t skip = pc_labels_[pcn + 1];
+                    const uint32_t skip = (*labels_)[pcn + 1];
                     branch_truthy(ins.b(), inv ? skip : copy_label, inv ? copy_label : skip);
                     bind(copy_label, false);
                     CgOp& cp = push(CgOpKind::kCopySlot);
                     cp.slot = ins.a();
                     cp.imm = ins.b();
-                    jump(pc_labels_[pcn]);
+                    jump((*labels_)[pcn]);
                     break;
                 }
 
@@ -1156,7 +1447,7 @@ namespace behl
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v1 = load(CgOpKind::kLoadI64, ins.b());
                     const uint32_t v2 = load(CgOpKind::kLoadI64, ins.c());
-                    branch_i64(v1, v2, invert(cmp), pc_labels_[pcn + 1]);
+                    branch_i64(v1, v2, invert(cmp), (*labels_)[pcn + 1]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -1180,12 +1471,12 @@ namespace behl
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.b());
                     if (k >= INT32_MIN && k <= INT32_MAX)
                     {
-                        branch_i64_imm(v, k, invert(cmp), pc_labels_[pcn + 1]);
+                        branch_i64_imm(v, k, invert(cmp), (*labels_)[pcn + 1]);
                     }
                     else
                     {
                         const uint32_t c = const_i64(k);
-                        branch_i64(v, c, invert(cmp), pc_labels_[pcn + 1]);
+                        branch_i64(v, c, invert(cmp), (*labels_)[pcn + 1]);
                     }
                     cold_blocks_.push_back(cb);
                     break;
@@ -1210,16 +1501,50 @@ namespace behl
                     guard_tag(ins.b(), Type::kNumber, cb.entry);
                     const uint32_t f = load(CgOpKind::kLoadF64, ins.b());
                     const uint32_t c = const_f64(kd);
-                    branch_f64(f, c, cmp, pc_labels_[pcn], pc_labels_[pcn + 1]);
+                    branch_f64(f, c, cmp, (*labels_)[pcn], (*labels_)[pcn + 1]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
 
                 case OpCode::kOpCall:
                 {
+                    if (can_inline_self_call(ins))
+                    {
+                        emit_inline_self_call(ins, pcn);
+                        break;
+                    }
+
+                    const bool fixed_args = ins.b() != static_cast<uint8_t>(kMultArgs);
+                    if (fixed_args && ins.flag_bit())
+                    {
+                        const uint32_t slow = new_label();
+                        frame_push_fast(ins, pcn, slow);
+                        jump(pc_labels_[0]);
+                        bind(slow, true);
+                        const uint32_t r = helper_call(jit_op_call, ins.raw, pcn);
+                        branch_var_eq_u32(r, kJitCallPushed, call_stub_);
+                        push(CgOpKind::kSyncFrame);
+                        add_resume_pc(pcn);
+                        break;
+                    }
+
+                    uint32_t done = 0;
+                    if (fixed_args)
+                    {
+                        const uint32_t slow = new_label();
+                        done = new_label();
+                        call_fast(ins.raw, pcn, slow, done, ins.flag_bit());
+                        bind(slow, true);
+                    }
+
                     const uint32_t r = helper_call(jit_op_call, ins.raw, pcn);
                     branch_var_eq_u32(r, kJitCallPushed, call_stub_);
-                    resume_pcs_.push_back(pcn);
+                    add_resume_pc(pcn);
+
+                    if (fixed_args)
+                    {
+                        bind(done, true);
+                    }
                     break;
                 }
 
@@ -1241,7 +1566,7 @@ namespace behl
 
                     for (uint32_t j = 1; j <= num_captures; ++j)
                     {
-                        bind(pc_labels_[pc + j], false);
+                        bind((*labels_)[pc + j], false);
                     }
                     pc += num_captures;
                     break;
@@ -1249,16 +1574,35 @@ namespace behl
 
                 case OpCode::kOpTailCall:
                 {
+                    if (ins.c() != 0 && !proto_->has_upvalues && !proto_->is_vararg && proto_->defer_blocks.empty())
+                    {
+                        const uint32_t slow = new_label();
+                        tail_frame_fast(ins, pcn, slow);
+                        jump((*labels_)[0]);
+                        bind(slow, true);
+                    }
+
                     const uint32_t r = helper_call(jit_op_tailcall, ins.raw, pcn);
                     branch_var_eq_u32(r, kJitTailReturned, ret_stub_);
-                    branch_var_eq_u32(r, kJitTailReplaced, tail_stub_);
-                    jump(pc_labels_[0]);
+
+                    const uint32_t replaced = new_label();
+                    branch_var_eq_u32(r, kJitTailReplaced, replaced);
+                    jump((*labels_)[0]);
+
+                    bind(replaced, true);
+                    tail_jump_native(tail_stub_);
                     break;
                 }
 
                 case OpCode::kOpReturn:
                     helper_call(jit_op_return, ins.raw, pcn);
-                    jump(ret_stub_);
+                    if (inline_depth_ > 0)
+                    {
+                        push(CgOpKind::kSyncFrame);
+                        jump(inline_return_label_);
+                        break;
+                    }
+                    return_dispatch();
                     break;
 
                 case OpCode::kOpRetSaved:
@@ -1292,13 +1636,11 @@ namespace behl
                 }
 
                 case OpCode::kOpReturn0:
-                    helper_call(jit_op_return0, ins.raw, pcn);
-                    jump(ret_stub_);
+                    return_fixed(ins, pcn, 0, 0, jit_op_return0);
                     break;
 
                 case OpCode::kOpReturn1:
-                    helper_call(jit_op_return1, ins.raw, pcn);
-                    jump(ret_stub_);
+                    return_fixed(ins, pcn, ins.a(), 1, jit_op_return1);
                     break;
 
                 case OpCode::kOpLoadBool:
@@ -1312,7 +1654,7 @@ namespace behl
                         {
                             return false;
                         }
-                        jump(pc_labels_[pc + 2]);
+                        jump((*labels_)[pc + 2]);
                     }
                     break;
                 }
@@ -1331,69 +1673,66 @@ namespace behl
                     ColdBlock cb{ new_label(), 0, jit_op_forprep, ins.raw, pcn, ColdKind::kForPrep, off };
                     cb.resume = cb.entry;
 
+                    int32_t mode = -1;
+                    if (pc > 0 && !jump_targets_[pc])
+                    {
+                        const Instruction prev = proto_->code[pc - 1];
+                        if (prev.op() == OpCode::kOpLoadImm && prev.a() == a + 4)
+                        {
+                            mode = prev.signed_immediate();
+                        }
+                    }
+                    if (mode < 0 || mode > (kForModeDescending | kForModeInclusive))
+                    {
+                        jump(cb.entry);
+                        cold_blocks_.push_back(cb);
+                        break;
+                    }
+                    const bool descending = (mode & kForModeDescending) != 0;
+                    const bool inclusive = (mode & kForModeInclusive) != 0;
+
                     guard_tag(a, Type::kInteger, cb.entry);
                     guard_tag(a + 1, Type::kInteger, cb.entry);
                     guard_tag(a + 2, Type::kInteger, cb.entry);
 
-                    const uint32_t neg_step = new_label();
-                    const uint32_t zero_step = new_label();
                     const uint32_t zero_trip = new_label();
                     const uint32_t prepared = new_label();
 
                     {
                         const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
-                        branch_i64_imm(s, 0, CgCmp::kEq, zero_step);
+                        branch_i64_imm(s, 0, CgCmp::kLe, cb.entry);
                     }
-                    {
-                        const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
-                        branch_i64_imm(s, 0, CgCmp::kLt, neg_step);
-                    }
-
                     {
                         const uint32_t i = load(CgOpKind::kLoadI64, a);
                         const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
-                        branch_i64(i, l, CgCmp::kGt, zero_trip);
+                        const CgCmp skip = descending ? (inclusive ? CgCmp::kLt : CgCmp::kLe)
+                                                      : (inclusive ? CgCmp::kGt : CgCmp::kGe);
+                        branch_i64(i, l, skip, zero_trip);
                     }
                     {
-                        const uint32_t t = load(CgOpKind::kLoadI64, a + 1);
-                        const uint32_t i = load(CgOpKind::kLoadI64, a);
-                        arith(CgOpKind::kSubI64, t, i);
+                        const uint32_t t = load(CgOpKind::kLoadI64, descending ? a : a + 1);
+                        const uint32_t u = load(CgOpKind::kLoadI64, descending ? a + 1 : a);
+                        arith(CgOpKind::kSubI64, t, u);
+                        if (!inclusive)
+                        {
+                            add_i64_imm(t, -1);
+                        }
                         const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
                         arith(CgOpKind::kDivU64, t, s);
                         store(CgOpKind::kStoreI64, a + 3, t);
                         store_tag(a + 3, Type::kInteger);
-                        jump(prepared);
                     }
-
-                    bind(neg_step, false);
+                    if (descending)
                     {
-                        const uint32_t i = load(CgOpKind::kLoadI64, a);
-                        const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
-                        branch_i64(i, l, CgCmp::kLt, zero_trip);
-                    }
-                    {
-                        const uint32_t t = load(CgOpKind::kLoadI64, a);
-                        const uint32_t l = load(CgOpKind::kLoadI64, a + 1);
-                        arith(CgOpKind::kSubI64, t, l);
                         const uint32_t d = const_i64(0);
                         const uint32_t s = load(CgOpKind::kLoadI64, a + 2);
                         arith(CgOpKind::kSubI64, d, s);
-                        arith(CgOpKind::kDivU64, t, d);
-                        store(CgOpKind::kStoreI64, a + 3, t);
-                        store_tag(a + 3, Type::kInteger);
-                        jump(prepared);
+                        store(CgOpKind::kStoreI64, a + 2, d);
                     }
-
-                    bind(zero_step, false);
-                    {
-                        const uint32_t v = const_i64(-1);
-                        store(CgOpKind::kStoreI64, a + 3, v);
-                        store_tag(a + 3, Type::kInteger);
-                        jump(prepared);
-                    }
+                    jump(prepared);
 
                     bind(zero_trip, false);
-                    jump(pc_labels_[static_cast<size_t>(exit_pc)]);
+                    jump((*labels_)[static_cast<size_t>(exit_pc)]);
 
                     bind(prepared, false);
                     cold_blocks_.push_back(cb);
@@ -1411,16 +1750,16 @@ namespace behl
                     const int32_t a = ins.a();
                     ColdBlock cb{ new_label(), 0, jit_op_forloop, ins.raw, pcn, ColdKind::kForLoop, off };
                     cb.resume = cb.entry;
-                    guard_tag(a + 2, Type::kInteger, cb.entry);
+                    guard_tag(a + 3, Type::kInteger, cb.entry);
                     const uint32_t step = load(CgOpKind::kLoadI64, a + 2);
                     const uint32_t idx = load(CgOpKind::kLoadI64, a);
                     arith(CgOpKind::kAddI64, idx, step);
                     store(CgOpKind::kStoreI64, a, idx);
                     const uint32_t count = load(CgOpKind::kLoadI64, a + 3);
-                    branch_i64_imm(count, 0, CgCmp::kEq, pc_labels_[pcn]);
+                    branch_i64_imm(count, 0, CgCmp::kEq, (*labels_)[pcn]);
                     add_i64_imm(count, -1);
                     store(CgOpKind::kStoreI64, a + 3, count);
-                    jump(pc_labels_[static_cast<size_t>(loop_target)]);
+                    jump((*labels_)[static_cast<size_t>(loop_target)]);
                     cold_blocks_.push_back(cb);
                     break;
                 }
@@ -1503,7 +1842,7 @@ namespace behl
                             guard_tag(cins.a(), Type::kNumber, help);
                             const uint32_t lhs = load(CgOpKind::kLoadF64, cins.a());
                             const uint32_t rhs = const_f64(static_cast<double>(cins.signed_immediate()));
-                            branch_f64(lhs, rhs, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                            branch_f64(lhs, rhs, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                         }
                         bind(help, true);
                         const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
@@ -1514,9 +1853,7 @@ namespace behl
                     case ColdKind::kForPrep:
                     {
                         const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
-                        pc_dispatch(r,
-                            { static_cast<int64_t>(cb.pcn), static_cast<int64_t>(cb.pcn) + cb.offset,
-                                static_cast<int64_t>(cb.pcn) + cb.offset + 1 });
+                        pc_dispatch(r, { static_cast<int64_t>(cb.pcn), static_cast<int64_t>(cb.pcn) + cb.offset + 1 });
                         break;
                     }
 
@@ -1620,7 +1957,7 @@ namespace behl
                             guard_tag(cins.c(), Type::kNumber, help);
                             const uint32_t f1 = load(CgOpKind::kLoadF64, cins.b());
                             const uint32_t f2 = load(CgOpKind::kLoadF64, cins.c());
-                            branch_f64(f1, f2, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                            branch_f64(f1, f2, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                         }
                         bind(help, true);
                         const uint32_t r = helper_call(cb.fn, cb.raw, cb.pcn);
@@ -1639,14 +1976,14 @@ namespace behl
                                 guard_tag(cins.b(), Type::kNumber, help);
                                 const uint32_t f = load(CgOpKind::kLoadF64, cins.b());
                                 const uint32_t c = const_f64(static_cast<double>(cb.k));
-                                branch_f64(f, c, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                                branch_f64(f, c, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                             }
                             else if (const_fp_cmp_info(cins.op(), cmp))
                             {
                                 guard_tag(cins.b(), Type::kInteger, help);
                                 const uint32_t t = load(CgOpKind::kCvtSlotToF64, cins.b());
                                 const uint32_t c = const_f64(std::bit_cast<double>(static_cast<uint64_t>(cb.k)));
-                                branch_f64(t, c, cmp, pc_labels_[cb.pcn], pc_labels_[cb.pcn + 1]);
+                                branch_f64(t, c, cmp, (*labels_)[cb.pcn], (*labels_)[cb.pcn + 1]);
                             }
                         }
                         bind(help, true);
@@ -1665,22 +2002,9 @@ namespace behl
 
         bool AbstractCompiler::compile()
         {
-            if (proto_->is_vararg || n_ == 0)
+            if (n_ == 0)
             {
                 return false;
-            }
-
-            for (size_t i = 0; i < n_; ++i)
-            {
-                switch (proto_->code[i].op())
-                {
-                    case OpCode::kOpVararg:
-                    case OpCode::kOpVarargPrep:
-                    case OpCode::kOpVarargExpand:
-                        return false;
-                    default:
-                        break;
-                }
             }
 
             {
@@ -1713,16 +2037,31 @@ namespace behl
             {
                 pc_labels_.push_back(new_label());
             }
+            inline_allowed_ = !proto_->is_vararg && proto_->defer_blocks.empty() && n_ <= 64;
+            if (inline_allowed_)
+            {
+                for (uint32_t pc = 0; pc < n_; ++pc)
+                {
+                    const OpCode op = proto_->code[pc].op();
+                    if (op == OpCode::kOpTailCall || op == OpCode::kOpVararg || op == OpCode::kOpVarargPrep
+                        || op == OpCode::kOpVarargExpand)
+                    {
+                        inline_allowed_ = false;
+                        break;
+                    }
+                }
+            }
             err_ = new_label();
             ret_stub_ = new_label();
             tail_stub_ = new_label();
             call_stub_ = new_label();
+            entry_label_ = new_label();
 
             entry_dispatch_at_ = out_.ops.size();
 
             for (uint32_t pc = 0; pc < n_; ++pc)
             {
-                bind(pc_labels_[pc], jump_targets_[pc]);
+                bind((*labels_)[pc], jump_targets_[pc]);
                 const Instruction ins = proto_->code[pc];
                 if (!compile_op(pc, ins))
                 {
@@ -1736,27 +2075,46 @@ namespace behl
                 return false;
             }
 
-            if (!resume_pcs_.empty())
+            for (const auto& [stub, target] : fused_jmp_stubs_)
+            {
+                bind(stub, true);
+                jump(target);
+            }
+
             {
                 AutoVector<CgOp> dispatch(state_);
 
-                CgOp load{};
-                load.kind = CgOpKind::kLoadFramePc;
-                load.var = new_var();
-                dispatch.push_back(load);
+                CgOp entry_bind{};
+                entry_bind.kind = CgOpKind::kBind;
+                entry_bind.label = entry_label_;
+                entry_bind.flag = true;
+                entry_bind.slot = kClobberAll;
+                dispatch.push_back(entry_bind);
 
-                for (const uint32_t r : resume_pcs_)
+                CgOp sync{};
+                sync.kind = CgOpKind::kSyncFrame;
+                dispatch.push_back(sync);
+
+                if (!resume_pcs_.empty())
                 {
-                    if (!valid_pc(static_cast<int64_t>(r)))
+                    CgOp load{};
+                    load.kind = CgOpKind::kLoadFramePc;
+                    load.var = new_var();
+                    dispatch.push_back(load);
+
+                    for (const uint32_t r : resume_pcs_)
                     {
-                        return false;
+                        if (!valid_pc(static_cast<int64_t>(r)))
+                        {
+                            return false;
+                        }
+                        CgOp br{};
+                        br.kind = CgOpKind::kBranchVarEqU32;
+                        br.var = load.var;
+                        br.imm = static_cast<int64_t>(r);
+                        br.label = (*labels_)[r];
+                        dispatch.push_back(br);
                     }
-                    CgOp br{};
-                    br.kind = CgOpKind::kBranchVarEqU32;
-                    br.var = load.var;
-                    br.imm = static_cast<int64_t>(r);
-                    br.label = pc_labels_[r];
-                    dispatch.push_back(br);
                 }
 
                 out_.ops.insert(

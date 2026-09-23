@@ -1,13 +1,16 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class CompareTest : public ::testing::Test
+class CompareTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
     }
     void TearDown() override
@@ -48,7 +51,7 @@ protected:
     }
 };
 
-TEST_F(CompareTest, ComparisonsReturnBooleans_TrueCases)
+TEST_P(CompareTest, ComparisonsReturnBooleans_TrueCases)
 {
     constexpr std::string_view code = "let a = {}\n"
                                       "a[0] = (1 == 1)\n"
@@ -73,7 +76,7 @@ TEST_F(CompareTest, ComparisonsReturnBooleans_TrueCases)
     }
 }
 
-TEST_F(CompareTest, ComparisonsReturnBooleans_FalseCases)
+TEST_P(CompareTest, ComparisonsReturnBooleans_FalseCases)
 {
     constexpr std::string_view code = "let a = {}\n"
                                       "a[0] = (1 == 2)\n"
@@ -98,7 +101,7 @@ TEST_F(CompareTest, ComparisonsReturnBooleans_FalseCases)
     }
 }
 
-TEST_F(CompareTest, OrderingValid_NumberNumber)
+TEST_P(CompareTest, OrderingValid_NumberNumber)
 {
     EXPECT_TRUE(test_comparison("return 1 < 2"));
     EXPECT_TRUE(test_comparison("return 1 <= 2"));
@@ -108,7 +111,7 @@ TEST_F(CompareTest, OrderingValid_NumberNumber)
     EXPECT_TRUE(test_comparison("return 1 < 2.5"));
 }
 
-TEST_F(CompareTest, OrderingValid_StringString)
+TEST_P(CompareTest, OrderingValid_StringString)
 {
     EXPECT_TRUE(test_comparison("return 'a' < 'b'"));
     EXPECT_TRUE(test_comparison("return 'a' <= 'b'"));
@@ -116,7 +119,7 @@ TEST_F(CompareTest, OrderingValid_StringString)
     EXPECT_TRUE(test_comparison("return 'b' >= 'a'"));
 }
 
-TEST_F(CompareTest, OrderingError_NumberNil)
+TEST_P(CompareTest, OrderingError_NumberNil)
 {
     EXPECT_TRUE(test_comparison("return 1 < nil", true));
     EXPECT_TRUE(test_comparison("return 1 <= nil", true));
@@ -124,7 +127,7 @@ TEST_F(CompareTest, OrderingError_NumberNil)
     EXPECT_TRUE(test_comparison("return 1 >= nil", true));
 }
 
-TEST_F(CompareTest, OrderingError_NumberString)
+TEST_P(CompareTest, OrderingError_NumberString)
 {
     EXPECT_TRUE(test_comparison("return 1 < 'str'", true));
     EXPECT_TRUE(test_comparison("return 1 <= 'str'", true));
@@ -132,7 +135,7 @@ TEST_F(CompareTest, OrderingError_NumberString)
     EXPECT_TRUE(test_comparison("return 1 >= 'str'", true));
 }
 
-TEST_F(CompareTest, OrderingError_NumberBool)
+TEST_P(CompareTest, OrderingError_NumberBool)
 {
     EXPECT_TRUE(test_comparison("return 1 < true", true));
     EXPECT_TRUE(test_comparison("return 1 <= true", true));
@@ -140,7 +143,7 @@ TEST_F(CompareTest, OrderingError_NumberBool)
     EXPECT_TRUE(test_comparison("return 1 >= true", true));
 }
 
-TEST_F(CompareTest, OrderingError_NumberTable)
+TEST_P(CompareTest, OrderingError_NumberTable)
 {
     EXPECT_TRUE(test_comparison("return 1 < {}", true));
     EXPECT_TRUE(test_comparison("return 1 <= {}", true));
@@ -148,7 +151,7 @@ TEST_F(CompareTest, OrderingError_NumberTable)
     EXPECT_TRUE(test_comparison("return 1 >= {}", true));
 }
 
-TEST_F(CompareTest, OrderingError_StringNumber)
+TEST_P(CompareTest, OrderingError_StringNumber)
 {
     EXPECT_TRUE(test_comparison("return 'str' < 1", true));
     EXPECT_TRUE(test_comparison("return 'str' <= 1", true));
@@ -156,7 +159,7 @@ TEST_F(CompareTest, OrderingError_StringNumber)
     EXPECT_TRUE(test_comparison("return 'str' >= 1", true));
 }
 
-TEST_F(CompareTest, OrderingError_NilNil)
+TEST_P(CompareTest, OrderingError_NilNil)
 {
     EXPECT_TRUE(test_comparison("return nil < nil", true));
     EXPECT_TRUE(test_comparison("return nil <= nil", true));
@@ -164,7 +167,7 @@ TEST_F(CompareTest, OrderingError_NilNil)
     EXPECT_TRUE(test_comparison("return nil >= nil", true));
 }
 
-TEST_F(CompareTest, OrderingError_BoolBool)
+TEST_P(CompareTest, OrderingError_BoolBool)
 {
     EXPECT_TRUE(test_comparison("return true < false", true));
     EXPECT_TRUE(test_comparison("return true <= false", true));
@@ -172,7 +175,7 @@ TEST_F(CompareTest, OrderingError_BoolBool)
     EXPECT_TRUE(test_comparison("return true >= false", true));
 }
 
-TEST_F(CompareTest, OrderingError_TableTable)
+TEST_P(CompareTest, OrderingError_TableTable)
 {
     EXPECT_TRUE(test_comparison("return {} < {}", true));
     EXPECT_TRUE(test_comparison("return {} <= {}", true));
@@ -180,7 +183,7 @@ TEST_F(CompareTest, OrderingError_TableTable)
     EXPECT_TRUE(test_comparison("return {} >= {}", true));
 }
 
-TEST_F(CompareTest, OrderingWithMetamethod_Lt)
+TEST_P(CompareTest, OrderingWithMetamethod_Lt)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -190,7 +193,7 @@ TEST_F(CompareTest, OrderingWithMetamethod_Lt)
     EXPECT_TRUE(test_comparison(code));
 }
 
-TEST_F(CompareTest, OrderingWithMetamethod_Le)
+TEST_P(CompareTest, OrderingWithMetamethod_Le)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -200,31 +203,31 @@ TEST_F(CompareTest, OrderingWithMetamethod_Le)
     EXPECT_TRUE(test_comparison(code));
 }
 
-TEST_F(CompareTest, EqualityNeverErrors_NumberNil)
+TEST_P(CompareTest, EqualityNeverErrors_NumberNil)
 {
     EXPECT_TRUE(test_comparison("return 1 == nil"));
     EXPECT_TRUE(test_comparison("return 1 != nil"));
 }
 
-TEST_F(CompareTest, EqualityNeverErrors_NumberString)
+TEST_P(CompareTest, EqualityNeverErrors_NumberString)
 {
     EXPECT_TRUE(test_comparison("return 1 == 'str'"));
     EXPECT_TRUE(test_comparison("return 1 != 'str'"));
 }
 
-TEST_F(CompareTest, EqualityNeverErrors_NilNil)
+TEST_P(CompareTest, EqualityNeverErrors_NilNil)
 {
     EXPECT_TRUE(test_comparison("return nil == nil"));
     EXPECT_TRUE(test_comparison("return nil != nil"));
 }
 
-TEST_F(CompareTest, EqualityNeverErrors_TableTable)
+TEST_P(CompareTest, EqualityNeverErrors_TableTable)
 {
     EXPECT_TRUE(test_comparison("return {} == {}"));
     EXPECT_TRUE(test_comparison("return {} != {}"));
 }
 
-TEST_F(CompareTest, EqualityNeverErrors_AllTypeCombos)
+TEST_P(CompareTest, EqualityNeverErrors_AllTypeCombos)
 {
     EXPECT_TRUE(test_comparison("return 1 == true"));
     EXPECT_TRUE(test_comparison("return 'str' == {}"));
@@ -232,7 +235,7 @@ TEST_F(CompareTest, EqualityNeverErrors_AllTypeCombos)
     EXPECT_TRUE(test_comparison("return true != 'str'"));
 }
 
-TEST_F(CompareTest, EqualityWithMetamethod_Eq)
+TEST_P(CompareTest, EqualityWithMetamethod_Eq)
 {
     constexpr std::string_view code = R"(
         let t1 = {}
@@ -244,7 +247,7 @@ TEST_F(CompareTest, EqualityWithMetamethod_Eq)
     EXPECT_TRUE(test_comparison(code));
 }
 
-TEST_F(CompareTest, TernaryBasic_TrueCondition)
+TEST_P(CompareTest, TernaryBasic_TrueCondition)
 {
     constexpr std::string_view code = "return true ? 42 : 0";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -254,7 +257,7 @@ TEST_F(CompareTest, TernaryBasic_TrueCondition)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryBasic_FalseCondition)
+TEST_P(CompareTest, TernaryBasic_FalseCondition)
 {
     constexpr std::string_view code = "return false ? 42 : 0";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -264,7 +267,7 @@ TEST_F(CompareTest, TernaryBasic_FalseCondition)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryWithComparison)
+TEST_P(CompareTest, TernaryWithComparison)
 {
     constexpr std::string_view code = "let x = 10; return x > 5 ? 'big' : 'small'";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -274,7 +277,7 @@ TEST_F(CompareTest, TernaryWithComparison)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryWithDifferentTypes)
+TEST_P(CompareTest, TernaryWithDifferentTypes)
 {
     constexpr std::string_view code = "return 1 == 1 ? 'string' : 42";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -284,7 +287,7 @@ TEST_F(CompareTest, TernaryWithDifferentTypes)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryNested)
+TEST_P(CompareTest, TernaryNested)
 {
     constexpr std::string_view code = "let x = 5; return x > 10 ? 'big' : x > 0 ? 'medium' : 'small'";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -294,7 +297,7 @@ TEST_F(CompareTest, TernaryNested)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryNestedParens)
+TEST_P(CompareTest, TernaryNestedParens)
 {
     constexpr std::string_view code = "let x = 5; return x > 10 ? 'big' : (x > 0 ? 'medium' : 'small')";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -304,7 +307,7 @@ TEST_F(CompareTest, TernaryNestedParens)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryWithNil)
+TEST_P(CompareTest, TernaryWithNil)
 {
     constexpr std::string_view code = "return nil ? 1 : 2";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -314,7 +317,7 @@ TEST_F(CompareTest, TernaryWithNil)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryWithZero)
+TEST_P(CompareTest, TernaryWithZero)
 {
     constexpr std::string_view code = "return 0 ? 'yes' : 'no'";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -324,7 +327,7 @@ TEST_F(CompareTest, TernaryWithZero)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryWithFunctionCalls)
+TEST_P(CompareTest, TernaryWithFunctionCalls)
 {
     constexpr std::string_view code = "function b() { return 1 } function c() { return 2 } let a = true; return a ? b() : c()";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -334,7 +337,7 @@ TEST_F(CompareTest, TernaryWithFunctionCalls)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryInAssignment)
+TEST_P(CompareTest, TernaryInAssignment)
 {
     constexpr std::string_view code = "let x = 10 > 5 ? 100 : 200; return x";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -344,7 +347,7 @@ TEST_F(CompareTest, TernaryInAssignment)
     behl::pop(S, 1);
 }
 
-TEST_F(CompareTest, TernaryWithTableAccess)
+TEST_P(CompareTest, TernaryWithTableAccess)
 {
     constexpr std::string_view code = R"(
         let t = {a = 10, b = 20}
@@ -356,3 +359,6 @@ TEST_F(CompareTest, TernaryWithTableAccess)
     ASSERT_EQ(behl::to_integer(S, -1), 10);
     behl::pop(S, 1);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, CompareTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

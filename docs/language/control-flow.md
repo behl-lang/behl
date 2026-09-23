@@ -53,7 +53,7 @@ if (condition) {
 
 ### If-Elseif-Else
 
-Chain multiple conditions:
+Chain multiple conditions. Behl accepts both `elseif` and the two-word `else if` form (the latter works because `else` takes a single statement, which can itself be an `if`):
 
 ```cpp
 if (condition1) {
@@ -78,6 +78,15 @@ if (score >= 90) {
     print("B");
 } elseif (score >= 70) {
     print("C");
+} else {
+    print("F");
+}
+
+// Same thing with 'else if'
+if (score >= 90) {
+    print("A");
+} else if (score >= 80) {
+    print("B");
 } else {
     print("F");
 }
@@ -154,7 +163,7 @@ for (let i = 0; i < 10; i++) {
 
 // Multiple variables
 for (let i = 0, j = 10; i < j; i++, j--) {
-    print(i + " " + tostring(j));
+    print(tostring(i) + " " + tostring(j));
 }
 
 // Countdown
@@ -170,27 +179,39 @@ for (let i = 0; i < 100; i += 10) {
 
 ### Empty Components
 
+Only the **increment** may be omitted. The initialization and the condition are both required:
+
 ```cpp
-// Empty initialization (variable declared outside)
-let i = 0;
-for (; i < 10; i++) {
-    print(i);
-}
-
-// Empty condition (infinite loop - use break)
-for (let i = 0; ; i++) {
-    if (i >= 10) break;
-    print(i);
-}
-
 // Empty increment (manual increment in body)
 for (let i = 0; i < 10; ) {
     print(i);
     i++;
 }
+```
 
-// All empty (infinite loop)
-for (;;) {
+The initialization must be either a `let`/`const` declaration or an assignment to a variable declared outside the loop. An empty initialization is a syntax error:
+
+```cpp
+// Initialization using a variable declared outside
+let i = 0;
+for (i = 0; i < 10; i++) {
+    print(i);
+}
+
+// Syntax error: no initialization
+// for (; i < 10; i++) { }
+
+// Syntax error: no condition
+// for (let i = 0; ; i++) { }
+
+// Syntax error: nothing at all
+// for (;;) { }
+```
+
+For an infinite loop, use `while (true)`:
+
+```cpp
+while (true) {
     if (shouldExit()) break;
     doWork();
 }
@@ -201,10 +222,12 @@ for (;;) {
 Iterate over tables using iterator functions:
 
 ```cpp
-for (key, value in iterator_function(table)) {
+for (let key, value in iterator_function(table)) {
     // loop body
 }
 ```
+
+The loop variables must either be declared inline with `let`/`const`, or already exist as a local or upvalue. Naming an undeclared variable is a compile error ("For-in loop variable '<x>' is not declared").
 
 ### Using pairs()
 
@@ -217,7 +240,7 @@ let t = {
     ["city"] = "NYC"
 };
 
-for (key, value in pairs(t)) {
+for (let key, value in pairs(t)) {
     print(key + " = " + tostring(value));
 }
 ```
@@ -227,7 +250,7 @@ for (key, value in pairs(t)) {
 ```cpp
 let arr = {10, 20, 30, 40, 50};
 
-for (index, value in pairs(arr)) {
+for (let index, value in pairs(arr)) {
     print("arr[" + tostring(index) + "] = " + tostring(value));
 }
 // Output:
@@ -242,7 +265,7 @@ for (index, value in pairs(arr)) {
 
 ```cpp
 // Iterate over keys only
-for (key in pairs(t)) {
+for (let key in pairs(t)) {
     print(key);
 }
 ```
@@ -252,12 +275,12 @@ for (key in pairs(t)) {
 Foreach is a simpler syntax for table iteration that automatically calls `pairs()`:
 
 ```cpp
-foreach (key, value in table) {
+foreach (let key, value in table) {
     // loop body
 }
 ```
 
-This is equivalent to `for (key, value in pairs(table))` but more concise.
+This is equivalent to `for (let key, value in pairs(table))` but more concise. The same declaration rule applies: the loop variables must be introduced with `let`/`const` or already exist as a local or upvalue.
 
 ### Basic Foreach
 
@@ -265,7 +288,7 @@ This is equivalent to `for (key, value in pairs(table))` but more concise.
 let arr = {10, 20, 30};
 let sum = 0;
 
-foreach (value in arr) {
+foreach (let value in arr) {
     sum = sum + value;
 }
 print(sum);  // 60
@@ -280,7 +303,7 @@ let t = {
     ["city"] = "NYC"
 };
 
-foreach (key, value in t) {
+foreach (let key, value in t) {
     print(key + " = " + tostring(value));
 }
 ```
@@ -303,6 +326,14 @@ foreach (let k, v in arr) {
 }
 ```
 
+`const` is accepted in the same position and declares the loop variables the same way:
+
+```cpp
+foreach (const k, v in arr) {
+    print(tostring(k) + " = " + tostring(v));
+}
+```
+
 ### Foreach with Existing Variables
 
 Or use existing variables:
@@ -311,7 +342,7 @@ Or use existing variables:
 let k, v;
 
 foreach (k, v in arr) {
-    print(k + ": " + tostring(v));
+    print(tostring(k) + ": " + tostring(v));
 }
 // k and v remain accessible after loop
 ```
@@ -322,11 +353,11 @@ Both work identically, but `foreach` is clearer for simple table iteration:
 
 ```cpp
 // These are equivalent:
-foreach (k, v in table) {
+foreach (let k, v in table) {
     process(k, v);
 }
 
-for (k, v in pairs(table)) {
+for (let k, v in pairs(table)) {
     process(k, v);
 }
 
@@ -355,7 +386,7 @@ let arr = {10, 20, 30, 40, 50};
 let target = 30;
 let found = false;
 
-for (i, v in pairs(arr)) {
+for (let i, v in pairs(arr)) {
     if (v == target) {
         found = true;
         break;
@@ -386,7 +417,7 @@ for (let i = 0; i < 10; i++) {
 // Process only valid items
 let items = {1, -5, 10, -3, 20};
 
-for (i, v in pairs(items)) {
+for (let i, v in pairs(items)) {
     if (v < 0) {
         continue;  // Skip negative values
     }
@@ -425,14 +456,16 @@ Execute code when leaving a scope:
 
 ```cpp
 function processFile(filename) {
-    let file = os.open(filename, "r");
-    defer os.close(file);  // Executes at function end
-    
+    let file = fs.open(filename, "r");
+    defer file:close();  // Executes at function end
+
     // Process file
-    let content = file.read("*a");
+    let content = file:read(fs.size(filename));
     return content;
 }  // File is closed here
 ```
+
+File I/O lives in the `fs` module, which is opt-in: the host embedding Behl must call `load_lib_fs`. The CLI loads it. `fs.open(path, mode)` returns a file handle whose methods (`read`, `write`, `seek`, `close`) are called with `:`.
 
 See [Defer Statement](defer) for complete documentation.
 
@@ -447,7 +480,7 @@ Use braces for clarity** - even for single-line bodies (braces are optional but 
 
 ```cpp
 // Good: foreach for simple table iteration
-foreach (k, v in table) {
+foreach (let k, v in table) {
     process(k, v);
 }
 

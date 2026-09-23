@@ -141,6 +141,8 @@ namespace behl
         void scvtf(A64Vec dst, A64Reg src);
 
         void call(uintptr_t target);
+        void br(A64Reg target);
+        void blr(A64Reg target);
         void ret();
 
         A64Label new_label();

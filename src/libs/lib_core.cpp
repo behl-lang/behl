@@ -17,7 +17,6 @@
 #include "vm/vm_detail.hpp"
 #include "vm/vm_metatable.hpp"
 
-#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -259,6 +258,11 @@ namespace behl
             return 1;
         }
 
+        if (resolved_path.empty())
+        {
+            error(S, behl::format("Module not found: {}", module_name));
+        }
+
         // Load module file
         std::ifstream file(resolved_path);
         if (!file.is_open())
@@ -300,7 +304,7 @@ namespace behl
 
         if (str_val.is_string())
         {
-            error(S, str_val.get_string()->data());
+            error(S, str_val.get_string()->view());
         }
         else
         {

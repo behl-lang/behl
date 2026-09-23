@@ -1,11 +1,12 @@
 #include "common/format.hpp"
+#include "state.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
 
-class CFunctionTest : public ::testing::Test
+class CFunctionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -18,6 +19,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         register_test_functions(S);
     }
 
@@ -413,7 +415,7 @@ protected:
     }
 };
 
-TEST_F(CFunctionTest, PrintSingleString)
+TEST_P(CFunctionTest, PrintSingleString)
 {
     constexpr std::string_view code = "print('hello')";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -423,7 +425,7 @@ TEST_F(CFunctionTest, PrintSingleString)
     ASSERT_EQ(output[0], "hello");
 }
 
-TEST_F(CFunctionTest, PrintMultipleArguments)
+TEST_P(CFunctionTest, PrintMultipleArguments)
 {
     constexpr std::string_view code = "print('hello', 'world', 42)";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -435,7 +437,7 @@ TEST_F(CFunctionTest, PrintMultipleArguments)
     ASSERT_EQ(output[2], "42");
 }
 
-TEST_F(CFunctionTest, PrintNoArguments)
+TEST_P(CFunctionTest, PrintNoArguments)
 {
     constexpr std::string_view code = "print()";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -444,7 +446,7 @@ TEST_F(CFunctionTest, PrintNoArguments)
     ASSERT_EQ(output.size(), 0);
 }
 
-TEST_F(CFunctionTest, PrintMixedTypes)
+TEST_P(CFunctionTest, PrintMixedTypes)
 {
     constexpr std::string_view code = "print(123, true, false, nil, 'test')";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -458,7 +460,7 @@ TEST_F(CFunctionTest, PrintMixedTypes)
     ASSERT_EQ(output[4], "test");
 }
 
-TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_SingleString)
+TEST_P(CFunctionTest, NativeFunctionReceivesCorrectArgs_SingleString)
 {
     constexpr std::string_view code = "capture_args('hello')";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -471,7 +473,7 @@ TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_SingleString)
     ASSERT_EQ(last_string_args[0], "hello");
 }
 
-TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_MultipleTypes)
+TEST_P(CFunctionTest, NativeFunctionReceivesCorrectArgs_MultipleTypes)
 {
     constexpr std::string_view code = "capture_args(42, 'test', true, false)";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -495,7 +497,7 @@ TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_MultipleTypes)
     ASSERT_EQ(last_bool_args[1], false);
 }
 
-TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_NoArgs)
+TEST_P(CFunctionTest, NativeFunctionReceivesCorrectArgs_NoArgs)
 {
     constexpr std::string_view code = "capture_args()";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -508,7 +510,7 @@ TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_NoArgs)
     ASSERT_EQ(last_bool_args.size(), 0);
 }
 
-TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_WithNil)
+TEST_P(CFunctionTest, NativeFunctionReceivesCorrectArgs_WithNil)
 {
     constexpr std::string_view code = "capture_args(123, nil, 'end')";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -527,7 +529,7 @@ TEST_F(CFunctionTest, NativeFunctionReceivesCorrectArgs_WithNil)
     ASSERT_EQ(last_string_args[0], "end");
 }
 
-TEST_F(CFunctionTest, NativeFunctionReturnsNothing)
+TEST_P(CFunctionTest, NativeFunctionReturnsNothing)
 {
     constexpr std::string_view code = "let a = return_nothing()";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -538,7 +540,7 @@ TEST_F(CFunctionTest, NativeFunctionReturnsNothing)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, NativeFunctionReturnsOneValue)
+TEST_P(CFunctionTest, NativeFunctionReturnsOneValue)
 {
     behl::get_global(S, "return_one");
     ASSERT_EQ(behl::type(S, -1), behl::Type::kCFunction);
@@ -549,7 +551,7 @@ TEST_F(CFunctionTest, NativeFunctionReturnsOneValue)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, NativeFunctionReturnsTwoValues)
+TEST_P(CFunctionTest, NativeFunctionReturnsTwoValues)
 {
     behl::get_global(S, "return_two");
     ASSERT_NO_THROW(behl::call(S, 0, 2));
@@ -563,7 +565,7 @@ TEST_F(CFunctionTest, NativeFunctionReturnsTwoValues)
     behl::pop(S, 2);
 }
 
-TEST_F(CFunctionTest, NativeFunctionReturnsManyValues)
+TEST_P(CFunctionTest, NativeFunctionReturnsManyValues)
 {
     behl::get_global(S, "return_many");
     ASSERT_NO_THROW(behl::call(S, 0, 5));
@@ -577,7 +579,7 @@ TEST_F(CFunctionTest, NativeFunctionReturnsManyValues)
     behl::pop(S, 5);
 }
 
-TEST_F(CFunctionTest, NativeFunctionReturnValueTruncation)
+TEST_P(CFunctionTest, NativeFunctionReturnValueTruncation)
 {
     behl::get_global(S, "return_many");
     ASSERT_NO_THROW(behl::call(S, 0, 1));
@@ -586,7 +588,7 @@ TEST_F(CFunctionTest, NativeFunctionReturnValueTruncation)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, NativeFunctionReturnValuePadding)
+TEST_P(CFunctionTest, NativeFunctionReturnValuePadding)
 {
     behl::get_global(S, "return_one");
     ASSERT_NO_THROW(behl::call(S, 0, 3));
@@ -597,7 +599,7 @@ TEST_F(CFunctionTest, NativeFunctionReturnValuePadding)
     behl::pop(S, 3);
 }
 
-TEST_F(CFunctionTest, NativeFunctionManyArguments)
+TEST_P(CFunctionTest, NativeFunctionManyArguments)
 {
     constexpr std::string_view code = "capture_args(1, 2, 3, 4, 5, 'six', 'seven', true, false, nil)";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -622,7 +624,7 @@ TEST_F(CFunctionTest, NativeFunctionManyArguments)
     ASSERT_EQ(last_bool_args[1], false);
 }
 
-TEST_F(CFunctionTest, NativeFunctionSumIntegers)
+TEST_P(CFunctionTest, NativeFunctionSumIntegers)
 {
     behl::get_global(S, "sum_integers");
     behl::push_integer(S, 1);
@@ -637,7 +639,7 @@ TEST_F(CFunctionTest, NativeFunctionSumIntegers)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, NativeFunctionSumManyIntegers)
+TEST_P(CFunctionTest, NativeFunctionSumManyIntegers)
 {
     behl::get_global(S, "sum_integers");
     for (int i = 1; i <= 10; ++i)
@@ -650,7 +652,7 @@ TEST_F(CFunctionTest, NativeFunctionSumManyIntegers)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, NativeFunctionEchoAll)
+TEST_P(CFunctionTest, NativeFunctionEchoAll)
 {
     behl::get_global(S, "echo_all");
     behl::push_integer(S, 10);
@@ -666,7 +668,7 @@ TEST_F(CFunctionTest, NativeFunctionEchoAll)
     behl::pop(S, 4);
 }
 
-TEST_F(CFunctionTest, NativeFunctionAddTwoNumbers)
+TEST_P(CFunctionTest, NativeFunctionAddTwoNumbers)
 {
     behl::get_global(S, "add_two_numbers");
     behl::push_integer(S, 17);
@@ -677,7 +679,7 @@ TEST_F(CFunctionTest, NativeFunctionAddTwoNumbers)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, NativeFunctionConcatStrings)
+TEST_P(CFunctionTest, NativeFunctionConcatStrings)
 {
     behl::get_global(S, "concat_strings");
     behl::push_string(S, "Hello");
@@ -690,7 +692,7 @@ TEST_F(CFunctionTest, NativeFunctionConcatStrings)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, NativeFunctionNestedCall)
+TEST_P(CFunctionTest, NativeFunctionNestedCall)
 {
     behl::get_global(S, "sum_integers");
     behl::push_integer(S, 1);
@@ -715,7 +717,7 @@ TEST_F(CFunctionTest, NativeFunctionNestedCall)
     behl::pop(S, 3);
 }
 
-TEST_F(CFunctionTest, NativeFunctionChainedCalls)
+TEST_P(CFunctionTest, NativeFunctionChainedCalls)
 {
     behl::get_global(S, "return_one");
     ASSERT_NO_THROW(behl::call(S, 0, 1));
@@ -740,7 +742,7 @@ TEST_F(CFunctionTest, NativeFunctionChainedCalls)
     behl::pop(S, 3);
 }
 
-TEST_F(CFunctionTest, CheckInteger_ValidInteger)
+TEST_P(CFunctionTest, CheckInteger_ValidInteger)
 {
     behl::get_global(S, "require_integer");
     behl::push_integer(S, 42);
@@ -750,7 +752,7 @@ TEST_F(CFunctionTest, CheckInteger_ValidInteger)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CheckNumber_ValidNumber)
+TEST_P(CFunctionTest, CheckNumber_ValidNumber)
 {
     behl::get_global(S, "require_number");
     behl::push_number(S, 3.5);
@@ -760,7 +762,7 @@ TEST_F(CFunctionTest, CheckNumber_ValidNumber)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CheckNumber_ValidInteger)
+TEST_P(CFunctionTest, CheckNumber_ValidInteger)
 {
     behl::get_global(S, "require_number");
     behl::push_integer(S, 5);
@@ -770,7 +772,7 @@ TEST_F(CFunctionTest, CheckNumber_ValidInteger)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CheckString_ValidString)
+TEST_P(CFunctionTest, CheckString_ValidString)
 {
     behl::get_global(S, "require_string");
     behl::push_string(S, "hello");
@@ -780,7 +782,7 @@ TEST_F(CFunctionTest, CheckString_ValidString)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CheckBoolean_ValidBoolean)
+TEST_P(CFunctionTest, CheckBoolean_ValidBoolean)
 {
     constexpr std::string_view code = "let result = require_boolean(true)";
     ASSERT_NO_THROW(behl::load_string(S, code));
@@ -791,7 +793,7 @@ TEST_F(CFunctionTest, CheckBoolean_ValidBoolean)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CheckInteger_TwoIntegers)
+TEST_P(CFunctionTest, CheckInteger_TwoIntegers)
 {
     behl::get_global(S, "require_two_integers");
     behl::push_integer(S, 6);
@@ -802,7 +804,7 @@ TEST_F(CFunctionTest, CheckInteger_TwoIntegers)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CheckMixedTypes_ValidTypes)
+TEST_P(CFunctionTest, CheckMixedTypes_ValidTypes)
 {
     behl::get_global(S, "require_mixed_types");
     behl::push_integer(S, 42);
@@ -814,98 +816,98 @@ TEST_F(CFunctionTest, CheckMixedTypes_ValidTypes)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CheckInteger_WrongType_String)
+TEST_P(CFunctionTest, CheckInteger_WrongType_String)
 {
     constexpr std::string_view code = "let result = require_integer('not a number')";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckInteger_WrongType_Nil)
+TEST_P(CFunctionTest, CheckInteger_WrongType_Nil)
 {
     constexpr std::string_view code = "let result = require_integer(nil)";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckInteger_WrongType_Boolean)
+TEST_P(CFunctionTest, CheckInteger_WrongType_Boolean)
 {
     constexpr std::string_view code = "let result = require_integer(true)";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckNumber_WrongType_String)
+TEST_P(CFunctionTest, CheckNumber_WrongType_String)
 {
     constexpr std::string_view code = "let result = require_number('not a number')";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckString_WrongType_Integer)
+TEST_P(CFunctionTest, CheckString_WrongType_Integer)
 {
     constexpr std::string_view code = "let result = require_string(42)";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckString_WrongType_Nil)
+TEST_P(CFunctionTest, CheckString_WrongType_Nil)
 {
     constexpr std::string_view code = "let result = require_string(nil)";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckBoolean_WrongType_Integer)
+TEST_P(CFunctionTest, CheckBoolean_WrongType_Integer)
 {
     constexpr std::string_view code = "let result = require_boolean(42)";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckBoolean_WrongType_String)
+TEST_P(CFunctionTest, CheckBoolean_WrongType_String)
 {
     constexpr std::string_view code = "let result = require_boolean('true')";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckInteger_SecondArgumentWrong)
+TEST_P(CFunctionTest, CheckInteger_SecondArgumentWrong)
 {
     constexpr std::string_view code = "let result = require_two_integers(10, 'not an int')";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckMixedTypes_FirstArgumentWrong)
+TEST_P(CFunctionTest, CheckMixedTypes_FirstArgumentWrong)
 {
     constexpr std::string_view code = "let result = require_mixed_types('wrong', 'test', true)";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckMixedTypes_SecondArgumentWrong)
+TEST_P(CFunctionTest, CheckMixedTypes_SecondArgumentWrong)
 {
     constexpr std::string_view code = "let result = require_mixed_types(42, 123, true)";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckMixedTypes_ThirdArgumentWrong)
+TEST_P(CFunctionTest, CheckMixedTypes_ThirdArgumentWrong)
 {
     constexpr std::string_view code = "let result = require_mixed_types(42, 'test', 'not bool')";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CheckInteger_MissingArgument)
+TEST_P(CFunctionTest, CheckInteger_MissingArgument)
 {
     constexpr std::string_view code = "let result = require_integer()";
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_ANY_THROW(behl::call(S, 0, 0));
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalSimpleExpression)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalSimpleExpression)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return 2 + 3");
@@ -916,7 +918,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalSimpleExpression)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalStringLiteral)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalStringLiteral)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return 'hello world'");
@@ -927,7 +929,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalStringLiteral)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalFunctionCall)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalFunctionCall)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return sum_integers(1, 2, 3, 4)");
@@ -937,7 +939,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalFunctionCall)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalAndDouble)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalAndDouble)
 {
     behl::get_global(S, "eval_and_double");
     behl::push_string(S, "return 10 + 5");
@@ -947,7 +949,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalAndDouble)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalComplexExpression)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalComplexExpression)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return (5 + 3) * 2 - 1");
@@ -957,7 +959,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalComplexExpression)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalWithVariable)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalWithVariable)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "let x = 42; return x * 2");
@@ -967,7 +969,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalWithVariable)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_NestedEval)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_NestedEval)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return eval_code('return 5 + 5')");
@@ -977,7 +979,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_NestedEval)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_CallNativeFromEval)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_CallNativeFromEval)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return add_two_numbers(20, 22)");
@@ -987,7 +989,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_CallNativeFromEval)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalReturnsMultipleValues)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalReturnsMultipleValues)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return return_two()");
@@ -998,7 +1000,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalReturnsMultipleValues)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalInvalidCode)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalInvalidCode)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "this is not valid syntax @#$");
@@ -1012,7 +1014,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalInvalidCode)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalRuntimeError)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalRuntimeError)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return undefined_variable + 5");
@@ -1025,7 +1027,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalRuntimeError)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_CallGlobalNoArgs)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_CallGlobalNoArgs)
 {
     behl::get_global(S, "call_global_function");
     behl::push_string(S, "return_one");
@@ -1035,7 +1037,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_CallGlobalNoArgs)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_DeepNesting)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_DeepNesting)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, "return sum_integers(5, 10, 5)");
@@ -1045,7 +1047,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_DeepNesting)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalDefineFunction)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalDefineFunction)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, R"(
@@ -1060,7 +1062,7 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalDefineFunction)
     behl::pop(S, 1);
 }
 
-TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalLoop)
+TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalLoop)
 {
     behl::get_global(S, "eval_code");
     behl::push_string(S, R"(
@@ -1075,3 +1077,6 @@ TEST_F(CFunctionTest, CFunction_CallsBackIntoBehl_EvalLoop)
     ASSERT_EQ(behl::to_integer(S, -1), 15);
     behl::pop(S, 1);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, CFunctionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

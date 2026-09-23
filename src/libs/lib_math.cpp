@@ -1,5 +1,6 @@
 #include "behl.hpp"
 #include "state.hpp"
+#include "common/arithmetic.hpp"
 
 #include <cmath>
 #include <limits>
@@ -14,7 +15,7 @@ namespace behl
         if (type(S, 0) == Type::kInteger)
         {
             Integer n = to_integer(S, 0);
-            push_integer(S, std::abs(n));
+            push_integer(S, (n < 0) ? arithmetic::neg(n) : n);
         }
         else
         {
@@ -24,31 +25,44 @@ namespace behl
         return 1;
     }
 
+    static void push_numeric_integral(State* S, FP d)
+    {
+        Integer n = 0;
+        if (arithmetic::try_from_fp(d, n))
+        {
+            push_integer(S, n);
+        }
+        else
+        {
+            push_number(S, d);
+        }
+    }
+
     static int math_floor(State* S)
     {
         FP n = to_number(S, 0);
-        push_integer(S, static_cast<Integer>(std::floor(n)));
+        push_numeric_integral(S, std::floor(n));
         return 1;
     }
 
     static int math_ceil(State* S)
     {
         FP n = to_number(S, 0);
-        push_integer(S, static_cast<Integer>(std::ceil(n)));
+        push_numeric_integral(S, std::ceil(n));
         return 1;
     }
 
     static int math_round(State* S)
     {
         FP n = to_number(S, 0);
-        push_integer(S, static_cast<Integer>(std::round(n)));
+        push_numeric_integral(S, std::round(n));
         return 1;
     }
 
     static int math_trunc(State* S)
     {
         FP n = to_number(S, 0);
-        push_integer(S, static_cast<Integer>(std::trunc(n)));
+        push_numeric_integral(S, std::trunc(n));
         return 1;
     }
 
@@ -70,7 +84,7 @@ namespace behl
     {
         FP x = to_number(S, 0);
         FP y = to_number(S, 1);
-        push_number(S, std::pow(x, y));
+        push_number(S, arithmetic::pow(x, y));
         return 1;
     }
 

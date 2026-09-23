@@ -21,7 +21,7 @@ Complete C++ API function reference.
 
 ## Header Files
 
-To use the behl API:
+To use the Behl API:
 ```cpp
 #include <behl/behl.hpp>        // Core API
 #include <behl/exceptions.hpp>  // Exception types
@@ -35,7 +35,7 @@ To use the behl API:
 ```cpp
 State* new_state()
 ```
-Creates a new behl interpreter state.
+Creates a new Behl interpreter state.
 
 ### `close(State*)`
 ```cpp
@@ -47,7 +47,9 @@ Closes and cleans up the interpreter state.
 ```cpp
 void load_stdlib(State* S)
 ```
-Loads all standard library modules. Modules must be explicitly imported using `import()`.
+Loads the core, table, gc, jit, debug, math, os and string libraries. Core installs its functions
+directly as globals (`print`, `pcall`, `error`, `pairs`, `import`, ...); the other libraries are
+modules and must be explicitly imported using `import()`.
 
 ---
 
@@ -193,7 +195,7 @@ Throws if value at `idx` is not of expected type.
 ```cpp
 Integer check_integer(State* S, int32_t idx)
 ```
-Returns integer value. Throws if not an integer.
+Returns integer value. Also accepts a float whose value is integral (for example `3.0`). Throws otherwise.
 
 ### `check_number(State*, int32_t)`
 ```cpp
@@ -286,15 +288,15 @@ void table_set(State* S, int32_t idx)
 ```
 Sets value in table. Pops key and value.
 
-### `table_rawget_field(State*, int32_t, std::string_view)`
+### `table_rawgetfield(State*, int32_t, std::string_view)`
 ```cpp
-void table_rawget_field(State* S, int32_t idx, std::string_view field)
+void table_rawgetfield(State* S, int32_t idx, std::string_view field)
 ```
 Gets field by string key (no metatable lookup).
 
-### `table_rawset_field(State*, int32_t, std::string_view)`
+### `table_rawsetfield(State*, int32_t, std::string_view)`
 ```cpp
-void table_rawset_field(State* S, int32_t idx, std::string_view field)
+void table_rawsetfield(State* S, int32_t idx, std::string_view field)
 ```
 Sets field by string key (no metatable lookup). Pops value.
 
@@ -302,17 +304,18 @@ Sets field by string key (no metatable lookup). Pops value.
 
 ## Metatables
 
-### `set_metatable(State*, int32_t)`
+### `metatable_set(State*, int32_t)`
 ```cpp
-void set_metatable(State* S, int32_t idx)
+void metatable_set(State* S, int32_t idx)
 ```
 Sets metatable for value at `idx`. Pops the metatable from stack.
 
-### `get_metatable(State*, int32_t)`
+### `metatable_get(State*, int32_t)`
 ```cpp
-bool get_metatable(State* S, int32_t idx)
+bool metatable_get(State* S, int32_t idx)
 ```
-Gets metatable of value at `idx` and pushes it. Returns `false` if no metatable.
+Gets metatable of value at `idx` and pushes it. If there is no metatable it pushes nil and returns
+`false`, so a value is pushed either way and the caller must pop it.
 
 ---
 
@@ -366,7 +369,7 @@ struct ModuleReg {
 
 struct ModuleConst {
     std::string_view name;
-    Value value;
+    std::variant<Integer, FP, std::string_view, bool> value;
 };
 ```
 
@@ -382,7 +385,7 @@ Throws a `RuntimeError` exception. Does not return.
 
 ### Exception Types
 
-All behl exceptions inherit from `behl::BehlException`:
+All Behl exceptions inherit from `behl::BehlException`:
 
 ```cpp
 namespace behl {
@@ -473,30 +476,42 @@ namespace behl {
     using PrintHandler = void (*)(State* S, std::string_view msg);
     
     // Value pin handle
-    using PinHandle = /* implementation-defined */;
+    enum class PinHandle : int32_t {
+        kInvalid = -1,
+    };
     
-    // Type enumeration
-    enum class Type {
+    // Type enumeration, the enumerator values carry category bits and are not sequential
+    enum class Type : uint8_t {
         kNil, kBoolean, kInteger, kNumber,
         kString, kTable, kClosure, kCFunction,
         kUserdata
     };
-    
-    // Special indices
-    constexpr int32_t REGISTRY_INDEX = /* ... */;
 }
 ```
 
 ---
 
-## Constants
+## Named Metatables
 
-### `REGISTRY_INDEX`
+Metatables can be registered under a name and looked up again later, which is how you attach a
+shared metatable to every instance of a userdata type.
 
-Special stack index for the registry table. Use for storing metatables and other internal values.
+### `metatable_new(State*, std::string_view)`
+```cpp
+bool metatable_new(State* S, std::string_view name)
+```
+Creates a metatable with the given name and pushes it. Returns `false` if one with that name already
+exists; the existing metatable is pushed in that case.
+
+### `metatable_find(State*, std::string_view)`
+```cpp
+void metatable_find(State* S, std::string_view name)
+```
+Pushes the metatable registered under `name`, or nil if there is none.
 
 ```cpp
-behl::table_rawset_field(S, behl::REGISTRY_INDEX, "MyType_mt");
+behl::metatable_find(S, "MyType_mt");
+behl::metatable_set(S, -2);
 ```
 
 ---

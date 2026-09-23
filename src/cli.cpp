@@ -34,7 +34,9 @@ struct Options
 {
     Mode mode = Mode::Interactive;
     std::string execute_code;
-    std::vector<std::string> scripts;
+    std::string script;
+    std::vector<std::string> script_args;
+    bool disable_jit = false;
 };
 
 template<typename... TArgs>
@@ -60,6 +62,11 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
     for (int i = 1; i < argc; ++i)
     {
         std::string_view arg = argv[i];
+        if (!opts.script.empty())
+        {
+            opts.script_args.emplace_back(arg);
+            continue;
+        }
         if (arg == "-i")
         {
             if (mode_set)
@@ -96,6 +103,10 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
             opts.execute_code = argv[++i];
             mode_set = true;
         }
+        else if (arg == "--nojit")
+        {
+            opts.disable_jit = true;
+        }
         else if (arg.starts_with('-'))
         {
             error_msg = behl::format("unrecognized option '{}'", arg);
@@ -103,14 +114,14 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         }
         else
         {
-            opts.scripts.emplace_back(arg);
+            opts.script = arg;
         }
     }
 
     // Determine mode based on what was provided
     if (!mode_set)
     {
-        if (!opts.scripts.empty())
+        if (!opts.script.empty())
         {
             opts.mode = Mode::Run;
         }
@@ -119,7 +130,7 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
             opts.mode = Mode::Interactive;
         }
     }
-    else if (!opts.scripts.empty())
+    else if (!opts.script.empty())
     {
         // Mode was explicitly set, apply it to scripts
         if (opts.mode == Mode::Interactive)
@@ -254,16 +265,10 @@ static int run_execute_mode(behl::State* S, const Options& opts)
 
 static int run_dump_mode(behl::State* S, const Options& opts)
 {
-    if (!opts.scripts.empty())
+    if (!opts.script.empty())
     {
-        if (opts.scripts.size() > 1)
-        {
-            print_error("Error: bytecode dump (-b) only works with a single file");
-            return 1;
-        }
-
         std::string load_error;
-        if (!load_file(S, opts.scripts[0], load_error))
+        if (!load_file(S, opts.script, load_error))
         {
             print_error("{}", load_error);
             return 1;
@@ -280,18 +285,20 @@ static int run_dump_mode(behl::State* S, const Options& opts)
 
 static int run_script_mode(behl::State* S, const Options& opts)
 {
-    for (const auto& script : opts.scripts)
+    std::string load_error;
+    if (!load_file(S, opts.script, load_error))
     {
-        std::string load_error;
-        if (!load_file(S, script, load_error))
-        {
-            print_error("{}", load_error);
-            return 1;
-        }
-
-        behl::call(S, 0, behl::kMultRet);
-        print_results(S);
+        print_error("{}", load_error);
+        return 1;
     }
+
+    for (const auto& script_arg : opts.script_args)
+    {
+        behl::push_string(S, script_arg);
+    }
+
+    behl::call(S, static_cast<int32_t>(opts.script_args.size()), behl::kMultRet);
+    print_results(S);
     return 0;
 }
 
@@ -341,6 +348,10 @@ int main(int argc, char* argv[])
     const Options& opts = *opts_result;
 
     behl::State* S = behl::new_state();
+    if (opts.disable_jit)
+    {
+        S->jit_enabled = false;
+    }
     behl::load_stdlib(S);
     behl::load_lib_fs(S);
     behl::load_lib_process(S);

@@ -118,7 +118,7 @@ print(loggedCall("sum", 10, 20, 30));
 
 ## Varargs with Closures
 
-Variadic parameters work with closures and are captured in upvalues:
+`...` itself is **not** capturable. It compiles to an instruction that reads the extra arguments of the *current* call frame, so an inner function cannot see the outer function's `...`. Pack it into a table first, and that table can be captured as an upvalue like any other local:
 
 ```javascript
 function makeFormatter(prefix, ...) {
@@ -145,9 +145,9 @@ Common pattern: varargs as table constructor arguments:
 function createPoint(...) {
     let coords = {...};
     return {
-        x = coords[0] or 0,
-        y = coords[1] or 0,
-        z = coords[2] or 0
+        x = coords[0] || 0,
+        y = coords[1] || 0,
+        z = coords[2] || 0
     };
 }
 
@@ -170,14 +170,16 @@ function inspect(...) {
     }
 }
 
-inspect(42, "hello", true, null);
+inspect(42, "hello", true, "x");
 // Output:
 // Count: 4
-// [0] = 42 (number)
+// [0] = 42 (integer)
 // [1] = hello (string)
 // [2] = true (boolean)
-// [3] = null (null)
+// [3] = x (string)
 ```
+
+**Note**: `#` stops at the first `nil` in the array part, so packing a `nil` argument makes the count short. `inspect(42, "hello", true, nil)` reports a count of 3.
 
 ## Default Values with Varargs
 
@@ -186,8 +188,8 @@ Provide default values when varargs are empty:
 ```javascript
 function process(required, ...) {
     let optional = {...};
-    let option1 = optional[0] or "default1";
-    let option2 = optional[1] or "default2";
+    let option1 = optional[0] || "default1";
+    let option2 = optional[1] || "default2";
     
     print(required + ", " + option1 + ", " + option2);
 }
@@ -206,7 +208,7 @@ function max(...) {
     let args = {...};
     
     if (#args == 0) {
-        return null;
+        return nil;
     }
     
     let maximum = args[0];
@@ -221,7 +223,7 @@ function max(...) {
 
 print(max(3, 7, 2, 9, 1));  // 9
 print(max(5));              // 5
-print(max());               // null
+print(max());               // nil
 ```
 
 ## Common Patterns
@@ -300,6 +302,46 @@ assert(x > 0, "x must be positive, got ", x);
 4. **Type Safety**: No type checking - use `typeof()` to validate
 5. **Performance**: Minimal overhead compared to fixed parameters
 6. **Empty Case**: `{...}` with no arguments creates empty table
+7. **Last In A Table Constructor**: `...` must be the final entry of a table literal, `{..., 1}` is a compile error
+8. **Multiple Assignment**: `let a, b, c = ...;` spreads the varargs across the names, padding with `nil` when there are too few and dropping the extras when there are too many
+9. **Return**: `return ...;` returns every vararg, not just the first
+10. **Vararg Functions Only**: using `...` in a function that does not declare `...` is a compile error, `cannot use '...' outside a vararg function`
+
+## Script Arguments
+
+The main chunk of a script is itself a vararg function, so `...` at the top level holds the arguments the script was invoked with. The CLI passes everything after the script path:
+
+```
+behl script.behl hello world 42
+```
+
+```cpp
+let args = {...}
+print(rawlen(args))  // 3
+print(args[0])       // hello
+```
+
+Arguments arrive as strings, so convert them yourself with `tonumber()` where needed. A script run with no arguments sees an empty `...`.
+
+Because everything after the script path is treated as an argument rather than as another file, the CLI runs exactly one script per invocation.
+
+When embedding, the same mechanism applies: push the arguments after `load_string` or `load_buffer` and pass the count to `call`.
+
+```cpp
+function spread(...) {
+    let a, b, c = ...;   // Missing values become nil
+    print(a, b, c);
+}
+
+spread(1);         // 1  nil  nil
+spread(1, 2, 3, 4); // 1  2  3 (the 4 is dropped)
+
+function forward(...) {
+    return ...;      // All varargs, not just the first
+}
+
+let x, y = forward(10, 20);  // x = 10, y = 20
+```
 
 ## Comparison with Other Languages
 

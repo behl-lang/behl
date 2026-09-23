@@ -61,6 +61,9 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_newtable, handler_newtable(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_setlist, handler_setlist(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_self, handler_self(S, frame, instr.a(), instr.b(), instr.c()))
+    BEHL_JIT_WRAP(jit_op_vararg, handler_vararg(S, frame, instr.a(), instr.b()))
+    BEHL_JIT_WRAP(jit_op_varargprep, handler_varargprep(S, frame, instr.a()))
+    BEHL_JIT_WRAP(jit_op_varargexpand, handler_varargexpand(S, frame, instr.a(), instr.b()))
     BEHL_JIT_WRAP(jit_op_defer, handler_defer(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_defercall, handler_defercall(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_enddefer, handler_enddefer(S, frame, instr.a()))
@@ -153,53 +156,53 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_decupvalue, handler_dec_upvalue(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_addlocal, handler_add(S, frame, instr.a(), instr.a(), instr.b()))
     BEHL_JIT_WRAP(
-        jit_op_eq, (handler_cmp<MetaMethodType::kEq, CmpEqOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
+        jit_op_eq, (handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
-        jit_op_ne, (handler_cmp<MetaMethodType::kEq, CmpNeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
+        jit_op_ne, (handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
-        jit_op_lt, (handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
+        jit_op_lt, (handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
-        jit_op_ge, (handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
+        jit_op_ge, (handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
-        jit_op_le, (handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
+        jit_op_le, (handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
-        jit_op_gt, (handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
+        jit_op_gt, (handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(jit_op_lti,
-        (handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_const_int>(
+        (handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_const_int>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_gei,
-        (handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_const_int>(
+        (handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_const_int>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_lei,
-        (handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_const_int>(
+        (handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_const_int>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_gti,
-        (handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_const_int>(
+        (handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_const_int>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_ltf,
-        (handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_const_fp>(
+        (handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_const_fp>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_gef,
-        (handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_const_fp>(
+        (handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_const_fp>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_lef,
-        (handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_const_fp>(
+        (handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_const_fp>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_gtf,
-        (handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_const_fp>(
+        (handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_const_fp>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_ltimm,
-        (handler_cmp<MetaMethodType::kLt, CmpLtOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_geimm,
-        (handler_cmp<MetaMethodType::kLt, CmpGeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_leimm,
-        (handler_cmp<MetaMethodType::kLe, CmpLeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_gtimm,
-        (handler_cmp<MetaMethodType::kLt, CmpGtOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_eqimm,
-        (handler_cmp<MetaMethodType::kEq, CmpEqOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_neimm,
-        (handler_cmp<MetaMethodType::kEq, CmpNeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_test, handler_test(S, frame, instr.a(), instr.b() != 0))
     BEHL_JIT_WRAP(jit_op_testset, handler_testset(S, frame, instr.a(), instr.b(), instr.c() != 0))
     BEHL_JIT_WRAP(jit_op_forprep, handler_forprep(S, frame, instr.a(), instr.signed_offset()))
@@ -314,6 +317,80 @@ namespace behl
         (void)pc_next;
         S->jit_exception = std::make_exception_ptr(RuntimeError("defer unwind chain reached from compiled code"));
         return kJitError;
+    }
+
+    uint32_t BEHL_CALLCONV jit_call_push(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    {
+        const Instruction instr{ raw };
+        try
+        {
+            CallFrame& frame = S->call_stack.back();
+            frame.pc = pc_next;
+            handler_call<false>(S, frame, instr.a(), instr.b(), instr.c(), instr.flag_bit());
+            return 0;
+        }
+        catch (...)
+        {
+            S->jit_exception = std::current_exception();
+            return kJitError;
+        }
+    }
+
+    uintptr_t BEHL_CALLCONV jit_call_setup(State* S, uint32_t raw, uint32_t pc_next) noexcept
+    {
+        const Instruction instr{ raw };
+
+        if (!S->jit_enabled || S->debug.enabled)
+        {
+            return kJitSetupDecline;
+        }
+
+        auto& callstack = S->call_stack;
+        CallFrame& frame = callstack.back();
+        const bool is_self_call = instr.flag_bit();
+
+        if (!is_self_call && callstack.size() >= kJitNestLimit)
+        {
+            return kJitSetupDecline;
+        }
+
+        const GCProto* callee = nullptr;
+        if (is_self_call)
+        {
+            callee = frame.proto;
+        }
+        else
+        {
+            const Value& func = get_register(S, frame, instr.a());
+            if (!func.is_closure())
+            {
+                return kJitSetupDecline;
+            }
+            callee = func.get_closure()->proto;
+        }
+
+        if (callee == nullptr || callee->jit_code == nullptr)
+        {
+            return kJitSetupDecline;
+        }
+
+        try
+        {
+            frame.pc = pc_next;
+            handler_call<false>(S, frame, instr.a(), instr.b(), instr.c(), is_self_call);
+
+            if (callstack.size() <= 1 || callstack.back().proto != callee)
+            {
+                return kJitSetupPushedOther;
+            }
+
+            return reinterpret_cast<uintptr_t>(callee->jit_code);
+        }
+        catch (...)
+        {
+            S->jit_exception = std::current_exception();
+            return kJitSetupError;
+        }
     }
 
     uint32_t BEHL_CALLCONV jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept

@@ -19,11 +19,13 @@ namespace behl
 
     static constexpr size_t kMaxUpvalues = 255;
 
-    static constexpr size_t kMaxConstants = 0xFFFFFFFF;
+    static constexpr size_t kMaxConstants = 0x1FFFF;
 
     static constexpr uint32_t kMinRegisterPrealloc = 8;
 
     static constexpr size_t kTableArrayGrowthLimit = 64;
+
+    static constexpr uint32_t kFieldsPerFlush = 50;
 
     // GC Configuration
     static constexpr size_t kGCInitialThreshold = 4096;

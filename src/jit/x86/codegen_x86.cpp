@@ -24,6 +24,7 @@ namespace behl
     static constexpr GpReg kFrameBase = GpReg::r6;
 #    endif
     static constexpr int32_t kFrameScratch = kWinABI ? 40 : 24;
+    static constexpr int32_t kEntryDepthSlot = kWinABI ? 32 : 16;
 
 #    if BEHL_JIT_X86_64
     static constexpr GpReg kGpPool[] = { kScratchA, kScratchB, kScratchC, GpReg::r9, GpReg::r10 };
@@ -74,9 +75,31 @@ namespace behl
         return Cond::e;
     }
 
-    Label CodegenX86::label(uint32_t id) const noexcept
+    Label CodegenX86::label(uint32_t id) noexcept
     {
+        if (!base_valid_)
+        {
+            uint8_t& flow = label_flow_[id];
+            assert((flow & kFlowAssumedValid) == 0 && "stale frame base on a backward edge into a label bound as valid");
+            if ((flow & kFlowAssumedValid) != 0)
+            {
+                failed_ = true;
+            }
+            flow |= kFlowEdgeInvalid;
+        }
         return Label{ id };
+    }
+
+    void CodegenX86::bind_label(uint32_t id)
+    {
+        e_.bind(Label{ id });
+        const bool fallthrough_valid = !reachable_ || base_valid_;
+        base_valid_ = fallthrough_valid && (label_flow_[id] & kFlowEdgeInvalid) == 0;
+        if (base_valid_)
+        {
+            label_flow_[id] |= kFlowAssumedValid;
+        }
+        reachable_ = true;
     }
 
     GpReg CodegenX86::gp(uint32_t var) const
@@ -219,6 +242,46 @@ namespace behl
         e_.add(kFrameBase, kScratchB);
     }
 
+    void CodegenX86::emit_tail_jump_native(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            constexpr GpReg kTarget = GpReg::r10;
+
+            e_.mov(kScratchA, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kScratchA, mem(kStackPtr, kEntryDepthSlot));
+            e_.jcc(Cond::ne, label(op.label));
+
+            e_.mov(kScratchA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.mov(kScratchB, mem(kStateReg, State::call_stack_size_offset()));
+            e_.lea(kScratchA, mem(kScratchA, kScratchB, kCallFrameHalfScale));
+            e_.mov(kTarget, mem(kScratchA, kScratchB, kCallFrameHalfScale, CallFrame::proto_offset() - kCallFrameStride));
+            e_.mov(kTarget, mem(kTarget, GCProto::jit_code_offset()));
+            e_.cmp(kTarget, 0);
+            e_.jcc(Cond::e, label(op.label));
+
+            if constexpr (kWinABI)
+            {
+                e_.mov(kScratchB, kStateReg);
+            }
+            else
+            {
+                e_.mov(GpReg::r7, kStateReg);
+            }
+
+            e_.add(kStackPtr, kFrameScratch);
+            e_.pop(kFrameBase);
+            e_.pop(kStateReg);
+            e_.jmp(kTarget);
+            reachable_ = false;
+        }
+    }
+
     void CodegenX86::emit_prologue()
     {
         if constexpr (kMode64)
@@ -234,6 +297,8 @@ namespace behl
             {
                 e_.mov(kStateReg, GpReg::r7);
             }
+            e_.mov(kScratchA, mem(kStateReg, State::call_stack_size_offset()));
+            e_.mov(mem(kStackPtr, kEntryDepthSlot), kScratchA);
         }
         else
         {
@@ -295,13 +360,575 @@ namespace behl
             e_.add(kStackPtr, 16);
         }
 
-        e_.cmp32(kScratchA, kJitError);
-        e_.jcc(Cond::e, label(op.label));
         if (!op.flag)
         {
             base_valid_ = false;
         }
+        e_.cmp32(kScratchA, kJitError);
+        e_.jcc(Cond::e, label(op.label));
         alloc_result(op.var);
+    }
+
+    void CodegenX86::emit_return_dispatch(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label2));
+            return;
+        }
+        else
+        {
+            e_.mov(kScratchA, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kScratchA, mem(kStackPtr, kEntryDepthSlot));
+            e_.jcc(Cond::ae, label(op.label));
+            e_.jmp(label(op.label2));
+            reachable_ = false;
+        }
+    }
+
+    void CodegenX86::emit_return_fast(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            const int32_t a = op.slot;
+            const Label slow = label(op.label);
+
+            constexpr GpReg kIdx = GpReg::r0;
+            constexpr GpReg kDest = GpReg::r1;
+            constexpr GpReg kSize = GpReg::r2;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+
+            ensure_base();
+
+            if (op.flag)
+            {
+                const int32_t moved = static_cast<int32_t>(op.var);
+                const int32_t delta_slots = static_cast<int32_t>(op.imm) / static_cast<int32_t>(Value::size());
+                const int32_t window = static_cast<int32_t>(op.var2);
+
+                if (moved == 1)
+                {
+                    e_.mov(kTmpB, mem(kFrameBase, a * Value::size()));
+                    e_.mov(mem(kFrameBase, 0), kTmpB);
+                    e_.mov(kTmpB, mem(kFrameBase, a * Value::size() + 8));
+                    e_.mov(mem(kFrameBase, 8), kTmpB);
+                }
+
+                e_.mov(kDest, kFrameBase);
+                e_.sub(kDest, mem(kStateReg, State::stack_data_offset()));
+                e_.sar(kDest, 4);
+                e_.lea(kTmpA, mem(kDest, window - delta_slots));
+                e_.mov(mem(kStateReg, State::stack_size_offset()), kTmpA);
+
+                e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+                e_.sub(kIdx, 1);
+                e_.mov(mem(kStateReg, State::call_stack_size_offset()), kIdx);
+                e_.mov(mem(kStateReg, State::call_headers_size_offset()), kIdx);
+
+                e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+                e_.lea(kIdx, mem(kIdx, -1));
+                e_.lea(kIdx, mem(kIdx, kIdx, 2));
+                e_.lea(kTmpB, mem(kTmpB, kIdx, 8));
+                e_.lea(kTmpA, mem(kDest, moved));
+                e_.mov32(mem(kTmpB, 0), kTmpA);
+
+                base_valid_ = false;
+                return;
+            }
+
+            e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kIdx, 2);
+            e_.jcc(Cond::b, slow);
+
+            e_.lea(kSize, mem(kIdx, -1));
+            e_.cmp(kSize, mem(kStackPtr, kEntryDepthSlot));
+            e_.jcc(Cond::b, slow);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kTmpB, mem(kSize, kSize, 2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            const int32_t moved = static_cast<int32_t>(op.var);
+
+            Label nresults_ok = e_.new_label();
+            e_.mov32(kTmpB, mem(kTmpA, 20));
+            e_.cmp32(kTmpB, static_cast<uint32_t>(moved));
+            e_.jcc(Cond::e, nresults_ok);
+            e_.cmp32(kTmpB, 255);
+            e_.jcc(Cond::ne, slow);
+            e_.bind(nresults_ok);
+            e_.mov32(kDest, mem(kTmpA, 4));
+
+            if (moved == 1)
+            {
+                e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+                e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+                e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+                e_.mov(kTmpB, mem(kFrameBase, a * Value::size()));
+                e_.mov(mem(kTmpA, 0), kTmpB);
+                e_.mov(kTmpB, mem(kFrameBase, a * Value::size() + 8));
+                e_.mov(mem(kTmpA, 8), kTmpB);
+            }
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.lea(kTmpB, mem(kIdx, -2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.mov(kTmpB, mem(kTmpA, CallFrame::proto_offset()));
+            e_.test(kTmpB, kTmpB);
+            e_.jcc(Cond::e, slow);
+            e_.mov32(kTmpB, mem(kTmpB, GCProto::max_stack_size_offset()));
+            e_.mov32(kTmpA, mem(kTmpA, CallFrame::base_offset()));
+            e_.add(kTmpB, kTmpA);
+
+            e_.lea(kTmpA, mem(kDest, moved));
+
+            Label have_size = e_.new_label();
+            e_.cmp(kTmpB, kTmpA);
+            e_.jcc(Cond::ae, have_size);
+            e_.mov(kTmpB, kTmpA);
+            e_.bind(have_size);
+
+            e_.cmp(kTmpB, mem(kStateReg, State::stack_size_offset()));
+            e_.jcc(Cond::a, slow);
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kTmpB);
+
+            e_.mov(mem(kStateReg, State::call_stack_size_offset()), kSize);
+            e_.mov(mem(kStateReg, State::call_headers_size_offset()), kSize);
+
+            e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kIdx, mem(kSize, -1));
+            e_.lea(kDest, mem(kIdx, kIdx, 2));
+            e_.lea(kTmpB, mem(kTmpB, kDest, 8));
+            e_.mov32(mem(kTmpB, 0), kTmpA);
+
+            base_valid_ = false;
+        }
+    }
+
+    void CodegenX86::emit_return_self_site(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            reachable_ = false;
+            return;
+        }
+        else
+        {
+            const int32_t slot = op.slot;
+            const int32_t moved = static_cast<int32_t>(op.var);
+            const int32_t window = static_cast<int32_t>(op.var2);
+            const int32_t a = static_cast<int32_t>(op.raw);
+
+            constexpr GpReg kIdx = GpReg::r0;
+            constexpr GpReg kDest = GpReg::r1;
+            constexpr GpReg kSize = GpReg::r2;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+
+            ensure_base();
+            const Label next = label(op.label);
+
+            e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kIdx, 2);
+            e_.jcc(Cond::b, next);
+            e_.lea(kSize, mem(kIdx, -1));
+            e_.cmp(kSize, mem(kStackPtr, kEntryDepthSlot));
+            e_.jcc(Cond::b, next);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.lea(kTmpB, mem(kIdx, -2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.mov(kTmpB, static_cast<uint64_t>(op.imm));
+            e_.cmp(kTmpB, mem(kTmpA, CallFrame::proto_offset()));
+            e_.jcc(Cond::ne, next);
+            e_.mov32(kTmpB, mem(kTmpA, CallFrame::pc_offset()));
+            e_.cmp32(kTmpB, op.pcn);
+            e_.jcc(Cond::ne, next);
+
+            e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kDest, mem(kSize, kSize, 2));
+            e_.lea(kTmpB, mem(kTmpB, kDest, 8));
+            e_.mov32(kDest, mem(kTmpB, 4));
+
+            e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+            e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+            if (moved == 1)
+            {
+                e_.mov(kTmpB, mem(kFrameBase, slot * Value::size()));
+                e_.mov(mem(kTmpA, 0), kTmpB);
+                e_.mov(kTmpB, mem(kFrameBase, slot * Value::size() + 8));
+                e_.mov(mem(kTmpA, 8), kTmpB);
+            }
+            e_.lea(kFrameBase, mem(kTmpA, -a * Value::size()));
+
+            e_.lea(kTmpA, mem(kDest, window - a));
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kTmpA);
+
+            e_.mov(mem(kStateReg, State::call_stack_size_offset()), kSize);
+            e_.mov(mem(kStateReg, State::call_headers_size_offset()), kSize);
+
+            e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kIdx, mem(kSize, -1));
+            e_.lea(kIdx, mem(kIdx, kIdx, 2));
+            e_.lea(kTmpB, mem(kTmpB, kIdx, 8));
+            e_.lea(kTmpA, mem(kDest, moved));
+            e_.mov32(mem(kTmpB, 0), kTmpA);
+
+            base_valid_ = true;
+            e_.jmp(label(op.label2));
+            reachable_ = false;
+        }
+    }
+
+    void CodegenX86::emit_frame_push_fast(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            const auto* proto = reinterpret_cast<const GCProto*>(static_cast<uintptr_t>(op.imm));
+            const int32_t a = op.slot;
+            const int32_t num_args = static_cast<int32_t>(op.var);
+            const int32_t nresults = static_cast<int32_t>(op.var2);
+            const int32_t window = static_cast<int32_t>(proto->max_stack_size);
+            const int32_t items = num_args + 1;
+            const int32_t needed = (items > window) ? items : window;
+
+            const Label slow = label(op.label);
+            constexpr GpReg kPos = GpReg::r2;
+            constexpr GpReg kIdx = GpReg::r0;
+            constexpr GpReg kReq = GpReg::r1;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+
+            ensure_base();
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.mov(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
+            e_.mov32(kPos, mem(kTmpA, kTmpB, kCallFrameHalfScale, CallFrame::base_offset() - kCallFrameStride));
+            e_.add(kPos, a);
+
+            e_.cmp(mem(kStateReg, State::gc_debt_offset()), 0);
+            e_.jcc(Cond::g, slow);
+
+            e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kIdx, mem(kStateReg, State::call_stack_capacity_offset()));
+            e_.jcc(Cond::ae, slow);
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_size_offset()));
+            e_.cmp(kTmpA, mem(kStateReg, State::call_headers_capacity_offset()));
+            e_.jcc(Cond::ae, slow);
+
+            e_.lea(kReq, mem(kPos, needed));
+            e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
+            e_.jcc(Cond::a, slow);
+
+            if (proto->has_upvalues)
+            {
+                e_.mov(kTmpA, mem(kFrameBase, 0));
+                e_.mov(kTmpB, mem(kFrameBase, 8));
+                e_.mov(mem(kFrameBase, a * Value::size()), kTmpA);
+                e_.mov(mem(kFrameBase, a * Value::size() + 8), kTmpB);
+            }
+
+            for (int32_t i = num_args; i < static_cast<int32_t>(proto->num_params); ++i)
+            {
+                e_.mov32(mem(kFrameBase, (a + 1 + i) * Value::size() + Value::type_offset()), 0);
+            }
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, kCallFrameHalfScale));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, kCallFrameHalfScale));
+            e_.mov32(mem(kTmpA, CallFrame::pc_offset() - kCallFrameStride), static_cast<uint32_t>(op.pcn));
+
+            e_.mov(kTmpB, reinterpret_cast<uint64_t>(proto));
+            e_.mov(mem(kTmpA, CallFrame::proto_offset()), kTmpB);
+            e_.mov32(mem(kTmpA, CallFrame::pc_offset()), 0);
+            e_.mov32(mem(kTmpA, CallFrame::base_offset()), kPos);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kTmpB, mem(kIdx, kIdx, 2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpB, mem(kPos, items));
+            e_.mov32(mem(kTmpA, 0), kTmpB);
+            e_.mov32(mem(kTmpA, 4), kPos);
+            e_.mov32(mem(kTmpA, 8), 0);
+            e_.mov32(mem(kTmpA, 12), 0);
+            e_.mov32(mem(kTmpA, 16), 0);
+            e_.mov32(mem(kTmpA, 20), static_cast<uint32_t>(nresults));
+
+            e_.lea(kTmpB, mem(kIdx, 1));
+            e_.mov(mem(kStateReg, State::call_stack_size_offset()), kTmpB);
+            e_.mov(mem(kStateReg, State::call_headers_size_offset()), kTmpB);
+
+            Label done = e_.new_label();
+            e_.mov(kIdx, mem(kStateReg, State::stack_size_offset()));
+            e_.cmp(kIdx, kReq);
+            e_.jcc(Cond::ae, done);
+
+            Label fill = e_.new_label();
+            e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, 8));
+            e_.lea(kTmpA, mem(kTmpA, kIdx, 8));
+            e_.bind(fill);
+            e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+            e_.add(kTmpA, Value::size());
+            e_.add(kIdx, 1);
+            e_.cmp(kIdx, kReq);
+            e_.jcc(Cond::b, fill);
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
+            e_.bind(done);
+
+            e_.lea(kFrameBase, mem(kFrameBase, a * Value::size()));
+            base_valid_ = true;
+        }
+    }
+
+    void CodegenX86::emit_tail_frame_fast(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            const auto* proto = reinterpret_cast<const GCProto*>(static_cast<uintptr_t>(op.imm));
+            const int32_t a = op.slot;
+            const int32_t num_args = static_cast<int32_t>(op.var);
+            const int32_t window = static_cast<int32_t>(proto->max_stack_size);
+            const int32_t items = num_args + 1;
+            const Label slow = label(op.label);
+
+            constexpr GpReg kBase = GpReg::r2;
+            constexpr GpReg kReq = GpReg::r1;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+            constexpr GpReg kCur = GpReg::r0;
+            constexpr int32_t kSpillItems = 0;
+            constexpr int32_t kSpillBase = 8;
+
+            ensure_base();
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.mov(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, kCallFrameHalfScale));
+            e_.mov32(kBase, mem(kTmpA, CallFrame::base_offset() - kCallFrameStride));
+
+            if (op.flag)
+            {
+                e_.mov(kCur, mem(kStateReg, State::call_headers_data_offset()));
+                e_.lea(kReq, mem(kTmpB, -1));
+                e_.lea(kReq, mem(kReq, kReq, 2));
+                e_.lea(kCur, mem(kCur, kReq, 8));
+
+                e_.mov32(kReq, mem(kCur, 0));
+                e_.sub(kReq, kBase);
+                e_.sub(kReq, a);
+                e_.cmp(kReq, 1);
+                e_.jcc(Cond::b, slow);
+                e_.cmp(kReq, window);
+                e_.jcc(Cond::a, slow);
+                e_.mov(mem(kStackPtr, kSpillItems), kReq);
+                e_.mov(mem(kStackPtr, kSpillBase), kBase);
+
+                e_.lea(kReq, mem(kBase, window));
+                e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
+                e_.jcc(Cond::a, slow);
+
+                e_.mov32(mem(kTmpA, CallFrame::pc_offset() - kCallFrameStride), 0);
+
+                e_.mov(kTmpB, mem(kStackPtr, kSpillItems));
+                e_.add(kTmpB, kBase);
+                e_.mov32(mem(kCur, 0), kTmpB);
+
+                e_.mov(kTmpA, kFrameBase);
+                e_.add(kTmpA, (a + 1) * Value::size());
+                e_.mov(kTmpB, kFrameBase);
+                e_.add(kTmpB, Value::size());
+                e_.mov(kCur, mem(kStackPtr, kSpillItems));
+                e_.sub(kCur, 1);
+
+                Label copy_done = e_.new_label();
+                Label copy_loop = e_.new_label();
+                e_.cmp(kCur, 0);
+                e_.jcc(Cond::be, copy_done);
+                e_.bind(copy_loop);
+                e_.mov(kBase, mem(kTmpA, 0));
+                e_.mov(mem(kTmpB, 0), kBase);
+                e_.mov(kBase, mem(kTmpA, 8));
+                e_.mov(mem(kTmpB, 8), kBase);
+                e_.add(kTmpA, Value::size());
+                e_.add(kTmpB, Value::size());
+                e_.sub(kCur, 1);
+                e_.cmp(kCur, 0);
+                e_.jcc(Cond::a, copy_loop);
+                e_.bind(copy_done);
+
+                e_.mov(kCur, mem(kStackPtr, kSpillItems));
+                e_.mov(kTmpA, kFrameBase);
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+
+                Label pad_done = e_.new_label();
+                Label pad_loop = e_.new_label();
+                e_.cmp(kCur, window);
+                e_.jcc(Cond::ae, pad_done);
+                e_.bind(pad_loop);
+                e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+                e_.add(kTmpA, Value::size());
+                e_.add(kCur, 1);
+                e_.cmp(kCur, window);
+                e_.jcc(Cond::b, pad_loop);
+                e_.bind(pad_done);
+
+                e_.mov(kReq, mem(kStackPtr, kSpillBase));
+                e_.add(kReq, window);
+
+                Label grow_done = e_.new_label();
+                e_.mov(kCur, mem(kStateReg, State::stack_size_offset()));
+                e_.cmp(kCur, kReq);
+                e_.jcc(Cond::ae, grow_done);
+
+                Label grow_fill = e_.new_label();
+                e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+                e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+                e_.bind(grow_fill);
+                e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+                e_.add(kTmpA, Value::size());
+                e_.add(kCur, 1);
+                e_.cmp(kCur, kReq);
+                e_.jcc(Cond::b, grow_fill);
+                e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
+                e_.bind(grow_done);
+
+                base_valid_ = true;
+                return;
+            }
+
+            e_.lea(kReq, mem(kBase, window));
+            e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
+            e_.jcc(Cond::a, slow);
+
+            for (int32_t i = 0; i < num_args; ++i)
+            {
+                const int32_t src = (a + 1 + i) * Value::size();
+                const int32_t dst = (1 + i) * Value::size();
+                e_.mov(kTmpB, mem(kFrameBase, src));
+                e_.mov(mem(kFrameBase, dst), kTmpB);
+                e_.mov(kTmpB, mem(kFrameBase, src + 8));
+                e_.mov(mem(kFrameBase, dst + 8), kTmpB);
+            }
+
+            for (int32_t i = items; i < window; ++i)
+            {
+                e_.mov32(mem(kFrameBase, i * Value::size() + Value::type_offset()), 0);
+            }
+
+            e_.mov32(mem(kTmpA, CallFrame::pc_offset() - kCallFrameStride), 0);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+            e_.mov(kTmpB, mem(kStateReg, State::call_stack_size_offset()));
+            e_.lea(kTmpB, mem(kTmpB, kTmpB, 2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpB, mem(kBase, items));
+            e_.mov32(mem(kTmpA, -24), kTmpB);
+
+            Label done = e_.new_label();
+            e_.mov(kCur, mem(kStateReg, State::stack_size_offset()));
+            e_.cmp(kCur, kReq);
+            e_.jcc(Cond::ae, done);
+
+            Label fill = e_.new_label();
+            e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+            e_.lea(kTmpA, mem(kTmpA, kCur, 8));
+            e_.bind(fill);
+            e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+            e_.add(kTmpA, Value::size());
+            e_.add(kCur, 1);
+            e_.cmp(kCur, kReq);
+            e_.jcc(Cond::b, fill);
+            e_.bind(done);
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
+
+            base_valid_ = true;
+        }
+    }
+
+    void CodegenX86::emit_call_fast(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            return;
+        }
+        else
+        {
+            assert(gp_used_ == 0 && xmm_used_ == 0 && "call fast with live variables");
+
+            if constexpr (kWinABI)
+            {
+                e_.mov(kScratchB, kStateReg);
+                e_.mov32(kScratchC, op.raw);
+                e_.mov32(GpReg::r8, op.pcn);
+            }
+            else
+            {
+                e_.mov(GpReg::r7, kStateReg);
+                e_.mov32(GpReg::r6, op.raw);
+                e_.mov32(kScratchC, op.pcn);
+            }
+            e_.call(reinterpret_cast<uintptr_t>(&jit_call_setup));
+
+            base_valid_ = false;
+
+            e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupDecline));
+            e_.jcc(Cond::e, label(op.label));
+            e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupError));
+            e_.jcc(Cond::e, label(op.var));
+            e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupPushedOther));
+            e_.jcc(Cond::e, label(op.var2));
+
+            if (op.flag)
+            {
+                e_.jmp(label(static_cast<uint32_t>(op.slot)));
+                reachable_ = false;
+                return;
+            }
+
+            e_.mov(GpReg::r10, kScratchA);
+            if constexpr (kWinABI)
+            {
+                e_.mov(kScratchB, kStateReg);
+            }
+            else
+            {
+                e_.mov(GpReg::r7, kStateReg);
+            }
+            e_.call(GpReg::r10);
+
+            e_.cmp32(kScratchA, kJitResultOk);
+            e_.jcc(Cond::e, label(op.label2));
+            e_.cmp32(kScratchA, kJitResultError);
+            e_.jcc(Cond::e, label(op.var));
+            e_.jmp(label(op.var2));
+            reachable_ = false;
+        }
     }
 
     void CodegenX86::emit_branch_i64_imm(const CgOp& op)
@@ -867,14 +1494,14 @@ namespace behl
                 {
                     e_.align(16);
                 }
-                e_.bind(label(op.label));
-                if (op.flag)
-                {
-                    base_valid_ = false;
-                }
+                bind_label(op.label);
                 break;
 
             case CgOpKind::kJump:
+                if (!base_valid_ && (label_flow_[op.label] & kFlowAssumedValid) != 0)
+                {
+                    ensure_base();
+                }
                 if (cache_enabled_)
                 {
                     cache_flush_dirty();
@@ -892,6 +1519,7 @@ namespace behl
                     }
                 }
                 e_.jmp(label(op.label));
+                reachable_ = false;
                 break;
 
             case CgOpKind::kGuardTag:
@@ -1427,6 +2055,8 @@ namespace behl
                         e_.mov(mem(kStackPtr, 8), gp(op.var2));
                         e_.mov(kScratchA, mem(kStackPtr, 0));
                         e_.mov(kScratchB, mem(kStackPtr, 8));
+                        e_.cmp(kScratchB, 63);
+                        e_.jcc(Cond::a, label(op.label));
                         if (is_shl)
                         {
                             e_.shl_cl(kScratchA);
@@ -1439,6 +2069,10 @@ namespace behl
                     }
                     else
                     {
+                        e_.cmp(gp_hi(op.var2), 0);
+                        e_.jcc(Cond::ne, label(op.label));
+                        e_.cmp(gp(op.var2), 63);
+                        e_.jcc(Cond::a, label(op.label));
                         e_.mov(mem(kStackPtr, 0), gp(op.var));
                         e_.mov(mem(kStackPtr, 4), gp_hi(op.var));
                         e_.mov(mem(kStackPtr, 8), gp(op.var2));
@@ -1593,6 +2227,75 @@ namespace behl
                 }
                 break;
 
+            case CgOpKind::kTailJumpNative:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                emit_tail_jump_native(op);
+                break;
+
+            case CgOpKind::kCallFast:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                emit_call_fast(op);
+                break;
+
+            case CgOpKind::kFramePushFast:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                emit_frame_push_fast(op);
+                break;
+
+            case CgOpKind::kTailFrameFast:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                emit_tail_frame_fast(op);
+                break;
+
+            case CgOpKind::kReturnFast:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                if (!failed_)
+                {
+                    emit_return_fast(op);
+                }
+                break;
+
+            case CgOpKind::kReturnSelfSite:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                if (!failed_)
+                {
+                    emit_return_self_site(op);
+                }
+                break;
+
+            case CgOpKind::kReturnDispatch:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                emit_return_dispatch(op);
+                break;
+
             case CgOpKind::kHelperCall:
                 if (cache_enabled_)
                 {
@@ -1608,7 +2311,14 @@ namespace behl
                     cache_drop_all();
                 }
                 assert(gp_used_ == 0 && xmm_used_ == 0 && "frame sync with live variables");
-                emit_base_refresh();
+                if (op.flag)
+                {
+                    e_.lea(kFrameBase, mem(kFrameBase, static_cast<int32_t>(op.imm)));
+                }
+                else
+                {
+                    emit_base_refresh();
+                }
                 base_valid_ = true;
                 break;
 
@@ -1619,6 +2329,7 @@ namespace behl
                     cache_drop_all();
                 }
                 emit_epilogue(static_cast<uint32_t>(op.imm));
+                reachable_ = false;
                 break;
         }
 
@@ -1680,6 +2391,8 @@ namespace behl
         }
 
         loop_header_.assign(program.num_labels, false);
+        label_flow_.assign(program.num_labels, 0);
+        reachable_ = true;
         {
             AutoVector<uint32_t> bind_pos(state_);
             bind_pos.assign(program.num_labels, UINT32_MAX);

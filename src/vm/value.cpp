@@ -7,6 +7,7 @@
 #include "gc/gco_proto.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
+#include "common/arithmetic.hpp"
 
 #include <bit>
 #include <cassert>
@@ -34,8 +35,9 @@ namespace behl
 
     size_t ValueHash::operator()(const std::string_view key) const noexcept
     {
-        return string_key_hash(string_hash32(key));
+        return StringHash32{}(key);
     }
+
 
     static inline uint64_t fmix64(uint64_t k) noexcept
     {
@@ -99,10 +101,10 @@ namespace behl
                 // For integer-valued floats, hash as integer to match equality semantics
                 // (e.g., 1000.0 == 1000, so they must have the same hash)
                 FP f = get_fp();
-                Integer i = static_cast<Integer>(f);
+                Integer i = 0;
 
                 // If the round-trip matches, it's an integer-valued float in range
-                if (static_cast<FP>(i) == f)
+                if (arithmetic::try_from_fp(f, i) && static_cast<FP>(i) == f)
                 {
                     return fold_to_size_t(fmix64(static_cast<uint64_t>(i)));
                 }
@@ -115,8 +117,8 @@ namespace behl
             case Type::kString:
             {
                 auto* val = get_string();
-                assert(val->str_hash == string_hash32(val->view()) && "stale cached string hash");
-                return string_key_hash(val->str_hash);
+                assert(val->header.object_hash == StringHash32{}(val->view()) && "stale cached string hash");
+                return val->header.object_hash;
             }
 
             case Type::kClosure:

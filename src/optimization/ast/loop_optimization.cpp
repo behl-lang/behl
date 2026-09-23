@@ -5,7 +5,7 @@
 
 namespace behl
 {
-    static bool block_writes_variable(const AstBlock* block, std::string_view var_name);
+    static bool block_writes_variable(const AstBlock* block, std::string_view var_name, bool direct = true);
 
     // Check if an expression can write the variable, which only happens through
     // a closure defined inside it that captures and assigns it
@@ -81,7 +81,7 @@ namespace behl
 
     // Check if a statement writes (or shadows) the variable, including writes
     // from closures defined anywhere inside it
-    static bool statement_writes_variable(const AstNode* stat, std::string_view var_name)
+    static bool statement_writes_variable(const AstNode* stat, std::string_view var_name, bool direct = true)
     {
         if (!stat)
         {
@@ -90,14 +90,14 @@ namespace behl
 
         if (auto* block = stat->try_as<AstBlock>())
         {
-            return block_writes_variable(block, var_name);
+            return block_writes_variable(block, var_name, direct);
         }
         if (auto* local_decl = stat->try_as<AstLocalDecl>())
         {
             // A redeclaration shadows the loop variable; treat it as a write to stay safe
             for (const AstNode* n = local_decl->first_name; n; n = n->next_child)
             {
-                if (static_cast<const AstString*>(n)->view() == var_name)
+                if (direct && static_cast<const AstString*>(n)->view() == var_name)
                 {
                     return true;
                 }
@@ -113,7 +113,7 @@ namespace behl
         }
         if (auto* assign_local = stat->try_as<AstAssignLocal>())
         {
-            return assign_local->name->view() == var_name || expr_writes_variable(assign_local->expr, var_name);
+            return (direct && assign_local->name->view() == var_name) || expr_writes_variable(assign_local->expr, var_name);
         }
         if (auto* assign_global = stat->try_as<AstAssignGlobal>())
         {
@@ -121,13 +121,13 @@ namespace behl
         }
         if (auto* assign_upvalue = stat->try_as<AstAssignUpvalue>())
         {
-            return assign_upvalue->name->view() == var_name || expr_writes_variable(assign_upvalue->expr, var_name);
+            return (direct && assign_upvalue->name->view() == var_name) || expr_writes_variable(assign_upvalue->expr, var_name);
         }
         if (auto* assign = stat->try_as<AstAssign>())
         {
             for (const AstNode* v = assign->first_var; v; v = v->next_child)
             {
-                if (ident_matches(v, var_name) || expr_writes_variable(v, var_name))
+                if ((direct && ident_matches(v, var_name)) || expr_writes_variable(v, var_name))
                 {
                     return true;
                 }
@@ -143,12 +143,12 @@ namespace behl
         }
         if (auto* compound = stat->try_as<AstCompoundAssign>())
         {
-            return ident_matches(compound->target, var_name) || expr_writes_variable(compound->target, var_name)
+            return (direct && ident_matches(compound->target, var_name)) || expr_writes_variable(compound->target, var_name)
                 || expr_writes_variable(compound->expr, var_name);
         }
         if (auto* compound_local = stat->try_as<AstCompoundLocal>())
         {
-            return compound_local->name->view() == var_name || expr_writes_variable(compound_local->expr, var_name);
+            return (direct && compound_local->name->view() == var_name) || expr_writes_variable(compound_local->expr, var_name);
         }
         if (auto* compound_global = stat->try_as<AstCompoundGlobal>())
         {
@@ -156,31 +156,32 @@ namespace behl
         }
         if (auto* compound_upvalue = stat->try_as<AstCompoundUpvalue>())
         {
-            return compound_upvalue->name->view() == var_name || expr_writes_variable(compound_upvalue->expr, var_name);
+            return (direct && compound_upvalue->name->view() == var_name)
+                || expr_writes_variable(compound_upvalue->expr, var_name);
         }
         if (auto* inc = stat->try_as<AstIncrement>())
         {
-            return ident_matches(inc->target, var_name) || expr_writes_variable(inc->target, var_name);
+            return (direct && ident_matches(inc->target, var_name)) || expr_writes_variable(inc->target, var_name);
         }
         if (auto* dec = stat->try_as<AstDecrement>())
         {
-            return ident_matches(dec->target, var_name) || expr_writes_variable(dec->target, var_name);
+            return (direct && ident_matches(dec->target, var_name)) || expr_writes_variable(dec->target, var_name);
         }
         if (auto* inc_local = stat->try_as<AstIncLocal>())
         {
-            return inc_local->name->view() == var_name;
+            return direct && inc_local->name->view() == var_name;
         }
         if (auto* dec_local = stat->try_as<AstDecLocal>())
         {
-            return dec_local->name->view() == var_name;
+            return direct && dec_local->name->view() == var_name;
         }
         if (auto* inc_upvalue = stat->try_as<AstIncUpvalue>())
         {
-            return inc_upvalue->name->view() == var_name;
+            return direct && inc_upvalue->name->view() == var_name;
         }
         if (auto* dec_upvalue = stat->try_as<AstDecUpvalue>())
         {
-            return dec_upvalue->name->view() == var_name;
+            return direct && dec_upvalue->name->view() == var_name;
         }
         if (auto* return_stat = stat->try_as<AstReturn>())
         {
@@ -199,7 +200,7 @@ namespace behl
         }
         if (auto* if_stat = stat->try_as<AstIf>())
         {
-            if (expr_writes_variable(if_stat->cond, var_name) || block_writes_variable(if_stat->then_block, var_name))
+            if (expr_writes_variable(if_stat->cond, var_name) || block_writes_variable(if_stat->then_block, var_name, direct))
             {
                 return true;
             }
@@ -207,33 +208,35 @@ namespace behl
                 elseif = static_cast<const ElseIf*>(elseif->next_child))
             {
                 if ((elseif->cond && expr_writes_variable(elseif->cond, var_name))
-                    || block_writes_variable(elseif->block, var_name))
+                    || block_writes_variable(elseif->block, var_name, direct))
                 {
                     return true;
                 }
             }
-            return block_writes_variable(if_stat->else_block, var_name);
+            return block_writes_variable(if_stat->else_block, var_name, direct);
         }
         if (auto* while_stat = stat->try_as<AstWhile>())
         {
-            return expr_writes_variable(while_stat->cond, var_name) || block_writes_variable(while_stat->block, var_name);
+            return expr_writes_variable(while_stat->cond, var_name)
+                || block_writes_variable(while_stat->block, var_name, direct);
         }
         if (auto* for_c = stat->try_as<AstForC>())
         {
-            return statement_writes_variable(for_c->init, var_name) || expr_writes_variable(for_c->condition, var_name)
-                || statement_writes_variable(for_c->update, var_name) || block_writes_variable(for_c->block, var_name);
+            return statement_writes_variable(for_c->init, var_name, direct) || expr_writes_variable(for_c->condition, var_name)
+                || statement_writes_variable(for_c->update, var_name, direct)
+                || block_writes_variable(for_c->block, var_name, direct);
         }
         if (auto* for_c_num = stat->try_as<AstForCNumeric>())
         {
-            return for_c_num->var->view() == var_name || expr_writes_variable(for_c_num->start, var_name)
+            return (direct && for_c_num->var->view() == var_name) || expr_writes_variable(for_c_num->start, var_name)
                 || expr_writes_variable(for_c_num->end, var_name) || expr_writes_variable(for_c_num->step, var_name)
-                || block_writes_variable(for_c_num->block, var_name);
+                || block_writes_variable(for_c_num->block, var_name, direct);
         }
         if (auto* for_in = stat->try_as<AstForIn>())
         {
             for (const AstNode* n = for_in->first_name; n; n = n->next_child)
             {
-                if (static_cast<const AstString*>(n)->view() == var_name)
+                if (direct && static_cast<const AstString*>(n)->view() == var_name)
                 {
                     return true;
                 }
@@ -245,7 +248,7 @@ namespace behl
                     return true;
                 }
             }
-            return block_writes_variable(for_in->block, var_name);
+            return block_writes_variable(for_in->block, var_name, direct);
         }
         if (auto* func_def_stat = stat->try_as<AstFuncDefStat>())
         {
@@ -253,21 +256,21 @@ namespace behl
         }
         if (auto* defer_stat = stat->try_as<AstDefer>())
         {
-            return statement_writes_variable(defer_stat->body, var_name);
+            return statement_writes_variable(defer_stat->body, var_name, direct);
         }
         if (auto* scope_stat = stat->try_as<AstScope>())
         {
-            return block_writes_variable(scope_stat->block, var_name);
+            return block_writes_variable(scope_stat->block, var_name, direct);
         }
 
         return false;
     }
 
-    static bool block_writes_variable(const AstBlock* block, std::string_view var_name)
+    static bool block_writes_variable(const AstBlock* block, std::string_view var_name, bool direct)
     {
         for (const AstNode* stat = block ? block->first_stat : nullptr; stat; stat = stat->next_child)
         {
-            if (statement_writes_variable(stat, var_name))
+            if (statement_writes_variable(stat, var_name, direct))
             {
                 return true;
             }
@@ -278,6 +281,23 @@ namespace behl
     class LoopOptimizer : public AstTransformer
     {
     private:
+        const AstBlock* program_block;
+
+        bool is_invariant_operand(const AstNode* operand, std::string_view loop_var, const AstBlock* body) const
+        {
+            if (!operand || operand->type == AstNodeType::kInteger || operand->type == AstNodeType::kFP)
+            {
+                return true;
+            }
+            const auto* ident = operand->try_as<AstIdent>();
+            if (!ident)
+            {
+                return false;
+            }
+            const std::string_view name = ident->name->view();
+            return name != loop_var && !block_writes_variable(body, name) && !block_writes_variable(program_block, name, false);
+        }
+
         // Pattern: for(let i = start; i </<=/>/>= end; i++ / i-- / i += step / i -= step)
         AstForCNumeric* try_optimize_for_c(AstForC* for_c)
         {
@@ -523,9 +543,16 @@ namespace behl
                 return nullptr;
             }
 
+            if (!is_invariant_operand(end_expr, loop_var->view(), for_c->block)
+                || !is_invariant_operand(step_expr, loop_var->view(), for_c->block))
+            {
+                return nullptr;
+            }
+
             // Create the optimized ForCNumeric node
             auto* optimized = holder.make<AstForCNumeric>(loop_var, start_expr, end_expr, step_expr, ascending, inclusive);
             optimized->block = for_c->block;
+            optimized->original = for_c;
             optimized->line = for_c->line;
             optimized->column = for_c->column;
 
@@ -534,8 +561,9 @@ namespace behl
         }
 
     public:
-        explicit LoopOptimizer(AstHolder& h)
+        LoopOptimizer(AstHolder& h, const AstBlock* program)
             : AstTransformer(h)
+            , program_block(program)
         {
         }
 
@@ -557,7 +585,7 @@ namespace behl
 
     bool LoopOptimizationPass::apply(AstOptimizationContext& context)
     {
-        LoopOptimizer optimizer(context.holder);
+        LoopOptimizer optimizer(context.holder, context.program->block);
 
         if (context.program->block)
         {

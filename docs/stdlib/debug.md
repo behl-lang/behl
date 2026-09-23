@@ -98,8 +98,8 @@ safeExecute(riskyOperation);
 
 // Debug logging with context
 function debugLog(message) {
-    let timestamp = os.time();
-    print("[" + tostring(timestamp) + "] " + message);
+    let elapsed = os.hrtime();
+    print("[" + tostring(elapsed) + "] " + message);
     print("Call stack:");
     print(debug.stacktrace());
 }

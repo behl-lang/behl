@@ -1,9 +1,11 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 #include <string>
 
-class ErrorTest : public ::testing::Test
+class ErrorTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -11,6 +13,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
     }
 
@@ -26,7 +29,7 @@ protected:
     }
 };
 
-TEST_F(ErrorTest, TypeError_ArithmeticOnNonNumber)
+TEST_P(ErrorTest, TypeError_ArithmeticOnNonNumber)
 {
     constexpr std::string_view code = R"(
         let x = 5 + 'hello'
@@ -35,7 +38,7 @@ TEST_F(ErrorTest, TypeError_ArithmeticOnNonNumber)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CallNonFunction)
+TEST_P(ErrorTest, TypeError_CallNonFunction)
 {
     constexpr std::string_view code = R"(
         let x = 5; x()
@@ -44,7 +47,7 @@ TEST_F(ErrorTest, TypeError_CallNonFunction)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CallNil)
+TEST_P(ErrorTest, TypeError_CallNil)
 {
     constexpr std::string_view code = R"(
         let x = nil; x()
@@ -53,7 +56,7 @@ TEST_F(ErrorTest, TypeError_CallNil)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CallBoolean)
+TEST_P(ErrorTest, TypeError_CallBoolean)
 {
     constexpr std::string_view code = R"(
         let x = true; x()
@@ -62,7 +65,7 @@ TEST_F(ErrorTest, TypeError_CallBoolean)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CallNumber)
+TEST_P(ErrorTest, TypeError_CallNumber)
 {
     constexpr std::string_view code = R"(
         let x = 3.14; x()
@@ -71,7 +74,7 @@ TEST_F(ErrorTest, TypeError_CallNumber)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CallString)
+TEST_P(ErrorTest, TypeError_CallString)
 {
     constexpr std::string_view code = R"(
         let x = "hello"; x()
@@ -80,7 +83,7 @@ TEST_F(ErrorTest, TypeError_CallString)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CallTable)
+TEST_P(ErrorTest, TypeError_CallTable)
 {
     constexpr std::string_view code = R"(
         let x = {1, 2, 3}; x()
@@ -89,7 +92,7 @@ TEST_F(ErrorTest, TypeError_CallTable)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_IndexNonTable)
+TEST_P(ErrorTest, TypeError_IndexNonTable)
 {
     constexpr std::string_view code = R"(
         let x = 5; let y = x[1]
@@ -98,7 +101,7 @@ TEST_F(ErrorTest, TypeError_IndexNonTable)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_GetLengthOfInvalidType)
+TEST_P(ErrorTest, TypeError_GetLengthOfInvalidType)
 {
     constexpr std::string_view code = R"(
         let x = #123
@@ -107,7 +110,7 @@ TEST_F(ErrorTest, TypeError_GetLengthOfInvalidType)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, ErrorIncludesSourceLocation)
+TEST_P(ErrorTest, ErrorIncludesSourceLocation)
 {
     constexpr std::string_view code = R"(
         let x = 1 + nil
@@ -116,7 +119,7 @@ TEST_F(ErrorTest, ErrorIncludesSourceLocation)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, ErrorInNestedFunction)
+TEST_P(ErrorTest, ErrorInNestedFunction)
 {
     constexpr std::string_view code = R"(
         function outer() {
@@ -132,7 +135,7 @@ TEST_F(ErrorTest, ErrorInNestedFunction)
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, MultipleOperationsShowCorrectError)
+TEST_P(ErrorTest, MultipleOperationsShowCorrectError)
 {
     constexpr std::string_view code = R"(
         let a = 5
@@ -144,7 +147,7 @@ TEST_F(ErrorTest, MultipleOperationsShowCorrectError)
     ASSERT_NO_THROW(behl::load_string(S, code, false)); // Disable optimizations
     EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
 }
-TEST_F(ErrorTest, ErrorFunction_BasicThrow)
+TEST_P(ErrorTest, ErrorFunction_BasicThrow)
 {
     constexpr std::string_view code = R"(
         error("test error message")
@@ -163,7 +166,7 @@ TEST_F(ErrorTest, ErrorFunction_BasicThrow)
     }
 }
 
-TEST_F(ErrorTest, ErrorFunction_CaughtByPcall)
+TEST_P(ErrorTest, ErrorFunction_CaughtByPcall)
 {
     constexpr std::string_view code = R"(
         function failing() {
@@ -183,7 +186,7 @@ TEST_F(ErrorTest, ErrorFunction_CaughtByPcall)
     EXPECT_NE(err_msg.find("expected error"), std::string::npos);
 }
 
-TEST_F(ErrorTest, ErrorFunction_WithNumberConvertsToString)
+TEST_P(ErrorTest, ErrorFunction_WithNumberConvertsToString)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -201,7 +204,7 @@ TEST_F(ErrorTest, ErrorFunction_WithNumberConvertsToString)
     EXPECT_NE(err_msg.find("42"), std::string::npos);
 }
 
-TEST_F(ErrorTest, ErrorFunction_InNestedCalls)
+TEST_P(ErrorTest, ErrorFunction_InNestedCalls)
 {
     constexpr std::string_view code = R"(
         function level3() {
@@ -225,7 +228,7 @@ TEST_F(ErrorTest, ErrorFunction_InNestedCalls)
     EXPECT_NE(err_msg.find("deep error"), std::string::npos);
 }
 
-TEST_F(ErrorTest, ErrorFunction_WithConcatenatedMessage)
+TEST_P(ErrorTest, ErrorFunction_WithConcatenatedMessage)
 {
     constexpr std::string_view code = R"(
         let value = 123;
@@ -245,7 +248,7 @@ TEST_F(ErrorTest, ErrorFunction_WithConcatenatedMessage)
     EXPECT_NE(err_msg.find("123"), std::string::npos);
 }
 
-TEST_F(ErrorTest, ErrorFunction_InClosure)
+TEST_P(ErrorTest, ErrorFunction_InClosure)
 {
     constexpr std::string_view code = R"(
         function make_error_func(msg) {
@@ -266,7 +269,7 @@ TEST_F(ErrorTest, ErrorFunction_InClosure)
     EXPECT_NE(err_msg.find("closure error"), std::string::npos);
 }
 
-TEST_F(ErrorTest, ErrorFunction_MultipleInSequence)
+TEST_P(ErrorTest, ErrorFunction_MultipleInSequence)
 {
     constexpr std::string_view code = R"(
         function error1() { error("first error"); }
@@ -292,7 +295,7 @@ TEST_F(ErrorTest, ErrorFunction_MultipleInSequence)
     EXPECT_NE(err2.find("second error"), std::string::npos);
 }
 
-TEST_F(ErrorTest, ErrorFunction_InLoop)
+TEST_P(ErrorTest, ErrorFunction_InLoop)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -315,7 +318,7 @@ TEST_F(ErrorTest, ErrorFunction_InLoop)
     EXPECT_NE(err_msg.find("5"), std::string::npos);
 }
 
-TEST_F(ErrorTest, TypeError_CompareIncompatibleTypes_LessThan)
+TEST_P(ErrorTest, TypeError_CompareIncompatibleTypes_LessThan)
 {
     constexpr std::string_view code = R"(
         return 5 < "hello";
@@ -324,7 +327,7 @@ TEST_F(ErrorTest, TypeError_CompareIncompatibleTypes_LessThan)
     EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CompareIncompatibleTypes_LessOrEqual)
+TEST_P(ErrorTest, TypeError_CompareIncompatibleTypes_LessOrEqual)
 {
     constexpr std::string_view code = R"(
         return true <= 42;
@@ -333,7 +336,7 @@ TEST_F(ErrorTest, TypeError_CompareIncompatibleTypes_LessOrEqual)
     EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
 }
 
-TEST_F(ErrorTest, TypeError_CompareTableWithNumber)
+TEST_P(ErrorTest, TypeError_CompareTableWithNumber)
 {
     constexpr std::string_view code = R"(
         let t = {1, 2, 3};
@@ -342,3 +345,30 @@ TEST_F(ErrorTest, TypeError_CompareTableWithNumber)
     ASSERT_NO_THROW(behl::load_string(S, code));
     EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
 }
+
+TEST_P(ErrorTest, LongErrorMessageIsNotReadPastItsEnd)
+{
+    constexpr std::string_view code = R"(
+        const string = import("string")
+
+        let msg = ""
+        for (let i = 0; i < 40; i = i + 1) { msg = msg + "ABCDEFGH" }
+
+        let ok, err = pcall(function() { error(msg) })
+
+        let at = string.find(err, msg)
+        if (at == nil) { return #msg, -1, "" }
+
+        return #msg, at, string.sub(err, at + #msg, at + #msg)
+    )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+
+    ASSERT_EQ(behl::to_integer(S, -3), 320);
+    ASSERT_GE(behl::to_integer(S, -2), 0) << "error text does not contain the message that was raised";
+    EXPECT_EQ(behl::to_string(S, -1), "\n") << "bytes were read past the end of the message payload";
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, ErrorTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -183,15 +183,21 @@ Start the interactive read-eval-print loop without any arguments:
 This launches an interactive session where you can type Behl code and see results immediately:
 
 ```
-Behl REPL
-> let x = 42
-> print(x)
+> print(42)
 42
 > function greet(name) { return "Hello, " + name }
 > greet("World")
 Hello, World
-> exit()
+>
 ```
+
+The REPL prints only the `> ` prompt, with no banner. Each line is compiled and
+run as its own chunk, so a `let` binding does not survive to the next line: it is
+a chunk-local register that is gone once the line finishes. A top-level
+`function` declaration does persist, because it is stored as a global.
+
+To end the session, send end-of-file (Ctrl+Z then Enter on Windows, Ctrl+D on
+Unix). There is no `exit()` function.
 
 ---
 
@@ -246,13 +252,16 @@ Load the standard library for access to built-in functions and modules:
 // When embedding in C++
 behl::State* S = behl::new_state();
 
-// Option 1: Make modules globally accessible
 behl::load_stdlib(S);
-// Usage: string.upper("hello"), math.sqrt(16)
+```
 
-// Option 2: Require explicit import() for better control
-behl::load_stdlib(S);
-// Usage: let str = import("string"); str.upper("hello")
+`load_stdlib` registers each module in the module cache, not in the global
+table. Apart from the core functions, which are globals, the modules are reached
+only through `import()`:
+
+```cpp
+let str = import("string");
+str.upper("hello");
 ```
 
 ### Available Modules
@@ -262,12 +271,15 @@ behl::load_stdlib(S);
 - **String** - String manipulation functions
 - **Table** - Table utilities
 - **OS** - Operating system functions
+- **GC** - Garbage collector control
+- **JIT** - Native JIT compiler control
+- **Debug** - Introspection helpers
 
 ### Importing Modules
 
 ```cpp
 const math = import("math");
-print(math.PI);        // 3.14159...
+print(math.pi);        // 3.14159...
 print(math.sqrt(16));  // 4
 ```
 

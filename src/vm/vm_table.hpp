@@ -5,7 +5,7 @@
 #include "gc/gc.hpp"
 #include "gc/gco_table.hpp"
 #include "gc/gco_userdata.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
@@ -19,7 +19,7 @@
 
 namespace behl
 {
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     std::optional<size_t> key_as_positive_index(const Value& key)
     {
         if (key.is_integer())
@@ -36,16 +36,17 @@ namespace behl
         if (key.is_fp())
         {
             const FP d = key.get_fp();
-            if (std::floor(d) == d && d >= 0 && d <= static_cast<FP>(INT64_MAX))
+            Integer k = 0;
+            if (std::floor(d) == d && d >= 0 && arithmetic::try_from_fp(d, k))
             {
-                return static_cast<size_t>(static_cast<Integer>(d));
+                return static_cast<size_t>(k);
             }
         }
 
         return std::nullopt;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     Value* table_raw_get_slot(auto* t, const Value& key)
     {
         // Try to interpret key as a non-negative array index
@@ -67,7 +68,7 @@ namespace behl
         return (it != t->hash.end()) ? &it->second : nullptr;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     const Value table_raw_getfield(GCTable* t, const Value& key)
     {
         auto* slot = table_raw_get_slot(t, key);
@@ -76,7 +77,8 @@ namespace behl
     }
 
     // Metatable-aware table get for VM
-    inline Value table_getfield_vm(State* state, GCTable* t, const Value key)
+    BEHL_INLINE
+    Value table_getfield_vm(State* state, GCTable* t, const Value key)
     {
         // First try raw get
         const Value& out = table_raw_getfield(t, key);
@@ -107,9 +109,12 @@ namespace behl
         return out;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void table_raw_setfield(State* S, struct GCTable* t, const Value& key, const Value& v)
     {
+        gc_barrier(S, t, v);
+        gc_barrier(S, t, key);
+
         // Try to interpret key as a non-negative array index
         if (const auto idx = key_as_positive_index(key))
         {
@@ -143,7 +148,8 @@ namespace behl
     }
 
     // Metatable-aware table set for VM
-    inline void table_setfield_vm(State* S, GCTable* t, const Value key, const Value v)
+    BEHL_INLINE
+    void table_setfield_vm(State* S, GCTable* t, const Value key, const Value v)
     {
         // Try to find existing slot
         Value* slot = table_raw_get_slot(t, key);
@@ -151,6 +157,7 @@ namespace behl
         // If key exists, update it directly
         if (slot != nullptr)
         {
+            gc_barrier(S, t, v);
             *slot = v;
             return;
         }
@@ -184,7 +191,7 @@ namespace behl
         table_raw_setfield(S, t, key, v);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_getglobal(State* S, CallFrame& frame, Reg a, uint32_t k)
     {
         const Value& key = get_string_constant(frame.proto, k);
@@ -204,7 +211,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setglobal(State* S, CallFrame& frame, Reg a, uint32_t k)
     {
         const Value& key = get_string_constant(frame.proto, k);
@@ -215,11 +222,13 @@ namespace behl
         auto* table = globals.get_table();
 
         const Value& v = get_register(S, frame, a);
+        gc_barrier(S, table, v);
+        gc_barrier(S, table, key);
         table->hash.insert_or_assign(S, key, v);
     }
 
     // Common implementation for all getfield operations
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void getfield_impl(State* S, CallFrame& frame, Reg a, const Value table, const Value key)
     {
         if (table.is_table())
@@ -290,7 +299,7 @@ namespace behl
     }
 
     // Common implementation for all setfield operations
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void setfield_impl(State* S, CallFrame& frame, Value& table, const Value& key, const Value& val)
     {
         if (table.is_table())
@@ -331,7 +340,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setfield(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
     {
         Value& table = get_register(S, frame, a);
@@ -340,7 +349,7 @@ namespace behl
         setfield_impl(S, frame, table, key, val);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setfieldi(State* S, CallFrame& frame, Reg a, Reg b, int32_t imm)
     {
         Value& table = get_register(S, frame, a);
@@ -349,7 +358,7 @@ namespace behl
         setfield_impl(S, frame, table, key, val);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_setfields(State* S, CallFrame& frame, Reg a, Reg b, ConstIndex k)
     {
         Value& table = get_register(S, frame, a);
@@ -368,7 +377,7 @@ namespace behl
         gc_step(S);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void handler_self(State* S, CallFrame& frame, Reg a, Reg b, Reg c)
     {
         const Value& table = get_register(S, frame, b);
@@ -386,40 +395,31 @@ namespace behl
         dst = table_raw_getfield(table_data, key);
     }
 
-    BEHL_FORCEINLINE
-    void handler_setlist(State* S, CallFrame& frame, Reg a, uint8_t num_fields, uint8_t extra)
+    BEHL_INLINE
+    void handler_setlist(State* S, CallFrame& frame, Reg a, uint8_t num_fields, uint8_t batch)
     {
-        Value table = get_register(S, frame, a);
+        const Value& table = get_register(S, frame, a);
+        assert(table.is_table() && "SETLIST: register A must contain a table");
 
-        if (table.is_table())
+        if (!table.is_table())
         {
-            auto* table_data = table.get_table();
+            return;
+        }
 
-            int64_t start_idx = extra;
+        auto* table_data = table.get_table();
 
-            // If num_fields is 0, this means "use all values from top of stack" (multret)
-            // This happens when the last field is a vararg expansion (...)
-            uint8_t actual_num_fields;
-            if (num_fields == 0)
-            {
-                // Calculate number of fields from stack top
-                // Values start at register (a + 2), and frame.top points one past the last value
-                uint8_t values_start = a + 2;
-                actual_num_fields = static_cast<uint8_t>(frame_header(S, frame).top - (frame.base + values_start));
-            }
-            else
-            {
-                actual_num_fields = num_fields;
-            }
-
-            size_t needed = static_cast<size_t>(start_idx - 1 + actual_num_fields);
+        const size_t start = static_cast<size_t>(batch) * kFieldsPerFlush;
+        const size_t needed = start + num_fields;
+        if (needed > table_data->array.size())
+        {
             table_data->array.resize(S, needed);
+        }
 
-            for (uint8_t i = 0; i < actual_num_fields; ++i)
-            {
-                Value val = get_register(S, frame, static_cast<Reg>(a + 2U + i));
-                table_data->array[static_cast<size_t>(start_idx + i - 1)] = val;
-            }
+        for (uint8_t i = 0; i < num_fields; ++i)
+        {
+            const Value& item = get_register(S, frame, static_cast<Reg>(a + 1U + i));
+            gc_barrier(S, table_data, item);
+            table_data->array[start + i] = item;
         }
     }
 

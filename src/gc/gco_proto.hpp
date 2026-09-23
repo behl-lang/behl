@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace behl
@@ -27,6 +28,8 @@ namespace behl
     struct GCProto : GCObject
     {
         static constexpr auto kObjectType = GCType::kProto;
+
+        GCOHeader header{};
 
         mutable uint32_t (*jit_code)(State*){};
         mutable bool jit_declined{};
@@ -49,6 +52,24 @@ namespace behl
         uint32_t num_jump_targets{};
         bool is_vararg{};
         bool has_upvalues{}; // True if function or any nested function uses upvalues
+
+        static constexpr int32_t jit_code_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCProto, jit_code));
+        }
+
+        static constexpr int32_t max_stack_size_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCProto, max_stack_size));
+        }
+
+        static constexpr int32_t is_vararg_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCProto, is_vararg));
+        }
     };
+
+    static_assert(std::is_standard_layout_v<GCProto>);
+    static_assert(offsetof(GCProto, header) == 0);
 
 } // namespace behl

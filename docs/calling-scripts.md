@@ -71,11 +71,25 @@ try {
 
 ### From File
 
-Use `load_file()` to load from a file:
+There is no file-loading entry point in the public API. Read the file yourself and hand the
+contents to `load_buffer()`, which lets you supply the chunk name used in error messages:
 
 ```cpp
+#include <fstream>
+#include <sstream>
+
+std::ifstream file("script.behl");
+if (!file) {
+    std::cerr << "Failed to open file\n";
+    return 1;
+}
+
+std::ostringstream buffer;
+buffer << file.rdbuf();
+const std::string source = buffer.str();
+
 try {
-    behl::load_file(S, "script.behl");
+    behl::load_buffer(S, source, "script.behl");
     // Function is on stack
 } catch (const behl::BehlException& e) {
     std::cerr << "Failed to load file: " << e.what() << "\n";
@@ -83,7 +97,7 @@ try {
 }
 ```
 
-**Throws:** Exception on file not found or compilation error.
+**Throws:** `SyntaxError` or `ParserError` on compilation error. Opening the file is your responsibility.
 
 ## Executing Code
 
@@ -97,31 +111,29 @@ try {
     // Call with 0 arguments, expecting 1 return value
     behl::call(S, 0, 1);
     
-    // Get result
+    // Result is now on top of stack
     int result = behl::to_integer(S, -1);
+    std::cout << "Result: " << result << "\n";  // 5
+    
+    // Clean up stack
     behl::pop(S, 1);
 } catch (const behl::BehlException& e) {
     std::cerr << "Error: " << e.what() << "\n";
     return 1;
 }
-```// Result is now on top of stack
-int result = behl::to_integer(S, -1);
-std::cout << "Result: " << result << "\n";  // 5
-
-// Clean up stack
-behl::pop(S, 1);
 ```
 
 ### Call Parameters
 
 ```cpp
-bool call(State* S, int32_t nargs, int32_t nresults);
+void call(State* S, int32_t nargs, int32_t nresults);
 ```
 
 - **`nargs`** - Number of arguments (already pushed onto stack before the function)
 - **`nresults`** - Number of expected return values
 
-**Returns:** `true` on success, `false` on runtime error.
+**Returns:** nothing. A runtime error is thrown as a `BehlException` subclass; before it
+propagates the function and its arguments are removed from the stack.
 
 ## Complete Example
 
@@ -144,17 +156,16 @@ int main() {
         return name + " v" + tostring(version);
     )";
     
-    if (behl::load_string(S, script)) {
-        if (behl::call(S, 0, 1)) {
-            // Get return value
-            auto result = behl::to_string(S, -1);
-            std::cout << "Returned: " << result << "\n";
-            behl::pop(S, 1);
-        } else {
-            std::cerr << "Execution error\n";
-        }
-    } else {
-        std::cerr << "Compilation error\n";
+    try {
+        behl::load_string(S, script);
+        behl::call(S, 0, 1);
+        
+        // Get return value
+        auto result = behl::to_string(S, -1);
+        std::cout << "Returned: " << result << "\n";
+        behl::pop(S, 1);
+    } catch (const behl::BehlException& e) {
+        std::cerr << "Error: " << e.what() << "\n";
     }
     
     behl::close(S);
@@ -341,7 +352,7 @@ behl::load_stdlib(S);
 
 const char* script = R"(
     const math = import("math");
-    print("PI = " + tostring(math.PI));
+    print("pi = " + tostring(math.pi));
 )";
 
 behl::load_string(S, script);
@@ -407,7 +418,16 @@ bool load_config(const char* path, Config& config) {
     behl::load_stdlib(S);
     
     try {
-        behl::load_file(S, path);
+        std::ifstream file(path);
+        if (!file) {
+            behl::close(S);
+            return false;
+        }
+        
+        std::ostringstream buffer;
+        buffer << file.rdbuf();
+        
+        behl::load_buffer(S, buffer.str(), path);
         behl::call(S, 0, 1);
         
         // Expect a table
@@ -417,11 +437,11 @@ bool load_config(const char* path, Config& config) {
         }
         
         // Read configuration
-        behl::get_field(S, -1, "width");
+        behl::table_getfield(S, -1, "width");
         config.width = behl::to_integer(S, -1);
         behl::pop(S, 1);
         
-        behl::get_field(S, -1, "height");
+        behl::table_getfield(S, -1, "height");
         config.height = behl::to_integer(S, -1);
         behl::pop(S, 1);
         
@@ -456,7 +476,7 @@ bool validate_script(const char* code) {
 ```cpp
 behl::State* S = behl::new_state();
 // Don't load stdlib or limit what's loaded
-behl::load_lib_math(S, true);  // Only math functions
+behl::load_lib_math(S);  // Only math functions
 
 behl::load_string(S, user_code);
 behl::call(S, 0, 0);

@@ -1,7 +1,9 @@
+#include "state.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class TableConstructionTest : public ::testing::Test
+class TableConstructionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +11,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +20,7 @@ protected:
     }
 };
 
-TEST_F(TableConstructionTest, ArrayAccess)
+TEST_P(TableConstructionTest, ArrayAccess)
 {
     constexpr std::string_view code = R"(
         let t = {10, 20, 30, 40, 50}
@@ -32,7 +35,7 @@ TEST_F(TableConstructionTest, ArrayAccess)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(TableConstructionTest, HashAccess)
+TEST_P(TableConstructionTest, HashAccess)
 {
     constexpr std::string_view code = R"(
         let t = {x = 100, y = 200}
@@ -46,7 +49,7 @@ TEST_F(TableConstructionTest, HashAccess)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(TableConstructionTest, MixedArrayHash)
+TEST_P(TableConstructionTest, MixedArrayHash)
 {
     constexpr std::string_view code = R"(
         let t = {1, 2, 3, x = 10, y = 20}
@@ -62,7 +65,7 @@ TEST_F(TableConstructionTest, MixedArrayHash)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(TableConstructionTest, EmptyTableCreation)
+TEST_P(TableConstructionTest, EmptyTableCreation)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -73,3 +76,6 @@ TEST_F(TableConstructionTest, EmptyTableCreation)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, TableConstructionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

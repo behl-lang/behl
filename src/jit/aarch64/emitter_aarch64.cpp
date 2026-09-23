@@ -330,6 +330,16 @@ namespace behl
         nodes_.push_back(PatchNode{ static_cast<uint32_t>(buffer_.size()), 0, target, NodeType::kCall, 0, 0 });
     }
 
+    void A64Emitter::br(A64Reg target)
+    {
+        emit(0xD61F0000u | (uint32_t{ rn(target) } << 5));
+    }
+
+    void A64Emitter::blr(A64Reg target)
+    {
+        emit(0xD63F0000u | (uint32_t{ rn(target) } << 5));
+    }
+
     void A64Emitter::ret()
     {
         emit(0xD65F03C0u);
