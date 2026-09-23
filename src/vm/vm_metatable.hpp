@@ -98,7 +98,7 @@ namespace behl
 
         constexpr auto method = kMetatableMethodNames[static_cast<size_t>(MMIndex)];
 
-        if (auto it = metatable->hash.find(method); it != metatable->hash.end())
+        if (auto it = metatable->hash.find(method); it != metatable->hash.end() && !it->second.is_nil())
         {
             // return it->value;
             return it->second;

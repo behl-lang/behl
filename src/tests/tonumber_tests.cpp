@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <gtest/gtest.h>
+#include <limits>
 #include <string>
 
 class ToNumberTest : public ::testing::TestWithParam<bool>
@@ -406,6 +407,49 @@ TEST_P(ToNumberTest, ToNumber_FloatPassthrough)
     ASSERT_NO_THROW(load_string(S, code));
     ASSERT_NO_THROW(call(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "number");
+}
+
+TEST_P(ToNumberTest, ToNumber_StringIntegerExtremes)
+{
+    constexpr std::string_view code = R"(
+        return tonumber("9223372036854775807"), tonumber("-9223372036854775808");
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 2));
+    EXPECT_EQ(type(S, -2), behl::Type::kInteger);
+    EXPECT_EQ(to_integer(S, -2), std::numeric_limits<int64_t>::max());
+    EXPECT_EQ(type(S, -1), behl::Type::kInteger);
+    EXPECT_EQ(to_integer(S, -1), std::numeric_limits<int64_t>::min());
+}
+
+TEST_P(ToNumberTest, ToNumber_MalformedStringsReturnNil)
+{
+    constexpr std::string_view code = R"(
+        let inputs = {"1a", ".", "1e", "e1", "1.2.3", "--1", "1_000", "1 2", "0x", "- 5", "5-", "1..2"};
+        let bad = "";
+        for (let i = 0; i < #inputs; i++) {
+            if (tonumber(inputs[i]) != nil) {
+                bad = bad + "[" + inputs[i] + "]";
+            }
+        }
+        return bad;
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_EQ(to_string(S, -1), "");
+}
+
+TEST_P(ToNumberTest, ToNumber_FloatStringsWithoutLeadingOrTrailingDigits)
+{
+    constexpr std::string_view code = R"(
+        return tonumber("1."), tonumber(".5");
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 2));
+    EXPECT_EQ(type(S, -2), behl::Type::kNumber);
+    EXPECT_DOUBLE_EQ(to_number(S, -2), 1.0);
+    EXPECT_EQ(type(S, -1), behl::Type::kNumber);
+    EXPECT_DOUBLE_EQ(to_number(S, -1), 0.5);
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, ToNumberTest, ::testing::Bool(),

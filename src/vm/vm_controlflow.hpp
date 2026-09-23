@@ -863,7 +863,7 @@ namespace behl
         {
             // Both operands must be tables OR userdata with metatables for __eq to trigger,
             // skip the metamethod lookups entirely when they are not
-            if (!first.is_table_like() || !second.is_table_like())
+            if (!first.is_table_like() || !second.is_table_like() || first.get_gcobject() == second.get_gcobject())
             {
                 return false;
             }
@@ -962,9 +962,10 @@ namespace behl
 
     // Test instruction handler
     BEHL_FORCEINLINE
-    void handler_test(State* S, CallFrame& frame, Reg a, bool invert)
+    void handler_test(State* S, CallFrame& frame, Reg a, bool invert, bool nil_only)
     {
-        const bool cond = get_register(S, frame, a).is_truthy() ^ invert;
+        const Value& value = get_register(S, frame, a);
+        const bool cond = (nil_only ? !value.is_nil() : value.is_truthy()) ^ invert;
         frame.pc += static_cast<uint32_t>(!cond);
     }
 

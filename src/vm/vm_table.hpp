@@ -2,6 +2,7 @@
 
 #include "bytecode.hpp"
 #include "common/arithmetic.hpp"
+#include "config_internal.hpp"
 #include "frame.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_table.hpp"
@@ -81,12 +82,17 @@ namespace behl
     BEHL_INLINE
     Value table_getfield_vm(State* state, GCTable* t, const Value key)
     {
-        // First try raw get
-        const Value& out = table_raw_getfield(t, key);
-
-        // If result is nil and table has a metatable, try __index
-        if (out.is_nil() && t->metatable != nullptr)
+        for (int32_t depth = 0; depth < kMaxMetaChain; ++depth)
         {
+            // First try raw get
+            const Value& out = table_raw_getfield(t, key);
+
+            // If result is nil and table has a metatable, try __index
+            if (!out.is_nil() || t->metatable == nullptr)
+            {
+                return out;
+            }
+
             // Create a Value wrapper for the table to call metatable_get_method
             Value table_value(const_cast<GCTable*>(t));
             Value metamethod = metatable_get_method<MetaMethodType::kIndex>(table_value);
@@ -98,16 +104,53 @@ namespace behl
                 {
                     return result;
                 }
+                return out;
             }
-            else if (metamethod.is_table())
+            if (!metamethod.is_table())
             {
-                // __index is a table: recursively get from it
-                GCTable* mm_table = metamethod.get_table();
-                return table_getfield_vm(state, mm_table, key);
+                return out;
+            }
+
+            // __index is a table: recursively get from it
+            t = metamethod.get_table();
+        }
+
+        throw RuntimeError("'__index' chain too long; possible loop");
+    }
+
+    inline void table_migrate_hash_to_array(State* S, GCTable* t, size_t from)
+    {
+        if (t->hash.empty())
+        {
+            return;
+        }
+
+        for (size_t i = from; i < t->array.size(); ++i)
+        {
+            const Value index_key(static_cast<Integer>(i));
+            auto it = t->hash.find(index_key);
+            if (it != t->hash.end())
+            {
+                if (t->array[i].is_nil())
+                {
+                    t->array[i] = it->second;
+                }
+                t->hash.erase(index_key);
             }
         }
 
-        return out;
+        for (;;)
+        {
+            const Value next_key(static_cast<Integer>(t->array.size()));
+            auto it = t->hash.find(next_key);
+            if (it == t->hash.end())
+            {
+                return;
+            }
+            const Value moved = it->second;
+            t->hash.erase(next_key);
+            t->array.push_back(S, moved);
+        }
     }
 
     BEHL_INLINE
@@ -126,6 +169,7 @@ namespace behl
             if (i == arr_size)
             {
                 t->array.push_back(S, v);
+                table_migrate_hash_to_array(S, t, arr_size);
                 return;
             }
             // In-bounds update
@@ -139,6 +183,7 @@ namespace behl
             {
                 t->array.resize(S, i + 1);
                 t->array[i] = v;
+                table_migrate_hash_to_array(S, t, arr_size);
                 return;
             }
         }
@@ -152,44 +197,48 @@ namespace behl
     BEHL_INLINE
     void table_setfield_vm(State* S, GCTable* t, const Value key, const Value v)
     {
-        // Try to find existing slot
-        Value* slot = table_raw_get_slot(t, key);
-
-        // If key exists, update it directly
-        if (slot != nullptr)
+        for (int32_t depth = 0; depth < kMaxMetaChain; ++depth)
         {
-            gc_barrier(S, t, v);
-            *slot = v;
-            return;
-        }
+            // Try to find existing slot
+            Value* slot = table_raw_get_slot(t, key);
 
-        // Key doesn't exist - check for __newindex metamethod
-        if (t->metatable != nullptr)
-        {
+            // If key exists, update it directly
+            if (slot != nullptr)
+            {
+                gc_barrier(S, t, v);
+                *slot = v;
+                return;
+            }
+
+            // Key doesn't exist - check for __newindex metamethod
+            if (t->metatable == nullptr)
+            {
+                table_raw_setfield(S, t, key, v);
+                return;
+            }
+
             // Create a Value wrapper for the table
             Value table_value(t);
             Value metamethod = metatable_get_method<MetaMethodType::kNewIndex>(table_value);
 
-            if (metamethod.has_value())
+            if (metamethod.is_callable())
             {
-                if (metamethod.is_callable())
-                {
-                    // __newindex is a closure: call it
-                    metatable_call_method(S, metamethod, table_value, key, v);
-                    return;
-                }
-                else if (metamethod.is_table())
-                {
-                    // __newindex is a table: recursively set in it
-                    GCTable* mm_table = metamethod.get_table();
-                    table_setfield_vm(S, mm_table, key, v);
-                    return;
-                }
+                // __newindex is a closure: call it
+                metatable_call_method(S, metamethod, table_value, key, v);
+                return;
             }
+            if (!metamethod.is_table())
+            {
+                // No metamethod, do raw set
+                table_raw_setfield(S, t, key, v);
+                return;
+            }
+
+            // __newindex is a table: recursively set in it
+            t = metamethod.get_table();
         }
 
-        // No metamethod, do raw set
-        table_raw_setfield(S, t, key, v);
+        throw RuntimeError("'__newindex' chain too long; possible loop");
     }
 
     BEHL_INLINE

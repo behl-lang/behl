@@ -29,6 +29,8 @@ namespace behl
                 return jit_op_varargexpand;
             case OpCode::kOpDefer:
                 return jit_op_defer;
+            case OpCode::kOpClose:
+                return jit_op_close;
             case OpCode::kOpSaveRet:
                 return jit_op_saveret;
             case OpCode::kOpGetGlobal:
@@ -544,12 +546,13 @@ namespace behl
                 op.label = on_true;
             }
 
-            void branch_truthy(int32_t slot, uint32_t on_truthy, uint32_t on_not)
+            void branch_truthy(int32_t slot, uint32_t on_truthy, uint32_t on_not, bool nil_only = false)
             {
                 CgOp& op = push(CgOpKind::kBranchTruthy);
                 op.slot = slot;
                 op.label = on_truthy;
                 op.label2 = on_not;
+                op.flag = nil_only;
             }
 
             void branch_var_eq_u32(uint32_t var, uint32_t value, uint32_t on_eq)
@@ -666,6 +669,50 @@ namespace behl
                 op.pcn = pcn;
             }
 
+            bool table_int_access(const Instruction& ins, uint32_t pcn)
+            {
+                const OpCode opc = ins.op();
+                const bool is_get = opc == OpCode::kOpGetField || opc == OpCode::kOpGetFieldI;
+                const bool imm_key = opc == OpCode::kOpGetFieldI || opc == OpCode::kOpSetFieldI;
+                if (!valid_pc(pcn))
+                {
+                    return false;
+                }
+
+                ColdBlock cb{ new_label(), (*labels_)[pcn], plain_helper(opc), ins.raw, pcn, ColdKind::kHelperOnly, 0 };
+
+                const int32_t table_slot = is_get ? ins.b() : ins.a();
+                int32_t value_slot = 0;
+                int64_t key = 0;
+                if (is_get)
+                {
+                    value_slot = ins.a();
+                    key = imm_key ? ins.small_const_index() : ins.c();
+                }
+                else
+                {
+                    value_slot = imm_key ? ins.b() : ins.c();
+                    key = imm_key ? ins.small_const_index() : ins.b();
+                }
+
+                guard_tag(table_slot, Type::kTable, cb.entry);
+                if (!imm_key)
+                {
+                    guard_tag(static_cast<int32_t>(key), Type::kInteger, cb.entry);
+                }
+
+                CgOp& op = push(is_get ? CgOpKind::kTableGetInt : CgOpKind::kTableSetInt);
+                op.slot = value_slot;
+                op.var = static_cast<uint32_t>(table_slot);
+                op.flag = imm_key;
+                op.imm = key;
+                op.label = cb.entry;
+
+                jump(cb.resume);
+                cold_blocks_.push_back(cb);
+                return true;
+            }
+
             void add_resume_pc(uint32_t pcn)
             {
                 for (const uint32_t existing : resume_pcs_)
@@ -723,6 +770,34 @@ namespace behl
             bool can_fuse_jmp(uint32_t pcn) const
             {
                 return static_cast<size_t>(pcn) + 1 < n_ && proto_->code[pcn].op() == OpCode::kOpJmp;
+            }
+
+            bool positive_branch(uint32_t pcn, int64_t& false_target) const
+            {
+                if (static_cast<size_t>(pcn) + 2 >= n_)
+                {
+                    return false;
+                }
+                const Instruction skip = proto_->code[pcn];
+                const Instruction exit = proto_->code[pcn + 1];
+                if (skip.op() != OpCode::kOpJmp || skip.jump_offset() != 1 || exit.op() != OpCode::kOpJmp)
+                {
+                    return false;
+                }
+                false_target = static_cast<int64_t>(pcn) + 2 + exit.jump_offset();
+                return valid_pc(false_target);
+            }
+
+            bool try_positive_branch_fusion(uint32_t& pc, uint32_t pcn, int64_t& false_target)
+            {
+                if (!positive_branch(pcn, false_target))
+                {
+                    return false;
+                }
+                fused_jmp_stubs_.push_back({ (*labels_)[pcn], (*labels_)[pcn + 2] });
+                fused_jmp_stubs_.push_back({ (*labels_)[pcn + 1], (*labels_)[static_cast<size_t>(false_target)] });
+                pc += 2;
+                return true;
             }
 
             void return_fixed(const Instruction& ins, uint32_t pcn, int32_t slot, uint32_t moved, JitOpFn slow_fn)
@@ -1089,6 +1164,13 @@ namespace behl
                     cb.resume = cb.entry;
                     guard_tag(ins.a(), Type::kInteger, cb.entry);
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.a());
+                    int64_t false_target = 0;
+                    if (try_positive_branch_fusion(pc, pcn, false_target))
+                    {
+                        branch_i64_imm(v, ins.signed_immediate(), invert(cmp), (*labels_)[static_cast<size_t>(false_target)]);
+                        cold_blocks_.push_back(cb);
+                        break;
+                    }
                     if (can_fuse_jmp(pcn) && !jump_targets_[pcn])
                     {
                         const int64_t target = static_cast<int64_t>(pcn) + 1 + proto_->code[pcn].jump_offset();
@@ -1407,7 +1489,7 @@ namespace behl
                     const bool inv = ins.b() != 0;
                     const uint32_t taken = (*labels_)[pcn];
                     const uint32_t skip = (*labels_)[pcn + 1];
-                    branch_truthy(ins.a(), inv ? skip : taken, inv ? taken : skip);
+                    branch_truthy(ins.a(), inv ? skip : taken, inv ? taken : skip, ins.c() != 0);
                     break;
                 }
 
@@ -1447,6 +1529,13 @@ namespace behl
                     guard_tag(ins.c(), Type::kInteger, cb.entry);
                     const uint32_t v1 = load(CgOpKind::kLoadI64, ins.b());
                     const uint32_t v2 = load(CgOpKind::kLoadI64, ins.c());
+                    int64_t false_target = 0;
+                    if (try_positive_branch_fusion(pc, pcn, false_target))
+                    {
+                        branch_i64(v1, v2, invert(cmp), (*labels_)[static_cast<size_t>(false_target)]);
+                        cold_blocks_.push_back(cb);
+                        break;
+                    }
                     branch_i64(v1, v2, invert(cmp), (*labels_)[pcn + 1]);
                     cold_blocks_.push_back(cb);
                     break;
@@ -1469,14 +1558,18 @@ namespace behl
                     cb.resume = cb.entry;
                     guard_tag(ins.b(), Type::kInteger, cb.entry);
                     const uint32_t v = load(CgOpKind::kLoadI64, ins.b());
+                    int64_t false_target = 0;
+                    const uint32_t skip_label = try_positive_branch_fusion(pc, pcn, false_target)
+                        ? (*labels_)[static_cast<size_t>(false_target)]
+                        : (*labels_)[pcn + 1];
                     if (k >= INT32_MIN && k <= INT32_MAX)
                     {
-                        branch_i64_imm(v, k, invert(cmp), (*labels_)[pcn + 1]);
+                        branch_i64_imm(v, k, invert(cmp), skip_label);
                     }
                     else
                     {
                         const uint32_t c = const_i64(k);
-                        branch_i64(v, c, invert(cmp), (*labels_)[pcn + 1]);
+                        branch_i64(v, c, invert(cmp), skip_label);
                     }
                     cold_blocks_.push_back(cb);
                     break;
@@ -1547,6 +1640,16 @@ namespace behl
                     }
                     break;
                 }
+
+                case OpCode::kOpGetField:
+                case OpCode::kOpGetFieldI:
+                case OpCode::kOpSetField:
+                case OpCode::kOpSetFieldI:
+                    if (!table_int_access(ins, pcn))
+                    {
+                        helper_call(plain_helper(ins.op()), ins.raw, pcn);
+                    }
+                    break;
 
                 case OpCode::kOpClosure:
                 {

@@ -36,7 +36,8 @@ namespace behl
         }
         else
         {
-            return static_cast<ptrdiff_t>(S->stack.size()) + idx;
+            const ptrdiff_t resolved = static_cast<ptrdiff_t>(S->stack.size()) + idx;
+            return resolved < static_cast<ptrdiff_t>(get_cfunction_base(S)) ? -1 : resolved;
         }
     }
 

@@ -275,6 +275,9 @@ namespace behl
                     handler_bitwise<MetaMethodType::kBShr, BitwiseShrOp, operand_reg, operand_reg>(
                         S, *frame, instr.a(), instr.b(), instr.c());
                     break;
+                case OpCode::kOpClose:
+                    close_upvalues(S, frame->base + instr.a());
+                    continue;
                 case OpCode::kOpDefer:
                     handler_defer(S, *frame, instr.a());
                     continue;
@@ -349,7 +352,7 @@ namespace behl
                     handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpNe:
-                    handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
+                    handler_cmp<MetaMethodType::kEq, true, CmpNeOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
                     break;
                 case OpCode::kOpLt:
                     handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_reg>(S, *frame, instr.b(), instr.c());
@@ -418,12 +421,12 @@ namespace behl
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
                 case OpCode::kOpNeImm:
-                    handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_imm>(
+                    handler_cmp<MetaMethodType::kEq, true, CmpNeOp, operand_reg, operand_imm>(
                         S, *frame, instr.a(), instr.signed_immediate());
                     break;
 
                 case OpCode::kOpTest:
-                    handler_test(S, *frame, instr.a(), instr.b() != 0);
+                    handler_test(S, *frame, instr.a(), instr.b() != 0, instr.c() != 0);
                     continue;
                 case OpCode::kOpTestSet:
                     handler_testset(S, *frame, instr.a(), instr.b(), instr.c() != 0);
@@ -509,7 +512,7 @@ namespace behl
                     continue;
 
                 case OpCode::kOpVarargExpand:
-                    handler_varargexpand(S, *frame, instr.a(), instr.b());
+                    handler_varargexpand(S, *frame, instr.a(), instr.const_or_proto_index());
                     break;
 
 #ifndef NDEBUG
@@ -540,21 +543,39 @@ namespace behl
         assert(new_base < S->stack.size() && "Frame base out of range");
 
         const auto* proto = closure_data->proto;
-        const auto nres = (nresults == kMultRet) ? static_cast<uint8_t>(kMultRet) : static_cast<uint8_t>(nresults);
+        const bool wide_results = nresults != kMultRet && nresults >= static_cast<int>(static_cast<uint8_t>(kMultRet));
+        const auto nres = (nresults == kMultRet || wide_results) ? static_cast<uint8_t>(kMultRet)
+                                                                 : static_cast<uint8_t>(nresults);
         setup_call_frame(S, proto, new_base, num_args, new_base, nres);
         prepare_call(S, proto->max_stack_size, new_base, num_args, proto->num_params);
+
+        const auto adjust_wide_results = [&]() {
+            if (!wide_results)
+            {
+                return;
+            }
+            const auto returned = static_cast<uint32_t>(S->stack.size()) - new_base;
+            const auto wanted = static_cast<uint32_t>(nresults);
+            S->stack.resize(S, new_base + wanted);
+            for (uint32_t i = returned; i < wanted; ++i)
+            {
+                S->stack[new_base + i].set_nil();
+            }
+        };
 
 #if BEHL_JIT_SUPPORTED
         if constexpr (!TDebugMode)
         {
             if (jit_try_execute(S, proto))
             {
+                adjust_wide_results();
                 return;
             }
         }
 #endif
 
         interpreter_loop<TDebugMode>(S, entry_call_depth, entry_call_depth);
+        adjust_wide_results();
     }
 
     bool perform_call(State* S, int nargs, int nresults, size_t func_pos)
@@ -635,6 +656,12 @@ namespace behl
                     pending = std::current_exception();
                     unwind_call_frames(S, static_cast<size_t>(index) + 1, pending);
                 }
+            }
+
+            const CallFrame& unwound = S->call_stack[index];
+            if (unwound.proto != nullptr && unwound.proto->has_upvalues)
+            {
+                close_upvalues(S, unwound.base);
             }
 
             truncate_call_frames(S, index);

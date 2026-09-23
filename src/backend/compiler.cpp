@@ -14,6 +14,7 @@
 #include "vm/bytecode.hpp"
 
 #include <behl/exceptions.hpp>
+#include <bit>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -28,12 +29,28 @@ namespace behl
     static constexpr size_t kInitialLineInfoCapacity = 64;
     static constexpr size_t kInitialColumnInfoCapacity = 64;
 
+    struct FpConstEq
+    {
+        bool operator()(const Value& lhs, const Value& rhs) const noexcept
+        {
+            return std::bit_cast<uint64_t>(lhs.get_fp()) == std::bit_cast<uint64_t>(rhs.get_fp());
+        }
+    };
+
     struct Local
     {
         std::string_view name;
         int32_t start_pc;
         Reg reg;
         bool is_const;
+        bool captured{};
+    };
+
+    struct PendingClose
+    {
+        size_t pc;
+        int32_t exit_level;
+        Reg reg;
     };
 
     struct UpvalueInfo
@@ -104,11 +121,12 @@ namespace behl
         AutoVector<LoopContext> loop_stack; // Stack of loop contexts for break/continue
         AutoVector<ActiveDefer> active_defers;
         AutoVector<PendingDefer> pending_defers;
+        AutoVector<PendingClose> pending_closes;
         uint32_t defer_count{};
         size_t loop_floor{};
         AutoHashMap<std::string_view, size_t, StringHash32, StringEq> upvalue_indices;
         AutoHashMap<Value, ConstIndex, ValueHash, ValueEq> int_const_indices;
-        AutoHashMap<Value, ConstIndex, ValueHash, ValueEq> fp_const_indices;
+        AutoHashMap<Value, ConstIndex, ValueHash, FpConstEq> fp_const_indices;
         AutoHashMap<std::string_view, ConstIndex, StringHash32, StringEq> str_const_indices;
         int32_t lastline = 1;
         int32_t lastcolumn = 1;
@@ -126,6 +144,7 @@ namespace behl
             , loop_stack(state)
             , active_defers(state)
             , pending_defers(state)
+            , pending_closes(state)
             , upvalue_indices(state)
             , int_const_indices(state)
             , fp_const_indices(state)
@@ -295,13 +314,45 @@ namespace behl
     static void leave_scope(CompilerState& C)
     {
         auto& scope_locals = C.scopes.back();
+        const auto level = static_cast<int32_t>(C.scopes.size());
 
         uint8_t scope_min_reg = kMaxRegisters;
+        uint8_t captured_min_reg = kMaxRegisters;
         for (const auto& local : scope_locals)
         {
             if (local.reg < scope_min_reg)
             {
                 scope_min_reg = local.reg;
+            }
+            if (local.captured && local.reg < captured_min_reg)
+            {
+                captured_min_reg = local.reg;
+            }
+        }
+
+        if (captured_min_reg < kMaxRegisters)
+        {
+            emit(C, make_op_close(captured_min_reg), C.lastline);
+        }
+
+        for (size_t i = C.pending_closes.size(); i-- > 0;)
+        {
+            PendingClose& pending = C.pending_closes[i];
+            if (pending.exit_level > level)
+            {
+                continue;
+            }
+            if (captured_min_reg < pending.reg)
+            {
+                pending.reg = captured_min_reg;
+            }
+            if (pending.exit_level == level)
+            {
+                if (pending.reg < kMaxRegisters)
+                {
+                    C.current_proto->code[pending.pc] = make_op_close(pending.reg);
+                }
+                C.pending_closes.erase(C.pending_closes.begin() + static_cast<ptrdiff_t>(i));
             }
         }
 
@@ -431,6 +482,31 @@ namespace behl
         return kInvalidLocal;
     }
 
+    static void mark_local_captured(CompilerState& C, std::string_view name)
+    {
+        for (auto scope_it = C.scopes.rbegin(); scope_it != C.scopes.rend(); ++scope_it)
+        {
+            for (auto local_it = scope_it->rbegin(); local_it != scope_it->rend(); ++local_it)
+            {
+                if (local_it->name == name)
+                {
+                    local_it->captured = true;
+                    return;
+                }
+            }
+        }
+    }
+
+    static void emit_pending_close(CompilerState& C, int32_t loop_scope_level)
+    {
+        if (current_scope_level(C) <= loop_scope_level)
+        {
+            return;
+        }
+        C.pending_closes.push_back(PendingClose{ C.current_proto->code.size(), loop_scope_level + 1, kMaxRegisters });
+        emit(C, make_op_jmp(0), C.lastline);
+    }
+
     static bool is_local_const(CompilerState& C, std::string_view name)
     {
         // Search from innermost to outermost scope
@@ -464,6 +540,14 @@ namespace behl
         return false;
     }
 
+    static void check_upvalue_limit(const CompilerState& C)
+    {
+        if (C.upvalues.size() >= kMaxUpvalues)
+        {
+            throw SyntaxError("too many upvalues in function", get_location(C));
+        }
+    }
+
     static uint32_t resolve_upvalue(CompilerState& C, std::string_view name)
     {
         auto it = C.upvalue_indices.find(name);
@@ -479,6 +563,8 @@ namespace behl
         int32_t loc = resolve_local(*C.parent, name);
         if (loc >= 0)
         {
+            check_upvalue_limit(C);
+            mark_local_captured(*C.parent, name);
             bool is_const = is_local_const(*C.parent, name);
             uint32_t idx = static_cast<uint32_t>(upvalues.size());
             upvalues.push_back(UpvalueInfo{ static_cast<uint8_t>(loc), true, is_const });
@@ -492,6 +578,7 @@ namespace behl
         uint32_t up = resolve_upvalue(*C.parent, name);
         if (up != kInvalidUpvalue)
         {
+            check_upvalue_limit(C);
             bool is_const = (up < static_cast<uint32_t>(C.parent->upvalues.size()))
                 ? C.parent->upvalues[static_cast<size_t>(up)].is_const
                 : false;
@@ -606,6 +693,67 @@ namespace behl
             expr->accept(*this);
             Reg reg = static_cast<Reg>(C.freereg - 1);
             return { reg, true };
+        }
+
+        Reg compile_method_callee(const AstFuncCall& node)
+        {
+            const auto* member = node.func->try_as<AstMember>();
+            const Reg func_reg = alloc_reg(C);
+            const Reg self_reg = alloc_reg(C);
+
+            node.first_arg->accept(*this);
+            const auto receiver = static_cast<Reg>(C.freereg - 1);
+            if (receiver != self_reg)
+            {
+                emit(C, make_op_move(self_reg, receiver), C.lastline);
+            }
+            reset_freereg(C, self_reg);
+
+            const auto k = add_string_constant(C, member->name->view());
+            if (k <= 511)
+            {
+                emit(C, make_op_getfields(func_reg, self_reg, k), C.lastline);
+            }
+            else
+            {
+                const Reg key_reg = alloc_reg(C);
+                emit(C, make_op_loads(key_reg, k), C.lastline);
+                emit(C, make_op_getfield(func_reg, self_reg, key_reg), C.lastline);
+                free_reg(C, key_reg);
+            }
+            return func_reg;
+        }
+
+        size_t* take_jump_patch()
+        {
+            size_t* const patch = compile_for_jump ? jump_patch_location : nullptr;
+            compile_for_jump = false;
+            jump_patch_location = nullptr;
+            return patch;
+        }
+
+        void compile_condition(const AstNode* cond, size_t& patch)
+        {
+            constexpr size_t kUnpatched = SIZE_MAX;
+            patch = kUnpatched;
+
+            const bool handles_jump = cond->try_as<AstBool>() || cond->try_as<AstIdent>() || cond->try_as<AstBinOp>()
+                || cond->try_as<AstUnOp>() || cond->try_as<AstTernary>() || cond->try_as<AstIndex>()
+                || cond->try_as<AstMember>() || cond->try_as<AstFuncCall>();
+            compile_for_jump = handles_jump;
+            jump_patch_location = handles_jump ? &patch : nullptr;
+            cond->accept(*this);
+            compile_for_jump = false;
+            jump_patch_location = nullptr;
+
+            if (patch == kUnpatched)
+            {
+                const Reg reg = static_cast<Reg>(C.freereg - 1);
+                emit(C, make_op_test(reg, true), C.lastline);
+                patch = C.current_proto->code.size();
+                emit(C, make_op_jmp(0), C.lastline);
+                free_reg(C, reg);
+            }
         }
 
         void visit(const AstNil&) override;
@@ -725,7 +873,7 @@ namespace behl
         }
 
         const auto reg = get_target_reg();
-        emit(C, make_op_vararg(reg, 0), C.lastline);
+        emit(C, make_op_vararg(reg, 1), C.lastline);
     }
 
     void VisitorAdapter::visit(const AstIdent& node)
@@ -771,13 +919,11 @@ namespace behl
         C.lastline = node.line;
         C.lastcolumn = node.column;
 
+        size_t* const jump_patch = take_jump_patch();
+
         if (node.op == TokenType::kAndOp)
         {
             Reg result_reg = get_target_reg();
-            bool saved_compile_for_jump = compile_for_jump;
-            size_t* saved_jump_patch = jump_patch_location;
-            compile_for_jump = false;
-            jump_patch_location = nullptr;
 
             node.left->accept(*this);
             Reg left_reg = static_cast<Reg>(C.freereg - 1);
@@ -798,10 +944,10 @@ namespace behl
 
             C.current_proto->code[jmp_pos] = make_op_jmp(static_cast<int32_t>(C.current_proto->code.size() - jmp_pos - 1));
 
-            if (saved_compile_for_jump && saved_jump_patch)
+            if (jump_patch != nullptr)
             {
                 emit(C, make_op_test(result_reg, true), C.lastline);
-                *saved_jump_patch = C.current_proto->code.size();
+                *jump_patch = C.current_proto->code.size();
                 emit(C, make_op_jmp(0), C.lastline);
                 free_reg(C, result_reg);
             }
@@ -812,10 +958,6 @@ namespace behl
         if (node.op == TokenType::kOrOp)
         {
             Reg result_reg = get_target_reg();
-            bool saved_compile_for_jump = compile_for_jump;
-            size_t* saved_jump_patch = jump_patch_location;
-            compile_for_jump = false;
-            jump_patch_location = nullptr;
 
             node.left->accept(*this);
             Reg left_reg = static_cast<Reg>(C.freereg - 1);
@@ -836,10 +978,10 @@ namespace behl
 
             C.current_proto->code[jmp_pos] = make_op_jmp(static_cast<int32_t>(C.current_proto->code.size() - jmp_pos - 1));
 
-            if (saved_compile_for_jump && saved_jump_patch)
+            if (jump_patch != nullptr)
             {
                 emit(C, make_op_test(result_reg, true), C.lastline);
-                *saved_jump_patch = C.current_proto->code.size();
+                *jump_patch = C.current_proto->code.size();
                 emit(C, make_op_jmp(0), C.lastline);
                 free_reg(C, result_reg);
             }
@@ -847,7 +989,7 @@ namespace behl
             return;
         }
 
-        if (compile_for_jump && jump_patch_location
+        if (jump_patch != nullptr
             && (node.op == TokenType::kEq || node.op == TokenType::kNe || node.op == TokenType::kLt || node.op == TokenType::kGt
                 || node.op == TokenType::kLe || node.op == TokenType::kGe))
         {
@@ -855,9 +997,7 @@ namespace behl
             if (node.right->try_as<AstInt>() && (node.op == TokenType::kEq || node.op == TokenType::kNe))
             {
                 auto* rhs_int = node.right->try_as<AstInt>();
-                compile_for_jump = false;
                 auto [lreg, l_free] = try_get_rk(node.left);
-                compile_for_jump = true;
 
                 // Use immediate opcode if the value fits in 17-bit signed range
                 if (rhs_int->value >= -65536 && rhs_int->value <= 65535)
@@ -874,9 +1014,7 @@ namespace behl
                 else
                 {
                     // Fallback to regular EQ with register
-                    compile_for_jump = false;
                     auto [rreg, r_free] = try_get_rk(node.right);
-                    compile_for_jump = true;
 
                     if (node.op == TokenType::kEq)
                     {
@@ -893,7 +1031,7 @@ namespace behl
                     }
                 }
 
-                *jump_patch_location = C.current_proto->code.size();
+                *jump_patch = C.current_proto->code.size();
                 emit(C, make_op_jmp(0), C.lastline);
 
                 if (l_free)
@@ -909,28 +1047,26 @@ namespace behl
                     || node.op == TokenType::kGe))
             {
                 auto* rhs_int = node.right->try_as<AstInt>();
-                compile_for_jump = false;
                 auto [lreg, l_free] = try_get_rk(node.left);
-                compile_for_jump = true;
 
                 // Use immediate opcodes if the value fits in 17-bit signed range
                 if (rhs_int->value >= -65536 && rhs_int->value <= 65535)
                 {
                     if (node.op == TokenType::kLt)
                     {
-                        emit(C, make_op_geimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
+                        emit(C, make_op_ltimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
                     }
                     else if (node.op == TokenType::kLe)
                     {
-                        emit(C, make_op_gtimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
+                        emit(C, make_op_leimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
                     }
                     else if (node.op == TokenType::kGt)
                     {
-                        emit(C, make_op_leimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
+                        emit(C, make_op_gtimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
                     }
                     else if (node.op == TokenType::kGe)
                     {
-                        emit(C, make_op_ltimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
+                        emit(C, make_op_geimm(lreg, static_cast<int32_t>(rhs_int->value)), C.lastline);
                     }
                 }
                 else
@@ -942,41 +1078,42 @@ namespace behl
                         const Reg k_reg = load_int_constant(C, k);
                         if (node.op == TokenType::kLt)
                         {
-                            emit(C, make_op_ge(lreg, k_reg), C.lastline);
+                            emit(C, make_op_lt(lreg, k_reg), C.lastline);
                         }
                         else if (node.op == TokenType::kLe)
                         {
-                            emit(C, make_op_gt(lreg, k_reg), C.lastline);
+                            emit(C, make_op_le(lreg, k_reg), C.lastline);
                         }
                         else if (node.op == TokenType::kGt)
                         {
-                            emit(C, make_op_le(lreg, k_reg), C.lastline);
+                            emit(C, make_op_gt(lreg, k_reg), C.lastline);
                         }
                         else if (node.op == TokenType::kGe)
                         {
-                            emit(C, make_op_lt(lreg, k_reg), C.lastline);
+                            emit(C, make_op_ge(lreg, k_reg), C.lastline);
                         }
                         free_reg(C, k_reg);
                     }
                     else if (node.op == TokenType::kLt)
                     {
-                        emit(C, make_op_gei(lreg, k), C.lastline);
+                        emit(C, make_op_lti(lreg, k), C.lastline);
                     }
                     else if (node.op == TokenType::kLe)
                     {
-                        emit(C, make_op_gti(lreg, k), C.lastline);
+                        emit(C, make_op_lei(lreg, k), C.lastline);
                     }
                     else if (node.op == TokenType::kGt)
                     {
-                        emit(C, make_op_lei(lreg, k), C.lastline);
+                        emit(C, make_op_gti(lreg, k), C.lastline);
                     }
                     else if (node.op == TokenType::kGe)
                     {
-                        emit(C, make_op_lti(lreg, k), C.lastline);
+                        emit(C, make_op_gei(lreg, k), C.lastline);
                     }
                 }
 
-                *jump_patch_location = C.current_proto->code.size();
+                emit(C, make_op_jmp(1), C.lastline);
+                *jump_patch = C.current_proto->code.size();
                 emit(C, make_op_jmp(0), C.lastline);
 
                 if (l_free)
@@ -991,9 +1128,7 @@ namespace behl
                     || node.op == TokenType::kGe))
             {
                 auto* rhs_fp = node.right->try_as<AstFP>();
-                compile_for_jump = false;
                 auto [lreg, l_free] = try_get_rk(node.left);
-                compile_for_jump = true;
 
                 auto const k = add_fp_constant(C, rhs_fp->value);
 
@@ -1002,40 +1137,41 @@ namespace behl
                     const Reg k_reg = load_fp_constant(C, k);
                     if (node.op == TokenType::kLt)
                     {
-                        emit(C, make_op_ge(lreg, k_reg), C.lastline);
+                        emit(C, make_op_lt(lreg, k_reg), C.lastline);
                     }
                     else if (node.op == TokenType::kLe)
                     {
-                        emit(C, make_op_gt(lreg, k_reg), C.lastline);
+                        emit(C, make_op_le(lreg, k_reg), C.lastline);
                     }
                     else if (node.op == TokenType::kGt)
                     {
-                        emit(C, make_op_le(lreg, k_reg), C.lastline);
+                        emit(C, make_op_gt(lreg, k_reg), C.lastline);
                     }
                     else if (node.op == TokenType::kGe)
                     {
-                        emit(C, make_op_lt(lreg, k_reg), C.lastline);
+                        emit(C, make_op_ge(lreg, k_reg), C.lastline);
                     }
                     free_reg(C, k_reg);
                 }
                 else if (node.op == TokenType::kLt)
                 {
-                    emit(C, make_op_gef(lreg, k), C.lastline);
+                    emit(C, make_op_ltf(lreg, k), C.lastline);
                 }
                 else if (node.op == TokenType::kLe)
                 {
-                    emit(C, make_op_gtf(lreg, k), C.lastline);
+                    emit(C, make_op_lef(lreg, k), C.lastline);
                 }
                 else if (node.op == TokenType::kGt)
                 {
-                    emit(C, make_op_lef(lreg, k), C.lastline);
+                    emit(C, make_op_gtf(lreg, k), C.lastline);
                 }
                 else if (node.op == TokenType::kGe)
                 {
-                    emit(C, make_op_ltf(lreg, k), C.lastline);
+                    emit(C, make_op_gef(lreg, k), C.lastline);
                 }
 
-                *jump_patch_location = C.current_proto->code.size();
+                emit(C, make_op_jmp(1), C.lastline);
+                *jump_patch = C.current_proto->code.size();
                 emit(C, make_op_jmp(0), C.lastline);
 
                 if (l_free)
@@ -1045,10 +1181,8 @@ namespace behl
                 return;
             }
 
-            compile_for_jump = false;
             auto [lreg, l_free] = try_get_rk(node.left);
             auto [rreg, r_free] = try_get_rk(node.right);
-            compile_for_jump = true;
 
             if (node.op == TokenType::kEq)
             {
@@ -1060,22 +1194,26 @@ namespace behl
             }
             else if (node.op == TokenType::kLt)
             {
-                emit(C, make_op_ge(lreg, rreg), C.lastline);
+                emit(C, make_op_lt(lreg, rreg), C.lastline);
             }
             else if (node.op == TokenType::kLe)
             {
-                emit(C, make_op_gt(lreg, rreg), C.lastline);
+                emit(C, make_op_le(lreg, rreg), C.lastline);
             }
             else if (node.op == TokenType::kGt)
             {
-                emit(C, make_op_le(lreg, rreg), C.lastline);
+                emit(C, make_op_gt(lreg, rreg), C.lastline);
             }
             else if (node.op == TokenType::kGe)
             {
-                emit(C, make_op_lt(lreg, rreg), C.lastline);
+                emit(C, make_op_ge(lreg, rreg), C.lastline);
             }
 
-            *jump_patch_location = C.current_proto->code.size();
+            if (node.op != TokenType::kEq && node.op != TokenType::kNe)
+            {
+                emit(C, make_op_jmp(1), C.lastline);
+            }
+            *jump_patch = C.current_proto->code.size();
             emit(C, make_op_jmp(0), C.lastline);
 
             if (r_free)
@@ -1242,7 +1380,7 @@ namespace behl
         }
 
         // Optimize equality comparisons with constant right operands (i == 0, x != 1, etc)
-        if (!compile_for_jump && node.right->try_as<AstInt>() && (node.op == TokenType::kEq || node.op == TokenType::kNe))
+        if (jump_patch == nullptr && node.right->try_as<AstInt>() && (node.op == TokenType::kEq || node.op == TokenType::kNe))
         {
             auto* rhs_int = node.right->try_as<AstInt>();
             auto saved_target = target_reg;
@@ -1294,7 +1432,7 @@ namespace behl
         }
 
         // Optimize comparisons with constant right operands (i < 10, x <= 5.5, etc)
-        if (!compile_for_jump && node.right->try_as<AstInt>()
+        if (jump_patch == nullptr && node.right->try_as<AstInt>()
             && (node.op == TokenType::kLt || node.op == TokenType::kLe || node.op == TokenType::kGt
                 || node.op == TokenType::kGe))
         {
@@ -1379,7 +1517,7 @@ namespace behl
             return;
         }
 
-        if (!compile_for_jump && node.right->try_as<AstFP>()
+        if (jump_patch == nullptr && node.right->try_as<AstFP>()
             && (node.op == TokenType::kLt || node.op == TokenType::kLe || node.op == TokenType::kGt
                 || node.op == TokenType::kGe))
         {
@@ -1454,6 +1592,10 @@ namespace behl
         {
             // Left is a temporary expression result - reuse its register
             result_reg = left_reg;
+        }
+        else if (!saved_target.has_value())
+        {
+            result_reg = right_reg;
         }
         else
         {
@@ -1592,7 +1734,10 @@ namespace behl
                 emit(C, std::move(mm), binop_line, binop_column);
             }
         }
-        free_reg(C, right_reg);
+        if (result_reg != right_reg)
+        {
+            free_reg(C, right_reg);
+        }
         if (left_free && result_reg != left_reg)
         {
             // Only free left if we didn't reuse it as result
@@ -1659,6 +1804,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstTernary& node)
     {
+        size_t* const jump_patch = take_jump_patch();
         Reg result_reg = get_target_reg();
 
         // Compile condition
@@ -1706,10 +1852,10 @@ namespace behl
         C.current_proto->code[jmp_to_end] = make_op_jmp(jmp_end_offset);
 
         // Result is already in result_reg from either branch
-        if (compile_for_jump && jump_patch_location)
+        if (jump_patch != nullptr)
         {
             emit(C, make_op_test(result_reg, true), C.lastline);
-            *jump_patch_location = C.current_proto->code.size();
+            *jump_patch = C.current_proto->code.size();
             emit(C, make_op_jmp(0), C.lastline);
             free_reg(C, result_reg);
         }
@@ -1824,17 +1970,23 @@ namespace behl
                 C.current_proto->max_stack_size = C.freereg;
             }
         }
+        else if (node.is_method_call)
+        {
+            func_reg = compile_method_callee(node);
+        }
         else
         {
             node.func->accept(*this);
             func_reg = C.freereg - 1;
         }
-        Reg arg_base = func_reg + 1;
+        const size_t receiver_count = node.is_method_call ? 1 : 0;
+        AstNode* const first_explicit_arg = node.is_method_call ? node.first_arg->next_child : node.first_arg;
+        Reg arg_base = static_cast<Reg>(func_reg + 1 + receiver_count);
 
         // Count args and find last arg
         size_t args_count = 0;
         AstNode* last_arg = nullptr;
-        for (AstNode* arg = node.first_arg; arg; arg = arg->next_child)
+        for (AstNode* arg = first_explicit_arg; arg; arg = arg->next_child)
         {
             args_count++;
             last_arg = arg;
@@ -1861,7 +2013,7 @@ namespace behl
 
         // Compile regular args
         size_t i = 0;
-        for (AstNode* arg = node.first_arg; arg && i < regular_args; arg = arg->next_child, ++i)
+        for (AstNode* arg = first_explicit_arg; arg && i < regular_args; arg = arg->next_child, ++i)
         {
             arg->accept(*this);
             Reg arg_reg = C.freereg - 1;
@@ -1898,7 +2050,7 @@ namespace behl
         }
         else
         {
-            uint8_t num_args = static_cast<uint8_t>(args_count + 1);
+            uint8_t num_args = static_cast<uint8_t>(args_count + receiver_count + 1);
             emit(C, make_op_call(func_reg, num_args, nresults, node.is_self_call), call_line, call_column);
         }
 
@@ -2058,7 +2210,12 @@ namespace behl
 
                     // Use VARARGEXPAND to copy varargs directly into table
                     check_vararg_allowed(C);
-                    emit(C, make_op_varargexpand(reg, static_cast<uint8_t>(array_idx)), C.lastline);
+                    constexpr size_t kMaxVarargExpandStart = 0x1FFFF;
+                    if (array_idx > kMaxVarargExpandStart)
+                    {
+                        throw SyntaxError("too many items before '...' in table constructor", get_location(C));
+                    }
+                    emit(C, make_op_varargexpand(reg, static_cast<uint32_t>(array_idx)), C.lastline);
                     break;
                 }
                 else if (batched)
@@ -2106,6 +2263,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstIndex& node)
     {
+        size_t* const jump_patch = take_jump_patch();
         Reg result_reg = get_target_reg();
 
         auto [table_reg, table_free] = try_get_reg(node.table);
@@ -2122,10 +2280,10 @@ namespace behl
                     free_reg(C, table_reg);
                 }
 
-                if (compile_for_jump && jump_patch_location)
+                if (jump_patch != nullptr)
                 {
                     emit(C, make_op_test(result_reg, true), C.lastline);
-                    *jump_patch_location = C.current_proto->code.size();
+                    *jump_patch = C.current_proto->code.size();
                     emit(C, make_op_jmp(0), C.lastline);
                     free_reg(C, result_reg);
                 }
@@ -2146,10 +2304,10 @@ namespace behl
                     free_reg(C, table_reg);
                 }
 
-                if (compile_for_jump && jump_patch_location)
+                if (jump_patch != nullptr)
                 {
                     emit(C, make_op_test(result_reg, true), C.lastline);
-                    *jump_patch_location = C.current_proto->code.size();
+                    *jump_patch = C.current_proto->code.size();
                     emit(C, make_op_jmp(0), C.lastline);
                     free_reg(C, result_reg);
                 }
@@ -2170,10 +2328,10 @@ namespace behl
             free_reg(C, table_reg);
         }
 
-        if (compile_for_jump && jump_patch_location)
+        if (jump_patch != nullptr)
         {
             emit(C, make_op_test(result_reg, true), C.lastline);
-            *jump_patch_location = C.current_proto->code.size();
+            *jump_patch = C.current_proto->code.size();
             emit(C, make_op_jmp(0), C.lastline);
             free_reg(C, result_reg);
         }
@@ -2181,6 +2339,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstMember& node)
     {
+        size_t* const jump_patch = take_jump_patch();
         Reg result_reg = get_target_reg();
         node.table->accept(*this);
         Reg table_reg = C.freereg - 1;
@@ -2201,10 +2360,10 @@ namespace behl
         }
         free_reg(C, table_reg);
 
-        if (compile_for_jump && jump_patch_location)
+        if (jump_patch != nullptr)
         {
             emit(C, make_op_test(result_reg, true), C.lastline);
-            *jump_patch_location = C.current_proto->code.size();
+            *jump_patch = C.current_proto->code.size();
             emit(C, make_op_jmp(0), C.lastline);
             free_reg(C, result_reg);
         }
@@ -2214,6 +2373,7 @@ namespace behl
     {
         auto* child_proto = gc_new_proto(C.S);
         child_proto->source_name = C.current_proto->source_name;
+        child_proto->source_path = C.current_proto->source_path;
         // Count params
         uint32_t param_count = 0;
         for (AstNode* p = node.first_param; p; p = p->next_child)
@@ -2426,6 +2586,74 @@ namespace behl
         Reg expr_base = C.freereg;
         size_t num_exprs = expr_count;
 
+        struct PreparedTarget
+        {
+            Reg table{};
+            Reg key{};
+            int32_t int_key = -1;
+            ConstIndex str_key{};
+            bool has_str_key = false;
+        };
+
+        AutoVector<PreparedTarget> prepared(C.S);
+        for (AstNode* v = node.first_var; v; v = v->next_child)
+        {
+            PreparedTarget target{};
+            if (auto* idx = v->try_as<AstIndex>())
+            {
+                idx->table->accept(*this);
+                target.table = static_cast<Reg>(C.freereg - 1);
+                const auto* int_node = idx->key->try_as<AstInt>();
+                const auto* str_node = idx->key->try_as<AstString>();
+                if (int_node != nullptr && int_node->value >= 0 && int_node->value <= 511)
+                {
+                    target.int_key = static_cast<int32_t>(int_node->value);
+                }
+                else if (str_node != nullptr && add_string_constant(C, str_node->view()) <= 511)
+                {
+                    target.has_str_key = true;
+                    target.str_key = add_string_constant(C, str_node->view());
+                }
+                else
+                {
+                    idx->key->accept(*this);
+                    target.key = static_cast<Reg>(C.freereg - 1);
+                }
+            }
+            else if (auto* mem = v->try_as<AstMember>())
+            {
+                mem->table->accept(*this);
+                target.table = static_cast<Reg>(C.freereg - 1);
+                const auto k = add_string_constant(C, mem->name->view());
+                if (k <= 511)
+                {
+                    target.has_str_key = true;
+                    target.str_key = k;
+                }
+                else
+                {
+                    target.key = alloc_reg(C);
+                    emit(C, make_op_loads(target.key, k), C.lastline);
+                }
+            }
+            prepared.push_back(target);
+        }
+
+        const auto store_prepared = [&](const PreparedTarget& target, Reg val_reg) {
+            if (target.int_key >= 0)
+            {
+                emit(C, make_op_setfieldi(target.table, val_reg, target.int_key), C.lastline);
+            }
+            else if (target.has_str_key)
+            {
+                emit(C, make_op_setfields(target.table, val_reg, target.str_key), C.lastline);
+            }
+            else
+            {
+                emit(C, make_op_setfield(target.table, target.key, val_reg), C.lastline);
+            }
+        };
+
         // Handle multi-return from single function call (like let a, b, c = func())
         if (expr_count == 1 && var_count > 1 && node.first_expr)
         {
@@ -2487,35 +2715,9 @@ namespace behl
                             }
                         }
                     }
-                    else if (auto* idx = v->try_as<AstIndex>())
+                    else if (v->try_as<AstIndex>() || v->try_as<AstMember>())
                     {
-                        idx->table->accept(*this);
-                        Reg table_reg = C.freereg - 1;
-                        auto [key_reg, key_needs_free] = try_get_rk(idx->key);
-                        emit(C, make_op_setfield(table_reg, key_reg, val_reg), C.lastline);
-                        if (key_needs_free)
-                        {
-                            free_reg(C, key_reg);
-                        }
-                        free_reg(C, table_reg);
-                    }
-                    else if (auto* mem = v->try_as<AstMember>())
-                    {
-                        mem->table->accept(*this);
-                        Reg table_reg = C.freereg - 1;
-                        const auto k = add_string_constant(C, mem->name->view());
-                        if (k <= 511)
-                        {
-                            emit(C, make_op_setfields(table_reg, val_reg, k), C.lastline);
-                        }
-                        else
-                        {
-                            Reg key_reg = alloc_reg(C);
-                            emit(C, make_op_loads(key_reg, k), C.lastline);
-                            emit(C, make_op_setfield(table_reg, key_reg, val_reg), C.lastline);
-                            free_reg(C, key_reg);
-                        }
-                        free_reg(C, table_reg);
+                        store_prepared(prepared[i], val_reg);
                     }
                 }
 
@@ -2572,72 +2774,9 @@ namespace behl
                     }
                 }
             }
-            else if (auto* idx = v->try_as<AstIndex>())
+            else if (v->try_as<AstIndex>() || v->try_as<AstMember>())
             {
-                // Check if key is a constant integer in range [0, 511] for SETFIELDI optimization
-                if (auto* int_node = dynamic_cast<const AstInt*>(idx->key))
-                {
-                    if (int_node->value >= 0 && int_node->value <= 511)
-                    {
-                        idx->table->accept(*this);
-                        Reg table_reg = C.freereg - 1;
-
-                        emit(C, make_op_setfieldi(table_reg, val_reg, static_cast<int32_t>(int_node->value)), C.lastline);
-
-                        free_reg(C, table_reg);
-                        continue;
-                    }
-                }
-
-                // Check if key is a string constant in range [0, 511] for SETFIELDS optimization
-                if (auto* str_node = dynamic_cast<const AstString*>(idx->key))
-                {
-                    ConstIndex k = add_string_constant(C, str_node->view());
-                    if (k <= 511)
-                    {
-                        idx->table->accept(*this);
-                        Reg table_reg = C.freereg - 1;
-
-                        emit(C, make_op_setfields(table_reg, val_reg, k), C.lastline);
-
-                        free_reg(C, table_reg);
-                        continue;
-                    }
-                }
-
-                idx->table->accept(*this);
-                Reg table_reg = C.freereg - 1;
-                auto [key_reg, key_needs_free] = try_get_rk(idx->key);
-
-                emit(C, make_op_setfield(table_reg, key_reg, val_reg), C.lastline);
-
-                if (key_needs_free)
-                {
-                    free_reg(C, key_reg);
-                }
-                free_reg(C, table_reg);
-            }
-            else if (auto* mem = v->try_as<AstMember>())
-            {
-                mem->table->accept(*this);
-                Reg table_reg = C.freereg - 1;
-                const auto k = add_string_constant(C, mem->name->view());
-
-                // Use SETFIELDS if the constant index fits in 9 bits
-                if (k <= 511)
-                {
-                    emit(C, make_op_setfields(table_reg, val_reg, k), C.lastline);
-                    free_reg(C, table_reg);
-                }
-                else
-                {
-                    // Fallback to LOADS + SETFIELD for large constant indices
-                    Reg key_reg = alloc_reg(C);
-                    emit(C, make_op_loads(key_reg, k), C.lastline);
-                    emit(C, make_op_setfield(table_reg, key_reg, val_reg), C.lastline);
-                    free_reg(C, key_reg);
-                    free_reg(C, table_reg);
-                }
+                store_prepared(prepared[i], val_reg);
             }
             else
             {
@@ -3101,11 +3240,7 @@ namespace behl
         AutoVector<size_t> jmp_end_pcs(C.S);
 
         size_t placeholder = 0;
-        compile_for_jump = true;
-        jump_patch_location = &placeholder;
-        node.cond->accept(*this);
-        compile_for_jump = false;
-        jump_patch_location = nullptr;
+        compile_condition(node.cond, placeholder);
         jmp_false_pcs.push_back(placeholder);
 
         if (node.then_block)
@@ -3128,14 +3263,10 @@ namespace behl
 
         for (ElseIf* elseif = node.first_elseif; elseif != nullptr; elseif = static_cast<ElseIf*>(elseif->next_child))
         {
-            compile_for_jump = true;
-            jump_patch_location = &placeholder;
             if (elseif->cond)
             {
-                elseif->cond->accept(*this);
+                compile_condition(elseif->cond, placeholder);
             }
-            compile_for_jump = false;
-            jump_patch_location = nullptr;
             jmp_false_pcs.push_back(placeholder);
 
             if (elseif->block)
@@ -3170,11 +3301,7 @@ namespace behl
     {
         size_t start_pc = C.current_proto->code.size();
         size_t exit_placeholder = 0;
-        compile_for_jump = true;
-        jump_patch_location = &exit_placeholder;
-        node.cond->accept(*this);
-        compile_for_jump = false;
-        jump_patch_location = nullptr;
+        compile_condition(node.cond, exit_placeholder);
 
         // Push loop context for break/continue tracking
         C.loop_stack.emplace_back(C.S, current_scope_level(C));
@@ -3345,7 +3472,7 @@ namespace behl
         // OP_TEST with invert=true: skip next instruction if truthy, execute if falsy
         // So TEST(true) + JMP means: if nil, execute JMP to exit
         size_t exit_jmp_placeholder = 0;
-        emit(C, make_op_test(next_key_reg, true), C.lastline); // invert=true: skip JMP if truthy
+        emit(C, make_op_test(next_key_reg, true, true), C.lastline); // invert=true: skip JMP if truthy
         exit_jmp_placeholder = C.current_proto->code.size();
         emit(C, make_op_jmp(0), C.lastline); // Jump to exit if nil
 
@@ -3433,11 +3560,7 @@ namespace behl
         size_t exit_jmp = 0;
         if (condition)
         {
-            visitor.compile_for_jump = true;
-            visitor.jump_patch_location = &exit_jmp;
-            condition->accept(visitor);
-            visitor.compile_for_jump = false;
-            visitor.jump_patch_location = nullptr;
+            visitor.compile_condition(condition, exit_jmp);
         }
 
         // Push loop context for break/continue tracking
@@ -3568,6 +3691,11 @@ namespace behl
         }
 
         emit(C, make_op_forloop(base, 0), C.lastline);
+        constexpr size_t kMaxForLoopSpan = 65535;
+        if (loop_pc - (prep_pc + 1) > kMaxForLoopSpan)
+        {
+            throw SyntaxError("loop body too large", get_location(C));
+        }
         C.current_proto->code[prep_pc] = make_op_forprep(base, static_cast<int32_t>(loop_pc - (prep_pc + 1)));
         C.current_proto->code[loop_pc] = make_op_forloop(base, static_cast<int32_t>((prep_pc + 1) - loop_pc));
 
@@ -3761,6 +3889,10 @@ namespace behl
                     C.current_proto->max_stack_size = C.freereg;
                 }
             }
+            else if (call_node.is_method_call)
+            {
+                func_reg = compile_method_callee(call_node);
+            }
             else
             {
                 call_node.func->accept(*this);
@@ -3768,19 +3900,25 @@ namespace behl
             }
 
             AutoVector<uint8_t> arg_regs(C.S);
+            if (call_node.is_method_call)
+            {
+                arg_regs.push_back(static_cast<uint8_t>(func_reg + 1));
+            }
+            AstNode* const first_explicit_arg = call_node.is_method_call ? call_node.first_arg->next_child
+                                                                         : call_node.first_arg;
 
             size_t arg_idx = 0;
             size_t total_args = 0;
             [[maybe_unused]] AstNode* last_arg_node = nullptr;
 
             // Count args
-            for (AstNode* arg = call_node.first_arg; arg; arg = arg->next_child)
+            for (AstNode* arg = first_explicit_arg; arg; arg = arg->next_child)
             {
                 total_args++;
                 last_arg_node = arg;
             }
 
-            for (AstNode* arg = call_node.first_arg; arg; arg = arg->next_child, ++arg_idx)
+            for (AstNode* arg = first_explicit_arg; arg; arg = arg->next_child, ++arg_idx)
             {
                 const bool is_last = (arg_idx == total_args - 1);
                 const auto* arg_call = arg->try_as<AstFuncCall>();
@@ -3869,8 +4007,9 @@ namespace behl
             else if (node.first_expr->try_as<AstVararg>())
             {
                 // return ... spreads every vararg, so emit a multret VARARG and return all of it
-                node.first_expr->accept(*this);
-                Reg result_reg = C.freereg - 1;
+                check_vararg_allowed(C);
+                const Reg result_reg = alloc_reg(C);
+                emit(C, make_op_vararg(result_reg, 0), C.lastline);
                 emit_return_with_defers(C, result_reg, static_cast<uint8_t>(kMultRet));
             }
             else
@@ -3997,6 +4136,7 @@ namespace behl
         }
 
         emit_defer_calls_above_scope(C, C.loop_stack.back().scope_level);
+        emit_pending_close(C, C.loop_stack.back().scope_level);
 
         size_t jmp_pos = C.current_proto->code.size();
         emit(C, make_op_jmp(0), C.lastline);
@@ -4011,6 +4151,7 @@ namespace behl
         }
 
         emit_defer_calls_above_scope(C, C.loop_stack.back().scope_level);
+        emit_pending_close(C, C.loop_stack.back().scope_level);
 
         size_t jmp_pos = C.current_proto->code.size();
         emit(C, make_op_jmp(0), C.lastline);

@@ -248,6 +248,13 @@ namespace behl
             return;
         }
 
+        if (val.is_fp())
+        {
+            const Integer i = bitwise_fp_operand(val.get_fp(), frame);
+            get_register(S, frame, a).emplace<Integer>(~i);
+            return;
+        }
+
         // Try __bnot metamethod
         const auto result = try_unary_metamethod<MetaMethodType::kBNot>(S, val);
 

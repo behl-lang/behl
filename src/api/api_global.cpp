@@ -119,19 +119,12 @@ namespace behl
         const Value& globals = S->globals_table;
         assert(globals.is_table() && "Globals table should be a TableData");
 
-        const auto* table = globals.get_table();
+        auto* table = globals.get_table();
         assert(table != nullptr);
 
         auto* key_obj = gc_new_string(S, name);
-        auto it = table->hash.find(Value(key_obj));
-        if (it != table->hash.end())
-        {
-            S->stack.push_back(S, it->second);
-        }
-        else
-        {
-            S->stack.push_back(S, Value{});
-        }
+        const Value result = table_getfield_vm(S, table, Value(key_obj));
+        S->stack.push_back(S, result);
     }
 
 } // namespace behl

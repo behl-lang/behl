@@ -678,5 +678,37 @@ TEST_P(NumericTest, Comparison_LargeIntegerConstants)
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
+TEST_P(NumericTest, UnaryOfParenthesisedLocalBinaryAsCallArgument)
+{
+    constexpr std::string_view code = R"(
+        function id(v) { return v; }
+        let x = 3;
+        let y = 4;
+        return id(-(x + y)), id(-(x * y)), id(~(x + y)), id(!(x == y));
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    EXPECT_EQ(behl::type(S, -4), behl::Type::kInteger);
+    EXPECT_EQ(behl::to_integer(S, -4), -7);
+    EXPECT_EQ(behl::to_integer(S, -3), -12);
+    EXPECT_EQ(behl::to_integer(S, -2), -8);
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kBoolean);
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
+TEST_P(NumericTest, UnaryMinusOfParenthesisedLocalDifferenceInTableConstructor)
+{
+    constexpr std::string_view code = R"(
+        let x = 3;
+        let y = 4;
+        let t = {-(x + y), -(x - y)};
+        return t[0], t[1];
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), -7);
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, NumericTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

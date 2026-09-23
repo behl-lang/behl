@@ -27,6 +27,8 @@ namespace behl
 
     static constexpr uint32_t kFieldsPerFlush = 50;
 
+    static constexpr int32_t kMaxMetaChain = 2000;
+
     // GC Configuration
     static constexpr size_t kGCInitialThreshold = 4096;
 

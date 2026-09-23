@@ -420,3 +420,23 @@ TEST_F(LexerTest, LexerAcceptsMaxValidCodepoint)
     ASSERT_EQ(tokens[1].type, TokenType::kIdentifier);
     ASSERT_EQ(tokens[1].value, "\xF4\x8F\xBF\xBF");
 }
+
+TEST_F(LexerTest, DocumentedEscapeSequencesProduceExpectedBytes)
+{
+    constexpr std::string_view code = R"(
+        return "\a\b\f\n\r\t\v\\\"\'", '\"\'', "ab\
+cd"
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 3));
+    EXPECT_EQ(to_string(S, -3), std::string_view("\a\b\f\n\r\t\v\\\"'"));
+    EXPECT_EQ(to_string(S, -2), std::string_view("\"'"));
+    EXPECT_EQ(to_string(S, -1), std::string_view("abcd"));
+}
+
+TEST_F(LexerTest, UnterminatedStringAtEofRaisesError)
+{
+    EXPECT_THROW(tokenize(S, "let s = \"abc"), BehlException);
+    EXPECT_THROW(tokenize(S, "let s = 'abc"), BehlException);
+    EXPECT_THROW(load_string(S, "let s = \"abc"), BehlException);
+}

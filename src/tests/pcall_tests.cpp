@@ -475,5 +475,76 @@ TEST_P(PCallTest, ErrorDoesntAffectState)
     pop(S, 1);
 }
 
+TEST_P(PCallTest, ErrorsThrownInsideMetamethodsAreCaughtAndStateStaysUsable)
+{
+    constexpr std::string_view code = R"(
+        let mt = {
+            __add = function(a, b) { error("in add") },
+            __lt = function(a, b) { error("in lt") },
+            __len = function(a) { error("in len") },
+            __call = function(a) { error("in call") }
+        }
+        let o = setmetatable({}, mt)
+
+        let ok1, e1 = pcall(function() { return o + 1 })
+        let ok2, e2 = pcall(function() { return o < o })
+        let ok3, e3 = pcall(function() { return #o })
+        let ok4, e4 = pcall(function() { return o() })
+
+        let sum = 0
+        for (let i = 0; i < 10; i = i + 1) { sum = sum + i }
+        let t = {x = 5}
+
+        return ok1, e1, ok2, e2, ok3, e3, ok4, e4, sum, t.x
+    )";
+
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 10));
+    ASSERT_EQ(get_top(S), 10);
+
+    const char* expected[] = { "in add", "in lt", "in len", "in call" };
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_FALSE(to_boolean(S, i * 2)) << expected[i];
+        ASSERT_EQ(type(S, i * 2 + 1), Type::kString) << expected[i];
+        EXPECT_NE(to_string(S, i * 2 + 1).find(expected[i]), std::string_view::npos) << to_string(S, i * 2 + 1);
+    }
+    EXPECT_EQ(to_integer(S, 8), 45);
+    EXPECT_EQ(to_integer(S, 9), 5);
+
+    set_top(S, 0);
+    ASSERT_NO_THROW(load_string(S, "let a = {1, 2, 3}; return #a + 1"));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_EQ(get_top(S), 1);
+    EXPECT_EQ(to_integer(S, -1), 4);
+}
+
+TEST_P(PCallTest, ErrorWithNilIsCaughtAsTheStringNil)
+{
+    constexpr std::string_view code = R"(
+        let ok, err = pcall(function() { error(nil) })
+        return ok, typeof(err), err
+    )";
+
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 3));
+    EXPECT_FALSE(to_boolean(S, -3));
+    EXPECT_EQ(to_string(S, -2), "string");
+    EXPECT_NE(to_string(S, -1).find("RuntimeError: nil"), std::string_view::npos) << to_string(S, -1);
+}
+
+TEST_P(PCallTest, ErrorWithNoArgumentStillRaisesAStringError)
+{
+    constexpr std::string_view code = R"(
+        let ok, err = pcall(function() { error() })
+        return ok, typeof(err)
+    )";
+
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 2));
+    EXPECT_FALSE(to_boolean(S, -2));
+    EXPECT_EQ(to_string(S, -1), "string");
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, PCallTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

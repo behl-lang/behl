@@ -572,5 +572,48 @@ TEST_P(VarargsTest, NonVarargCallAfterVarargCallIsNotCorrupted)
     EXPECT_EQ(behl::to_integer(S, -1), 5);
 }
 
+TEST_P(VarargsTest, TailCallForwardsZeroOneAndThreeVarargs)
+{
+    constexpr std::string_view code = R"(
+        function cnt(...) { return rawlen({...}) }
+        function fwd(...) { return cnt(...) }
+        function ident(...) { return ... }
+        function fwd2(...) { return ident(...) }
+        let a, b, c = fwd2(7, 8, 9)
+        let d = fwd2()
+        let e, f = fwd2(4)
+        return tostring(fwd()) + "," + tostring(fwd(1)) + "," + tostring(fwd(1, 2, 3)) + ";" +
+               tostring(a) + "," + tostring(b) + "," + tostring(c) + "," + tostring(d) + "," + tostring(e) + "," + tostring(f)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "0,1,3;7,8,9,nil,4,nil");
+}
+
+TEST_P(VarargsTest, VarargInMiddleOfAssignmentListTruncatesToOne)
+{
+    constexpr std::string_view code = R"(
+        function mid(...) {
+            let a, b, c, d = 10, ..., 20
+            return tostring(a) + "," + tostring(b) + "," + tostring(c) + "," + tostring(d)
+        }
+        function midEmpty(...) {
+            let a, b, c = 10, ..., 20
+            return tostring(a) + "," + tostring(b) + "," + tostring(c)
+        }
+        function midAssign(...) {
+            let a = 0
+            let b = 0
+            let c = 0
+            a, b, c = 1, ..., 3
+            return tostring(a) + "," + tostring(b) + "," + tostring(c)
+        }
+        return mid(5, 6, 7) + ";" + midEmpty() + ";" + midAssign(8, 9)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "10,5,20,nil;10,nil,20;1,8,3");
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, VarargsTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -4,6 +4,7 @@
 
 #    include "gc/gco_closure.hpp"
 #    include "gc/gco_proto.hpp"
+#    include "gc/gco_table.hpp"
 #    include "state.hpp"
 #    include "vm/frame.hpp"
 
@@ -1139,6 +1140,78 @@ namespace behl
         }
     }
 
+    void CodegenX86::emit_table_int(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            reachable_ = false;
+            return;
+        }
+        else
+        {
+            constexpr GpReg kTable = GpReg::r11;
+            constexpr GpReg kIdx = GpReg::r8;
+            constexpr XmmReg kVal = XmmReg::xmm5;
+            constexpr int32_t kArraySize = GCTable::array_offset() + Vector<Value>::size_offset();
+            constexpr int32_t kArrayData = GCTable::array_offset() + Vector<Value>::data_offset();
+
+            const bool is_get = op.kind == CgOpKind::kTableGetInt;
+            const Label slow = label(op.label);
+            const int32_t table_slot = static_cast<int32_t>(op.var);
+
+            ensure_base();
+            e_.mov(kTable, slot_payload(table_slot));
+
+            if (op.flag)
+            {
+                e_.cmp(mem(kTable, kArraySize), static_cast<int32_t>(op.imm));
+                e_.jcc(Cond::be, slow);
+            }
+            else
+            {
+                e_.mov(kIdx, slot_payload(static_cast<int32_t>(op.imm)));
+                e_.cmp(kIdx, mem(kTable, kArraySize));
+                e_.jcc(Cond::ae, slow);
+            }
+
+            if (!is_get)
+            {
+                const Label no_barrier = e_.new_label();
+                e_.test8(slot_tag(op.slot), kGCTypeBit);
+                e_.jcc(Cond::e, no_barrier);
+                e_.cmp8(mem(kTable, GCTable::color_offset()), static_cast<uint8_t>(GCColor::kBlack));
+                e_.jcc(Cond::e, slow);
+                e_.bind(no_barrier);
+            }
+
+            e_.mov(kTable, mem(kTable, kArrayData));
+            Mem elem{};
+            if (op.flag)
+            {
+                elem = mem(kTable, static_cast<int32_t>(op.imm) * Value::size());
+            }
+            else
+            {
+                e_.lea(kTable, mem(kTable, kIdx, 8));
+                elem = mem(kTable, kIdx, 8);
+            }
+
+            if (is_get)
+            {
+                e_.movups(kVal, elem);
+                e_.cmp8(elem, static_cast<uint8_t>(Type::kNil));
+                e_.jcc(Cond::e, slow);
+                e_.movups(slot_tag(op.slot), kVal);
+            }
+            else
+            {
+                e_.movups(kVal, slot_tag(op.slot));
+                e_.movups(elem, kVal);
+            }
+        }
+    }
+
     void CodegenX86::emit_const_f64(const CgOp& op)
     {
         alloc_f64(op.var);
@@ -2061,6 +2134,11 @@ namespace behl
                 const Label falsy = label(op.label2);
                 e_.cmp8(slot_tag(op.slot), static_cast<uint8_t>(Type::kNil));
                 e_.jcc(Cond::e, falsy);
+                if (op.flag)
+                {
+                    e_.jmp(truthy);
+                    break;
+                }
                 e_.cmp8(slot_tag(op.slot), static_cast<uint8_t>(Type::kBoolean));
                 e_.jcc(Cond::ne, truthy);
                 e_.cmp8(slot_payload(op.slot), 0);
@@ -2418,6 +2496,19 @@ namespace behl
                     cache_drop_all();
                 }
                 emit_return_dispatch(op);
+                break;
+
+            case CgOpKind::kTableGetInt:
+            case CgOpKind::kTableSetInt:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    if (op.kind == CgOpKind::kTableGetInt)
+                    {
+                        cache_drop_slot(op.slot);
+                    }
+                }
+                emit_table_int(op);
                 break;
 
             case CgOpKind::kHelperCall:

@@ -227,6 +227,52 @@ TEST_P(SplitArithTest, FloatOperandsTakeFastPath)
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 3.0);
 }
 
+TEST_P(ConcatTest, ConcatPreservesNulBytes)
+{
+    constexpr std::string_view code = R"(
+        const string = import("string");
+        let c = "a" + string.char(0) + "b";
+        let d = c + string.char(0);
+        let e = d + d;
+        return d, string.len(c), string.len(d), string.len(e), string.byte(d, 3);
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    EXPECT_EQ(behl::to_string(S, -5), std::string_view("a\0b\0", 4));
+    EXPECT_EQ(behl::to_integer(S, -4), 3);
+    EXPECT_EQ(behl::to_integer(S, -3), 4);
+    EXPECT_EQ(behl::to_integer(S, -2), 8);
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(ConcatTest, LengthOfParenthesisedLocalConcatAsCallArgument)
+{
+    constexpr std::string_view code = R"(
+        function id(v) { return v; }
+        let a = "xy";
+        let b = "zw";
+        return id(#(a + b));
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    EXPECT_EQ(behl::to_integer(S, -1), 4);
+}
+
+TEST_P(ConcatTest, LengthOfParenthesisedLocalConcatInTableConstructor)
+{
+    constexpr std::string_view code = R"(
+        let a = "xy";
+        let b = "zw";
+        let t = {#(a + b)};
+        return t[0];
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    EXPECT_EQ(behl::to_integer(S, -1), 4);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ConcatTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 

@@ -1,9 +1,11 @@
 #include "behl.hpp"
+#include "common/arithmetic.hpp"
 #include "common/format.hpp"
 #include "common/print.hpp"
 #include "common/vector.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <string>
 #include <utility>
@@ -380,17 +382,32 @@ namespace behl
         Integer start = 0;
         Integer end = len - 1;
 
+        const auto integral_arg = [S](int32_t idx, Integer& out) {
+            if (get_top(S) <= idx)
+            {
+                return;
+            }
+            if (type(S, idx) == Type::kInteger)
+            {
+                out = to_integer(S, idx);
+                return;
+            }
+            if (type(S, idx) == Type::kNumber)
+            {
+                Integer converted = 0;
+                const FP value = to_number(S, idx);
+                if (std::floor(value) == value && arithmetic::try_from_fp(value, converted))
+                {
+                    out = converted;
+                }
+            }
+        };
+
         // Optional start index (arg 1)
-        if (get_top(S) > 1 && type(S, 1) == Type::kInteger)
-        {
-            start = to_integer(S, 1);
-        }
+        integral_arg(1, start);
 
         // Optional end index (arg 2)
-        if (get_top(S) > 2 && type(S, 2) == Type::kInteger)
-        {
-            end = to_integer(S, 2);
-        }
+        integral_arg(2, end);
 
         // Clamp to valid range
         if (start < 0)

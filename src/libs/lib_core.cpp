@@ -239,12 +239,13 @@ namespace behl
         // Get current proto to find importing file path
         // Look at the frame BEFORE the current one (since current frame is this C function with proto=null)
         std::string_view importing_file = "./"; // Default to current directory
-        if (S->call_stack.size() >= 2)
+        for (size_t depth = S->call_stack.size(); depth >= 2; --depth)
         {
-            auto& caller_frame = S->call_stack[S->call_stack.size() - 2];
+            auto& caller_frame = S->call_stack[depth - 2];
             if (caller_frame.proto && caller_frame.proto->source_path && caller_frame.proto->source_path->size() > 0)
             {
                 importing_file = caller_frame.proto->source_path->view();
+                break;
             }
         }
 

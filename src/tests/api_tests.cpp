@@ -389,5 +389,169 @@ TEST_P(APITest, CallWithZeroResultsDiscards)
     ASSERT_EQ(get_top(S), 0);
 }
 
+TEST_P(APITest, ApiSetGlobalOfNewKeyUsesNewIndexMetamethod)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view setup = R"(
+        seen = {}
+        existing = 1
+        setmetatable(_G, { __newindex = function(t, k, v) { seen[k] = v } })
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, setup));
+    ASSERT_NO_THROW(behl::call(S, 0, 0));
+
+    behl::push_integer(S, 42);
+    ASSERT_NO_THROW(behl::set_global(S, "brand_new"));
+    behl::push_integer(S, 2);
+    ASSERT_NO_THROW(behl::set_global(S, "existing"));
+
+    constexpr std::string_view check = R"(
+        setmetatable(_G, nil)
+        return brand_new, seen["brand_new"], existing, seen["existing"]
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, check));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl::is_nil(S, -4));
+    ASSERT_EQ(behl::to_integer(S, -3), 42);
+    ASSERT_EQ(behl::to_integer(S, -2), 2);
+    ASSERT_TRUE(behl::is_nil(S, -1));
+}
+
+TEST_P(APITest, ApiGetGlobalOfMissingKeyUsesIndexMetamethod)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view setup = R"(
+        existing = 1
+        setmetatable(_G, { __index = function(t, k) { return 7 } })
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, setup));
+    ASSERT_NO_THROW(behl::call(S, 0, 0));
+
+    ASSERT_NO_THROW(behl::get_global(S, "missing"));
+    ASSERT_EQ(behl::to_integer(S, -1), 7);
+    ASSERT_NO_THROW(behl::get_global(S, "existing"));
+    ASSERT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(APITest, NegativeIndexBelowCFunctionFrameDoesNotReachCallerSlots)
+{
+    static Type seen_types[4];
+    static Integer seen_ints[4];
+    static int32_t seen_top;
+    static Integer seen_arg;
+    for (int i = 0; i < 4; ++i)
+    {
+        seen_types[i] = Type::kBoolean;
+        seen_ints[i] = -1;
+    }
+    seen_top = -1;
+    seen_arg = -1;
+
+    push_integer(S, 7771);
+    push_integer(S, 7772);
+    push_integer(S, 7773);
+    push_cfunction(S, [](State* L) -> int {
+        seen_top = get_top(L);
+        seen_arg = to_integer(L, -1);
+        for (int i = 0; i < 4; ++i)
+        {
+            seen_types[i] = type(L, -2 - i);
+            seen_ints[i] = to_integer(L, -2 - i);
+        }
+        return 0;
+    });
+    push_integer(S, 99);
+    ASSERT_NO_THROW(call(S, 1, 0));
+
+    ASSERT_EQ(seen_top, 1);
+    ASSERT_EQ(seen_arg, 99);
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_EQ(seen_types[i], Type::kNil) << "index " << (-2 - i) << " reached below the C function frame";
+        EXPECT_EQ(seen_ints[i], 0) << "index " << (-2 - i) << " read a caller value";
+    }
+
+    ASSERT_EQ(get_top(S), 3);
+    EXPECT_EQ(to_integer(S, -1), 7773);
+}
+
+TEST_P(APITest, CallWithMoreThan255ResultsReturnsAll)
+{
+    load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const table = import("table")
+        let t = {}
+        for (let i = 0; i < 300; i = i + 1) { t[i] = i }
+        return table.unpack(t)
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 300));
+    ASSERT_EQ(get_top(S), 300);
+    for (int32_t i = 0; i < 300; ++i)
+    {
+        EXPECT_EQ(to_integer(S, i), i) << "result " << i;
+    }
+}
+
+TEST_P(APITest, CallWithExactly255ResultsIsNotTreatedAsMultret)
+{
+    load_stdlib(S);
+    constexpr std::string_view code = R"(
+        const table = import("table")
+        let t = {}
+        for (let i = 0; i < 300; i = i + 1) { t[i] = i }
+        return table.unpack(t)
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 255));
+    ASSERT_EQ(get_top(S), 255);
+    EXPECT_EQ(to_integer(S, 0), 0);
+    EXPECT_EQ(to_integer(S, -1), 254);
+}
+
+TEST_P(APITest, ToIntegerTruncatesFractionalNumber)
+{
+    push_number(S, 3.7);
+    EXPECT_EQ(to_integer(S, -1), 3);
+    push_number(S, -3.7);
+    EXPECT_EQ(to_integer(S, -1), -3);
+    push_number(S, 1e300);
+    EXPECT_EQ(to_integer(S, -1), 0);
+}
+
+TEST_P(APITest, ToStringOfIntegerReturnsEmpty)
+{
+    push_integer(S, 12);
+    EXPECT_TRUE(to_string(S, -1).empty());
+    EXPECT_EQ(type(S, -1), Type::kInteger);
+    EXPECT_EQ(to_integer(S, -1), 12);
+}
+
+TEST_P(APITest, LoadStringSyntaxErrorLeavesStackUnchanged)
+{
+    push_integer(S, 11);
+    push_string(S, "keep");
+
+    bool threw = false;
+    try
+    {
+        load_string(S, "let x = = 1");
+    }
+    catch (const BehlException&)
+    {
+        threw = true;
+    }
+
+    ASSERT_TRUE(threw);
+    ASSERT_EQ(get_top(S), 2);
+    EXPECT_EQ(to_integer(S, 0), 11);
+    EXPECT_EQ(to_string(S, 1), "keep");
+
+    ASSERT_NO_THROW(load_string(S, "return 5"));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_EQ(get_top(S), 3);
+    EXPECT_EQ(to_integer(S, -1), 5);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, APITest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

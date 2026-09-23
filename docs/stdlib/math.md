@@ -189,7 +189,7 @@ print(math.atanh(x));
 ## Advanced Functions
 
 ### math.fmod(x, y)
-Floating-point modulo.
+Remainder of `x / y` with the quotient rounded towards zero. With two integers the result is an exact integer and a zero divisor raises an error; otherwise it is a float.
 
 ```cpp
 print(math.fmod(7.5, 2.0));  // 1.5

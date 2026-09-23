@@ -742,9 +742,10 @@ namespace behl
         size_t black_kept = 0;
         for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
         {
-            if (obj->get_header().color == GCColor::kBlack)
+            if (obj->get_header().color == GCColor::kBlack || obj->get_header().color == GCColor::kGray)
             {
                 obj->get_header().color = GCColor::kWhite;
+                obj->get_header().gray_next = nullptr;
                 white_count++;
                 gc_log("  Turned BLACK->WHITE: {}", gc_object_to_string(obj));
 
@@ -875,6 +876,43 @@ namespace behl
         gc_log("Root marking complete, gray_list size: {}", gray_count);
     }
 
+    static void gc_remark_mutable_roots(State* S)
+    {
+        for (size_t i = 0; i < S->ret_scratch.size(); ++i)
+        {
+            mark_value(S, S->ret_scratch[i]);
+        }
+
+        for (size_t i = 0; i < S->stack.size(); ++i)
+        {
+            mark_value(S, S->stack[i]);
+        }
+
+        for (size_t i = 0; i < S->pinned.size(); ++i)
+        {
+            mark_value(S, S->pinned[i]);
+        }
+
+        for (const auto& upvalue : S->upvalues)
+        {
+            if (!upvalue.is_open())
+            {
+                mark_value(S, upvalue.closed_value);
+            }
+        }
+    }
+
+    static void gc_drain_gray(State* S)
+    {
+        while (S->gc.gc_gray_list != nullptr)
+        {
+            GCObject* obj = S->gc.gc_gray_list;
+            S->gc.gc_gray_list = obj->get_header().gray_next;
+            obj->get_header().gray_next = nullptr;
+            blacken_object(S, obj);
+        }
+    }
+
     static size_t gc_propagate_mark(State* S, size_t work_limit)
     {
         const size_t budget = std::max<size_t>(work_limit, 1);
@@ -893,6 +931,9 @@ namespace behl
 
         if (S->gc.gc_gray_list == nullptr)
         {
+            gc_remark_mutable_roots(S);
+            gc_drain_gray(S);
+
             // Before sweeping, find WHITE userdata with finalizers
             // These will be resurrected (marked BLACK) and queued for finalization
             gc_log("Queueing userdata with finalizers");
@@ -928,6 +969,8 @@ namespace behl
             }
 
             gc_log("Queued {} userdata, gray list empty: {}", queued_count, S->gc.gc_gray_list == nullptr);
+
+            gc_drain_gray(S);
 
             // If we marked any userdata/metatables, process them before transitioning to sweep
             if (S->gc.gc_gray_list == nullptr)
@@ -1399,6 +1442,45 @@ namespace behl
     void gc_close(State* S)
     {
         gc_log("===== GC_CLOSE: Final cleanup, destroying all remaining objects =====");
+
+        {
+            GCPauseGuard pause(S);
+            AutoVector<UserdataData*> pending(S);
+            for (;;)
+            {
+                pending.clear();
+                for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
+                {
+                    if (obj->get_header().type != GCType::kUserdata || obj->get_header().has_flag(GCOFlags::kFinalized))
+                    {
+                        continue;
+                    }
+                    auto* userdata = static_cast<UserdataData*>(obj);
+                    if (userdata->metatable != nullptr
+                        && metatable_get_method<MetaMethodType::kGC>(Value(userdata)).is_callable())
+                    {
+                        pending.push_back(userdata);
+                    }
+                }
+
+                if (pending.empty())
+                {
+                    break;
+                }
+
+                for (UserdataData* userdata : pending)
+                {
+                    userdata->header.add_flag(GCOFlags::kFinalized);
+                    try
+                    {
+                        metatable_call_method(S, metatable_get_method<MetaMethodType::kGC>(Value(userdata)), Value(userdata));
+                    }
+                    catch (...)
+                    {
+                    }
+                }
+            }
+        }
 
         size_t count = 0;
         while (GCObject* obj = S->gc.gc_all_objects.head())

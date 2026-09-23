@@ -86,5 +86,69 @@ TEST_P(ScopingTest, LocalInNestedBlocks)
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
+TEST_P(ScopingTest, SiblingBlockClosuresKeepOwnUpvaluesAtTopLevel)
+{
+    constexpr std::string_view code = R"(
+        let f1 = nil
+        let f2 = nil
+        {
+            let a = 10
+            f1 = function() { return a }
+        }
+        {
+            let b = 20
+            f2 = function() { return b }
+        }
+        return tostring(f1()) + "," + tostring(f2())
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "10,20");
+}
+
+TEST_P(ScopingTest, SiblingBlockClosuresKeepOwnUpvaluesInFunction)
+{
+    constexpr std::string_view code = R"(
+        function make() {
+            let f1 = nil
+            let f2 = nil
+            {
+                let a = 10
+                f1 = function() { return a }
+            }
+            {
+                let b = 20
+                f2 = function() { return b }
+            }
+            return tostring(f1()) + "," + tostring(f2())
+        }
+        return make()
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "10,20");
+}
+
+TEST_P(ScopingTest, TooManyTopLevelLocalsRaisesErrorOrWorks)
+{
+    std::string code;
+    for (int i = 0; i < 300; ++i)
+    {
+        code += "let v" + std::to_string(i) + " = " + std::to_string(i) + "\n";
+    }
+    code += "return v0 + v299\n";
+    try
+    {
+        behl::load_string(S, code);
+        behl::call(S, 0, 1);
+    }
+    catch (const std::exception&)
+    {
+        SUCCEED();
+        return;
+    }
+    EXPECT_EQ(behl::to_integer(S, -1), 299);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ScopingTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

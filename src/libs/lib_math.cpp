@@ -40,6 +40,11 @@ namespace behl
 
     static int math_floor(State* S)
     {
+        if (type(S, 0) == Type::kInteger)
+        {
+            push_integer(S, to_integer(S, 0));
+            return 1;
+        }
         FP n = to_number(S, 0);
         push_numeric_integral(S, std::floor(n));
         return 1;
@@ -47,6 +52,11 @@ namespace behl
 
     static int math_ceil(State* S)
     {
+        if (type(S, 0) == Type::kInteger)
+        {
+            push_integer(S, to_integer(S, 0));
+            return 1;
+        }
         FP n = to_number(S, 0);
         push_numeric_integral(S, std::ceil(n));
         return 1;
@@ -54,6 +64,11 @@ namespace behl
 
     static int math_round(State* S)
     {
+        if (type(S, 0) == Type::kInteger)
+        {
+            push_integer(S, to_integer(S, 0));
+            return 1;
+        }
         FP n = to_number(S, 0);
         push_numeric_integral(S, std::round(n));
         return 1;
@@ -61,6 +76,11 @@ namespace behl
 
     static int math_trunc(State* S)
     {
+        if (type(S, 0) == Type::kInteger)
+        {
+            push_integer(S, to_integer(S, 0));
+            return 1;
+        }
         FP n = to_number(S, 0);
         push_numeric_integral(S, std::trunc(n));
         return 1;
@@ -381,6 +401,17 @@ namespace behl
 
     static int math_fmod(State* S)
     {
+        if (type(S, 0) == Type::kInteger && type(S, 1) == Type::kInteger)
+        {
+            const Integer x = to_integer(S, 0);
+            const Integer y = to_integer(S, 1);
+            if (y == 0)
+            {
+                error(S, "fmod: zero divisor");
+            }
+            push_integer(S, y == -1 ? 0 : x % y);
+            return 1;
+        }
         FP x = to_number(S, 0);
         FP y = to_number(S, 1);
         push_number(S, std::fmod(x, y));

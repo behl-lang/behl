@@ -199,5 +199,114 @@ TEST_P(ClosureTest, NestedFunctionWithDecrement)
     ASSERT_EQ(behl::to_integer(S, -1), 24); // 9 + 8 + 7
 }
 
+TEST_P(ClosureTest, ForBodyLocalCapturedPerIterationInFunction)
+{
+    constexpr std::string_view code = R"(
+        function f() {
+            let fs = {}
+            for (let i = 0; i < 3; i++) {
+                let y = i * 10
+                fs[i] = function() { return y }
+            }
+            return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
+        }
+        return f()
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "0,10,20");
+}
+
+TEST_P(ClosureTest, WhileBodyLocalCapturedPerIterationInFunction)
+{
+    constexpr std::string_view code = R"(
+        function f() {
+            let fs = {}
+            let i = 0
+            while (i < 3) {
+                let y = i * 10
+                fs[i] = function() { return y }
+                i++
+            }
+            return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
+        }
+        return f()
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "0,10,20");
+}
+
+TEST_P(ClosureTest, ForeachBodyLocalCapturedPerIterationInFunction)
+{
+    constexpr std::string_view code = R"(
+        function f() {
+            let fs = {}
+            foreach (let k, v in {5, 6, 7}) {
+                let y = v
+                fs[k] = function() { return y }
+            }
+            return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
+        }
+        return f()
+    )";
+    behl::load_stdlib(S);
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "5,6,7");
+}
+
+TEST_P(ClosureTest, LoopBodyLocalCapturedWithContinueAndBreakInFunction)
+{
+    constexpr std::string_view code = R"(
+        function f() {
+            let fs = {}
+            let n = 0
+            for (let i = 0; i < 5; i++) {
+                let y = i * 10
+                if (i == 1) {
+                    continue
+                }
+                fs[n] = function() { return y }
+                n++
+                if (i == 3) {
+                    break
+                }
+            }
+            return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]()) + "," + tostring(n)
+        }
+        return f()
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "0,20,30,3");
+}
+
+TEST_P(ClosureTest, UpvalueClosedWhenFunctionExitsByError)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        let g = nil
+        function f() {
+            let x = 42
+            g = function() { return x }
+            error("boom")
+        }
+        let ok = pcall(f)
+        function h(a, b, c, d, e) {
+            let z = 99
+            return z
+        }
+        h(1, 2, 3, 4, 5)
+        let junk = {1, 2, 3, 4, 5, 6, 7, 8}
+        return ok, g()
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    ASSERT_TRUE(behl::is_integer(S, -1));
+    EXPECT_EQ(behl::to_integer(S, -1), 42);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ClosureTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <string>
 #include <system_error>
 
 namespace fs = std::filesystem;
@@ -17,9 +18,22 @@ namespace behl
 
     constexpr uint32_t kFileHandleUID = make_uid("fs.File");
 
+    struct FileHandle
+    {
+        std::fstream stream;
+        bool readable{};
+        bool writable{};
+    };
+
+    static std::string missing_path_message(const std::error_code& ec)
+    {
+        return ec ? ec.message() : std::make_error_code(std::errc::no_such_file_or_directory).message();
+    }
+
     static int file_read(State* S)
     {
-        auto* stream = static_cast<std::fstream*>(check_userdata(S, 0, kFileHandleUID));
+        auto* handle = static_cast<FileHandle*>(check_userdata(S, 0, kFileHandleUID));
+        auto* stream = &handle->stream;
         Integer size = check_integer(S, 1);
 
         if (!stream->is_open())
@@ -33,6 +47,13 @@ namespace behl
         {
             push_boolean(S, false);
             push_string(S, "invalid size");
+            return 2;
+        }
+
+        if (!handle->readable)
+        {
+            push_boolean(S, false);
+            push_string(S, "file not opened for reading");
             return 2;
         }
 
@@ -51,13 +72,21 @@ namespace behl
 
     static int file_write(State* S)
     {
-        auto* stream = static_cast<std::fstream*>(check_userdata(S, 0, kFileHandleUID));
+        auto* handle = static_cast<FileHandle*>(check_userdata(S, 0, kFileHandleUID));
+        auto* stream = &handle->stream;
         auto data = check_string(S, 1);
 
         if (!stream->is_open())
         {
             push_boolean(S, false);
             push_string(S, "file is closed");
+            return 2;
+        }
+
+        if (!handle->writable)
+        {
+            push_boolean(S, false);
+            push_string(S, "file not opened for writing");
             return 2;
         }
 
@@ -75,7 +104,7 @@ namespace behl
 
     static int file_close(State* S)
     {
-        auto* stream = static_cast<std::fstream*>(check_userdata(S, 0, kFileHandleUID));
+        auto* stream = &static_cast<FileHandle*>(check_userdata(S, 0, kFileHandleUID))->stream;
 
         if (stream->is_open())
         {
@@ -88,7 +117,7 @@ namespace behl
 
     static int file_seek(State* S)
     {
-        auto* stream = static_cast<std::fstream*>(check_userdata(S, 0, kFileHandleUID));
+        auto* stream = &static_cast<FileHandle*>(check_userdata(S, 0, kFileHandleUID))->stream;
         auto whence = check_string(S, 1);
         Integer offset = get_top(S) > 2 ? check_integer(S, 2) : 0;
 
@@ -119,24 +148,29 @@ namespace behl
             return 2;
         }
 
-        stream->seekg(offset, dir);
-        stream->seekp(offset, dir);
+        stream->clear();
+        const std::streampos pos = stream->rdbuf()->pubseekoff(offset, dir, std::ios::in | std::ios::out);
+        if (pos == std::streampos(std::streamoff(-1)))
+        {
+            push_boolean(S, false);
+            push_string(S, "seek failed");
+            return 2;
+        }
 
-        std::streampos pos = stream->tellg();
         push_integer(S, static_cast<Integer>(pos));
         return 1;
     }
 
     static int file_gc(State* S)
     {
-        auto* stream = static_cast<std::fstream*>(check_userdata(S, 0, kFileHandleUID));
-        if (stream)
+        auto* handle = static_cast<FileHandle*>(check_userdata(S, 0, kFileHandleUID));
+        if (handle)
         {
-            if (stream->is_open())
+            if (handle->stream.is_open())
             {
-                stream->close();
+                handle->stream.close();
             }
-            std::destroy_at(stream);
+            std::destroy_at(handle);
         }
         return 0;
     }
@@ -200,8 +234,8 @@ namespace behl
             return 2;
         }
 
-        auto* fstream_ptr = static_cast<std::fstream*>(userdata_new(S, sizeof(std::fstream), kFileHandleUID));
-        std::construct_at(fstream_ptr, std::move(stream));
+        auto* handle_ptr = static_cast<FileHandle*>(userdata_new(S, sizeof(FileHandle), kFileHandleUID));
+        std::construct_at(handle_ptr, std::move(stream), (open_mode & std::ios::in) != 0, (open_mode & std::ios::out) != 0);
 
         // Get or create file metatable
         if (metatable_new(S, "fs.File"))
@@ -248,7 +282,7 @@ namespace behl
         if (!fs::exists(path, ec) || ec)
         {
             push_boolean(S, false);
-            push_string(S, ec.message());
+            push_string(S, missing_path_message(ec));
             return 2;
         }
 
@@ -269,6 +303,7 @@ namespace behl
 
         file.seekg(0, std::ios::end);
         std::streamsize file_size = static_cast<std::streamsize>(file.tellg());
+        file.seekg(0, std::ios::beg);
 
         char* buffer = mem_alloc_array<char>(S, static_cast<size_t>(file_size));
         file.read(buffer, file_size);
@@ -465,7 +500,7 @@ namespace behl
         if (!fs::exists(path, ec) || ec)
         {
             push_boolean(S, false);
-            push_string(S, ec.message());
+            push_string(S, missing_path_message(ec));
             return 2;
         }
 

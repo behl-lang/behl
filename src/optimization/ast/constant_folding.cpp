@@ -172,22 +172,10 @@ namespace behl
                             static_cast<int>(node->op), right_val, result);
                     }
                     changed = true;
-                    // If result is whole number and both inputs were int, keep as int
-                    Integer folded_int = 0;
-                    if (left_int && right_int && std::floor(result) == result && arithmetic::try_from_fp(result, folded_int))
-                    {
-                        auto* folded = holder.make<AstInt>(folded_int);
-                        folded->line = node->line;
-                        folded->column = node->column;
-                        return folded;
-                    }
-                    else
-                    {
-                        auto* folded = holder.make<AstFP>(result);
-                        folded->line = node->line;
-                        folded->column = node->column;
-                        return folded;
-                    }
+                    auto* folded = holder.make<AstFP>(result);
+                    folded->line = node->line;
+                    folded->column = node->column;
+                    return folded;
                 }
             }
 

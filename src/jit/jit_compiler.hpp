@@ -63,6 +63,8 @@ namespace behl
         kReturnFast,
         kReturnSelfSite,
         kReturnDispatch,
+        kTableGetInt,
+        kTableSetInt,
         kHelperCall,
         kSyncFrame,
         kReturnResult,

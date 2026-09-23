@@ -463,6 +463,14 @@ namespace behl
         emit8(imm);
     }
 
+    void X86Emitter::test8(Mem mem_op, uint8_t imm)
+    {
+        emit_rex_opt(false, mem_index_ext(mem_op), reg_ext(mem_op.base));
+        emit8(0xF6);
+        emit_modrm_mem(0, mem_op);
+        emit8(imm);
+    }
+
     void X86Emitter::test(GpReg lhs, GpReg rhs)
     {
         emit_rex_natural(reg_ext(rhs), false, reg_ext(lhs));

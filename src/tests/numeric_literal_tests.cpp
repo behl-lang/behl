@@ -8,6 +8,9 @@
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <limits>
+
 class NumericLiteralTest : public ::testing::TestWithParam<bool>
 {
 protected:
@@ -282,6 +285,39 @@ TEST_P(NumericLiteralTest, HexadecimalComparison)
     ASSERT_NO_THROW(behl::load_string(S, code));
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(NumericLiteralTest, HexadecimalAllOnesWrapsToMinusOne)
+{
+    constexpr std::string_view code = R"(
+        return 0xFFFFFFFFFFFFFFFF
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl::is_integer(S, -1));
+    EXPECT_EQ(behl::to_integer(S, -1), -1);
+}
+
+TEST_P(NumericLiteralTest, HexadecimalHighBitWrapsToMinInteger)
+{
+    constexpr std::string_view code = R"(
+        return 0x8000000000000000
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl::is_integer(S, -1));
+    EXPECT_EQ(behl::to_integer(S, -1), std::numeric_limits<int64_t>::min());
+}
+
+TEST_P(NumericLiteralTest, HexadecimalMaxInteger)
+{
+    constexpr std::string_view code = R"(
+        return 0x7FFFFFFFFFFFFFFF
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl::is_integer(S, -1));
+    EXPECT_EQ(behl::to_integer(S, -1), std::numeric_limits<int64_t>::max());
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, NumericLiteralTest, ::testing::Bool(),

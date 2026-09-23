@@ -73,8 +73,9 @@ namespace behl
     BEHL_JIT_WRAP(jit_op_self, handler_self(S, frame, instr.a(), instr.b(), instr.c()))
     BEHL_JIT_WRAP(jit_op_vararg, handler_vararg(S, frame, instr.a(), instr.b()))
     BEHL_JIT_WRAP(jit_op_varargprep, handler_varargprep(S, frame, instr.a()))
-    BEHL_JIT_WRAP(jit_op_varargexpand, handler_varargexpand(S, frame, instr.a(), instr.b()))
+    BEHL_JIT_WRAP(jit_op_varargexpand, handler_varargexpand(S, frame, instr.a(), instr.const_or_proto_index()))
     BEHL_JIT_WRAP(jit_op_defer, handler_defer(S, frame, instr.a()))
+    BEHL_JIT_WRAP(jit_op_close, close_upvalues(S, frame.base + instr.a()))
     BEHL_JIT_WRAP(jit_op_defercall, handler_defercall(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_enddefer, handler_enddefer(S, frame, instr.a()))
     BEHL_JIT_WRAP(jit_op_saveret, handler_saveret(S, frame, instr.a(), instr.b()))
@@ -168,7 +169,7 @@ namespace behl
     BEHL_JIT_WRAP(
         jit_op_eq, (handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
-        jit_op_ne, (handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
+        jit_op_ne, (handler_cmp<MetaMethodType::kEq, true, CmpNeOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
         jit_op_lt, (handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_reg>(S, frame, instr.b(), instr.c())))
     BEHL_JIT_WRAP(
@@ -217,9 +218,9 @@ namespace behl
         (handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_imm>(
             S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_neimm,
-        (handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_imm>(
+        (handler_cmp<MetaMethodType::kEq, true, CmpNeOp, operand_reg, operand_imm>(
             S, frame, instr.a(), instr.signed_immediate())))
-    BEHL_JIT_WRAP(jit_op_test, handler_test(S, frame, instr.a(), instr.b() != 0))
+    BEHL_JIT_WRAP(jit_op_test, handler_test(S, frame, instr.a(), instr.b() != 0, instr.c() != 0))
     BEHL_JIT_WRAP(jit_op_testset, handler_testset(S, frame, instr.a(), instr.b(), instr.c() != 0))
     BEHL_JIT_WRAP(jit_op_forprep, handler_forprep(S, frame, instr.a(), instr.signed_offset()))
     BEHL_JIT_WRAP(jit_op_forloop, handler_forloop(S, frame, instr.a(), instr.signed_offset()))

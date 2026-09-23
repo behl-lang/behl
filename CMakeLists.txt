@@ -305,10 +305,13 @@ if(BEHL_BUILD_TESTS)
         src/tests/edge_case_tests.cpp
         src/tests/error_tests.cpp
         src/tests/format_tests.cpp
+        src/tests/fs_tests.cpp
         src/tests/string_format_tests.cpp
+        src/tests/string_lib_tests.cpp
         src/tests/string_key_tests.cpp
         src/tests/function_tests.cpp
         src/tests/hash_map_tests.cpp
+        src/tests/jit_codegen_tests.cpp
         src/tests/jit_unwind_tests.cpp
         src/tests/hash_set_tests.cpp
         src/tests/gc_list_tests.cpp
@@ -324,6 +327,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/numeric_literal_tests.cpp
         src/tests/integer_wrapping_tests.cpp
         src/tests/operator_tests.cpp
+        src/tests/os_tests.cpp
         src/tests/parser_tests.cpp
         src/tests/pow_accuracy_tests.cpp
         src/tests/pcall_tests.cpp

@@ -219,6 +219,9 @@ namespace behl
             case OpCode::kOpJmp:
                 opcode_str = behl::format("{:<9} {}", meta.name, instr.jump_offset());
                 break;
+            case OpCode::kOpClose:
+                opcode_str = behl::format("{:<9} R{}", meta.name, instr.a());
+                break;
             case OpCode::kOpEq:
                 opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.b(), instr.c());
                 break;

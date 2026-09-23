@@ -1213,5 +1213,98 @@ TEST_P(LoopTest, ForLoopLimitMetamethodIsCalled)
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
+TEST_P(LoopTest, ForBodyLocalCapturedPerIterationAtTopLevel)
+{
+    constexpr std::string_view code = R"(
+        let fs = {}
+        for (let i = 0; i < 3; i++) {
+            let y = i * 10
+            fs[i] = function() { return y }
+        }
+        return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "0,10,20");
+}
+
+TEST_P(LoopTest, WhileBodyLocalCapturedPerIterationAtTopLevel)
+{
+    constexpr std::string_view code = R"(
+        let fs = {}
+        let i = 0
+        while (i < 3) {
+            let y = i * 10
+            fs[i] = function() { return y }
+            i++
+        }
+        return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "0,10,20");
+}
+
+TEST_P(LoopTest, ForeachBodyLocalCapturedPerIterationAtTopLevel)
+{
+    constexpr std::string_view code = R"(
+        let fs = {}
+        foreach (let k, v in {5, 6, 7}) {
+            let y = v
+            fs[k] = function() { return y }
+        }
+        return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "5,6,7");
+}
+
+TEST_P(LoopTest, LoopBodyLocalCapturedWithContinueAndBreakAtTopLevel)
+{
+    constexpr std::string_view code = R"(
+        let fs = {}
+        let n = 0
+        let i = 0
+        while (i < 5) {
+            let y = i * 10
+            i++
+            if (i == 2) {
+                continue
+            }
+            fs[n] = function() { return y }
+            n++
+            if (i == 4) {
+                break
+            }
+        }
+        return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]()) + "," + tostring(n)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "0,20,30,3");
+}
+
+TEST_P(LoopTest, LoopBodyBeyondJumpRangeRunsCorrectlyOrFailsToCompile)
+{
+    std::string code = "let x = 0\nfor (let i = 0; i < 2; i++) {\n";
+    for (int i = 0; i < 70000; ++i)
+    {
+        code += "x = x + 1\n";
+    }
+    code += "}\nreturn x\n";
+    try
+    {
+        behl::load_string(S, code);
+    }
+    catch (const std::exception&)
+    {
+        SUCCEED();
+        return;
+    }
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 140000);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, LoopTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -1,7 +1,9 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
+#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include <string>
 
 class CallStackTest : public ::testing::TestWithParam<bool>
 {
@@ -268,6 +270,83 @@ TEST_P(CallStackTest, DeepCallStackStressTest)
     ASSERT_NO_THROW(behl::call(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 420);
+}
+
+TEST_P(CallStackTest, ClosureCapturingMoreThan255UpvaluesBindsTheRightVariables)
+{
+    std::string code = "function outer() {\n";
+    for (int i = 0; i < 200; ++i)
+    {
+        code += "let a" + std::to_string(i) + " = " + std::to_string(i) + "\n";
+    }
+    code += "function mid() {\n";
+    for (int i = 0; i < 200; ++i)
+    {
+        code += "let b" + std::to_string(i) + " = " + std::to_string(1000 + i) + "\n";
+    }
+    code += "return function() { return { ";
+    for (int i = 0; i < 200; ++i)
+    {
+        code += "a" + std::to_string(i) + ", ";
+    }
+    for (int i = 0; i < 200; ++i)
+    {
+        code += "b" + std::to_string(i) + (i + 1 < 200 ? ", " : " ");
+    }
+    code += "} }\n}\nreturn mid()\n}\n";
+    code += "let t = outer()()\n";
+    code += "let bad = 0\n";
+    code += "for (let i = 0; i < 200; i = i + 1) {\n";
+    code += "if (t[i] != i) { bad = bad + 1 }\n";
+    code += "if (t[200 + i] != 1000 + i) { bad = bad + 1 }\n";
+    code += "}\n";
+    code += "return bad\n";
+
+    try
+    {
+        behl::load_string(S, code);
+    }
+    catch (const behl::BehlException&)
+    {
+        SUCCEED() << "rejected at compile time, which is acceptable";
+        return;
+    }
+
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::get_top(S), 1);
+    EXPECT_EQ(behl::to_integer(S, -1), 0) << "upvalue indices past 255 resolved to the wrong variables";
+}
+
+TEST_P(CallStackTest, DeepPlainRecursionUnderPcallSucceedsOrFailsCleanly)
+{
+    behl::load_stdlib(S);
+    constexpr std::string_view code = R"(
+        function rec(k) {
+            if (k == 0) { return 0 }
+            return 1 + rec(k - 1)
+        }
+        let ok, res = pcall(rec, 100000)
+        let after = rec(10)
+        return ok, res, after
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::get_top(S), 3);
+
+    if (behl::to_boolean(S, -3))
+    {
+        EXPECT_EQ(behl::to_integer(S, -2), 100000);
+    }
+    else
+    {
+        EXPECT_EQ(behl::type(S, -2), behl::Type::kString);
+    }
+    EXPECT_EQ(behl::to_integer(S, -1), 10);
+
+    behl::set_top(S, 0);
+    ASSERT_NO_THROW(behl::load_string(S, "return rec(50)"));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 50);
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, CallStackTest, ::testing::Bool(),

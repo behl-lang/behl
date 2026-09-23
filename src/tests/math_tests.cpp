@@ -321,5 +321,63 @@ TEST_P(MathTest, LdexpStillHonoursRepresentableFloatExponents)
     ASSERT_DOUBLE_EQ(number("math.ldexp(1.0, 0.0 - 2.0)"), 0.25);
 }
 
+TEST_P(MathTest, FloorAndCeilOfIntegerMaximumStayExactIntegers)
+{
+    ASSERT_EQ(type_of("math.floor(9223372036854775807)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.floor(9223372036854775807)"), std::numeric_limits<int64_t>::max());
+    ASSERT_EQ(type_of("math.ceil(9223372036854775807)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.ceil(9223372036854775807)"), std::numeric_limits<int64_t>::max());
+}
+
+TEST_P(MathTest, FloorAndCeilOfIntegerAboveDoublePrecisionStayExact)
+{
+    ASSERT_EQ(integer("math.floor(9007199254740993)"), 9007199254740993);
+    ASSERT_EQ(integer("math.ceil(9007199254740993)"), 9007199254740993);
+    ASSERT_EQ(integer("math.floor(0 - 9007199254740993)"), -9007199254740993);
+}
+
+TEST_P(MathTest, FloorAndCeilOfIntegerMinimumStayExactIntegers)
+{
+    ASSERT_EQ(type_of("math.floor(-9223372036854775807 - 1)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.floor(-9223372036854775807 - 1)"), std::numeric_limits<int64_t>::min());
+    ASSERT_EQ(type_of("math.ceil(-9223372036854775807 - 1)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.ceil(-9223372036854775807 - 1)"), std::numeric_limits<int64_t>::min());
+}
+
+TEST_P(MathTest, RoundAndTruncOfLargeIntegersStayExact)
+{
+    ASSERT_EQ(type_of("math.round(9223372036854775807)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.round(9223372036854775807)"), std::numeric_limits<int64_t>::max());
+    ASSERT_EQ(type_of("math.trunc(9223372036854775807)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.trunc(9223372036854775807)"), std::numeric_limits<int64_t>::max());
+    ASSERT_EQ(integer("math.round(9007199254740993)"), 9007199254740993);
+    ASSERT_EQ(integer("math.trunc(9007199254740993)"), 9007199254740993);
+}
+
+TEST_P(MathTest, MinMaxAtIntegerExtremes)
+{
+    ASSERT_EQ(integer("math.min(9223372036854775807, -9223372036854775807 - 1)"), std::numeric_limits<int64_t>::min());
+    ASSERT_EQ(integer("math.max(9223372036854775807, -9223372036854775807 - 1)"), std::numeric_limits<int64_t>::max());
+    ASSERT_EQ(integer("math.max(9223372036854775807, 9223372036854775806)"), std::numeric_limits<int64_t>::max());
+    ASSERT_EQ(integer("math.min(-9223372036854775807, -9223372036854775807 - 1)"), std::numeric_limits<int64_t>::min());
+    ASSERT_EQ(type_of("math.max(-9223372036854775807 - 1)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.max(-9223372036854775807 - 1)"), std::numeric_limits<int64_t>::min());
+}
+
+TEST_P(MathTest, AbsOfIntegerMaximumAndNearMinimum)
+{
+    ASSERT_EQ(type_of("math.abs(9223372036854775807)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.abs(9223372036854775807)"), std::numeric_limits<int64_t>::max());
+    ASSERT_EQ(integer("math.abs(-9223372036854775807)"), std::numeric_limits<int64_t>::max());
+}
+
+TEST_P(MathTest, FmodOfIntegersIsExact)
+{
+    ASSERT_EQ(type_of("math.fmod(9223372036854775807, 10)"), behl::Type::kInteger);
+    ASSERT_EQ(integer("math.fmod(9223372036854775807, 10)"), 7);
+    ASSERT_EQ(integer("math.fmod(-9223372036854775807 - 1, 10)"), -8);
+    ASSERT_EQ(integer("math.fmod(9007199254740993, 2)"), 1);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, MathTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

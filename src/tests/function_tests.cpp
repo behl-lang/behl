@@ -291,5 +291,49 @@ TEST_P(FunctionTest, UpvalueModificationWhileOnStack)
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
 
+TEST_P(FunctionTest, MethodCallOnComputedIndexEvaluatesKeyOnce)
+{
+    constexpr std::string_view code = R"(
+        let n = 0
+        let obj = {m = function(self) { return 5 }}
+        let t = {obj}
+        function k() {
+            n++
+            return 0
+        }
+        let r = t[k()]:m()
+        return r, n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 5);
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(FunctionTest, ManyCallArgumentsRaiseErrorOrWork)
+{
+    std::string code = "function f(...) { return rawlen({...}) }\nreturn f(";
+    for (int i = 0; i < 252; ++i)
+    {
+        if (i != 0)
+        {
+            code += ",";
+        }
+        code += std::to_string(i);
+    }
+    code += ")\n";
+    try
+    {
+        behl::load_string(S, code);
+        behl::call(S, 0, 1);
+    }
+    catch (const std::exception&)
+    {
+        SUCCEED();
+        return;
+    }
+    EXPECT_EQ(behl::to_integer(S, -1), 252);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, FunctionTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

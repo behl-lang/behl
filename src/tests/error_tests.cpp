@@ -370,5 +370,127 @@ TEST_P(ErrorTest, LongErrorMessageIsNotReadPastItsEnd)
     EXPECT_EQ(behl::to_string(S, -1), "\n") << "bytes were read past the end of the message payload";
 }
 
+static std::string run_and_capture_error(behl::State* S, const std::string& code)
+{
+    try
+    {
+        behl::load_string(S, code, false);
+        behl::call(S, 0, 0);
+    }
+    catch (const behl::BehlException& e)
+    {
+        return e.what();
+    }
+    return {};
+}
+
+static void expect_runtime_error_text(behl::State* S, const std::string& body, const std::string& args, const char* needle)
+{
+    const std::string code = "let pad = 0\nlet f = function(a, b) { " + body + " }\nreturn f(" + args + ")\n";
+    const std::string what = run_and_capture_error(S, code);
+    ASSERT_FALSE(what.empty()) << "no error raised for: " << body;
+    EXPECT_NE(what.find(needle), std::string::npos) << what;
+    EXPECT_NE(what.find("TypeError"), std::string::npos) << what;
+    EXPECT_NE(what.find("<string>(2,"), std::string::npos) << "error location missing or on the wrong line: " << what;
+}
+
+TEST_P(ErrorTest, CallNilMessageNamesTheProblemAndLocation)
+{
+    expect_runtime_error_text(S, "return a()", "nil, nil", "attempt to call");
+}
+
+TEST_P(ErrorTest, IndexNonTableReadMessageNamesTheProblemAndLocation)
+{
+    expect_runtime_error_text(S, "return a.field", "5, nil", "attempt to index");
+}
+
+TEST_P(ErrorTest, IndexNonTableWriteMessageNamesTheProblemAndLocation)
+{
+    expect_runtime_error_text(S, "a.field = 1", "5, nil", "attempt to index");
+}
+
+TEST_P(ErrorTest, ArithmeticOnNilMessageNamesTheProblemAndLocation)
+{
+    expect_runtime_error_text(S, "return a + b", "nil, 1", "attempt to perform arithmetic");
+    const std::string what = run_and_capture_error(S, "let pad = 0\nlet f = function(a, b) { return a + b }\nreturn f(nil, 1)\n");
+    EXPECT_NE(what.find("nil"), std::string::npos) << what;
+}
+
+TEST_P(ErrorTest, ArithmeticOnTableMessageNamesTheProblemAndLocation)
+{
+    expect_runtime_error_text(S, "return a * b", "{}, 2", "attempt to perform arithmetic");
+    const std::string what = run_and_capture_error(S, "let pad = 0\nlet f = function(a, b) { return a * b }\nreturn f({}, 2)\n");
+    EXPECT_NE(what.find("table"), std::string::npos) << what;
+}
+
+TEST_P(ErrorTest, CompareIncompatibleMessageNamesTheProblemAndLocation)
+{
+    expect_runtime_error_text(S, "return a < b", "1, \"x\"", "attempt to compare");
+}
+
+TEST_P(ErrorTest, ConcatInvalidMessageNamesTheProblemAndLocation)
+{
+    expect_runtime_error_text(S, "return a + b", "\"x\", {}", "concatenate");
+}
+
+TEST_P(ErrorTest, RuntimeErrorCaughtByPcallCarriesLocation)
+{
+    constexpr std::string_view code = "let pad = 0\nlet f = function(a) { return a.field }\nlet ok, err = pcall(f, 5)\nreturn ok, err\n";
+    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    const std::string_view err = get_error();
+    EXPECT_NE(err.find("attempt to index"), std::string_view::npos) << err;
+    EXPECT_NE(err.find("<string>(2,"), std::string_view::npos) << err;
+}
+
+TEST_P(ErrorTest, LoopStartNotANumberRaises)
+{
+    constexpr std::string_view code = R"(
+        let s = "a"
+        let n = 0
+        for (let i = s; i < 3; i = i + 1) { n = n + 1; if (n > 10) { break } }
+        return n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+}
+
+TEST_P(ErrorTest, LoopLimitStringRaises)
+{
+    constexpr std::string_view code = R"(
+        let lim = "3"
+        let n = 0
+        for (let i = 0; i < lim; i = i + 1) { n = n + 1; if (n > 10) { break } }
+        return n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+}
+
+TEST_P(ErrorTest, LoopLimitNilRaises)
+{
+    constexpr std::string_view code = R"(
+        let lim = nil
+        let n = 0
+        for (let i = 0; i < lim; i = i + 1) { n = n + 1; if (n > 10) { break } }
+        return n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+}
+
+TEST_P(ErrorTest, DescendingLoopLimitTableRaises)
+{
+    constexpr std::string_view code = R"(
+        let lim = {}
+        let n = 0
+        for (let i = 10; i > lim; i = i - 1) { n = n + 1; if (n > 20) { break } }
+        return n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ErrorTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

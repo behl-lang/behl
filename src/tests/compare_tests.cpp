@@ -360,5 +360,112 @@ TEST_P(CompareTest, TernaryWithTableAccess)
     behl::pop(S, 1);
 }
 
+TEST_P(CompareTest, StringOrderingWithNulBytesAndPrefixes)
+{
+    constexpr std::string_view code = R"(
+        const string = import("string");
+        let nul = string.char(0);
+        let r = "";
+        r = r + (("alo" < "alo" + nul) ? "T" : "F");
+        r = r + (("alo" + nul < "alo") ? "T" : "F");
+        r = r + (("alo" + nul == "alo") ? "T" : "F");
+        r = r + (("alo" <= "alo" + nul) ? "T" : "F");
+        r = r + (("alo" + nul + "x" > "alo" + nul) ? "T" : "F");
+        r = r + (("a" + nul + "b" < "a" + nul + "c") ? "T" : "F");
+        r = r + ((nul < string.char(1)) ? "T" : "F");
+        r = r + ((nul > "") ? "T" : "F");
+        r = r + (("" < "a") ? "T" : "F");
+        r = r + (("a" < "") ? "T" : "F");
+        r = r + (("ab" < "abc") ? "T" : "F");
+        r = r + (("Z" < "a") ? "T" : "F");
+        r = r + (("a" + string.char(255) > "a" + string.char(1)) ? "T" : "F");
+        return r;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "TFFTTTTTTFTTT");
+}
+
+TEST_P(CompareTest, NanComparisonsInValueContextAreFalse)
+{
+    constexpr std::string_view code = R"(
+        let nan = 0.0 / 0.0;
+        let one = 1;
+        let onef = 1.0;
+        let r = "";
+        r = r + ((nan == nan) ? "T" : "F");
+        r = r + ((nan < one) ? "T" : "F");
+        r = r + ((nan <= one) ? "T" : "F");
+        r = r + ((nan > one) ? "T" : "F");
+        r = r + ((nan >= one) ? "T" : "F");
+        r = r + ((onef < nan) ? "T" : "F");
+        r = r + ((onef >= nan) ? "T" : "F");
+        r = r + ((nan != nan) ? "T" : "F");
+        return r, nan < 1, nan >= 1.0;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_EQ(behl::to_string(S, -3), "FFFFFFFT");
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(CompareTest, NanComparisonsInBranchContextAreFalse)
+{
+    constexpr std::string_view code = R"(
+        let nan = 0.0 / 0.0;
+        let one = 1;
+        let onef = 1.0;
+        let r = "";
+        if (nan < 1) { r = r + "a"; }
+        if (nan <= 1) { r = r + "b"; }
+        if (nan > 1) { r = r + "c"; }
+        if (nan >= 1) { r = r + "d"; }
+        if (nan < one) { r = r + "e"; }
+        if (nan < onef) { r = r + "f"; }
+        if (one < nan) { r = r + "g"; }
+        if (one > nan) { r = r + "h"; }
+        if (nan == nan) { r = r + "i"; }
+        if (onef <= nan) { r = r + "j"; }
+        if (onef >= nan) { r = r + "k"; }
+        if (nan < 1.0) { r = r + "l"; }
+        return r;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "");
+}
+
+TEST_P(CompareTest, NanInequalityInBranchContextIsTrue)
+{
+    constexpr std::string_view code = R"(
+        let nan = 0.0 / 0.0;
+        let r = "";
+        if (nan != nan) { r = r + "a"; }
+        if (!(nan < 1)) { r = r + "b"; }
+        if (!(nan >= 1)) { r = r + "c"; }
+        return r;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "abc");
+}
+
+TEST_P(CompareTest, NanLoopConditionDoesNotEnterBody)
+{
+    constexpr std::string_view code = R"(
+        let nan = 0.0 / 0.0;
+        let count = 0;
+        while (nan < 1) {
+            count = count + 1;
+            if (count > 3) { break; }
+        }
+        return count;
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, CompareTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

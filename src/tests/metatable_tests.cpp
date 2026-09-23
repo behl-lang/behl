@@ -1656,5 +1656,560 @@ TEST_P(MetatableTest, ComparisonMetamethodsAgreeUnderJit)
     EXPECT_EQ(to_string(S, -1), "true|truetruefalsefalseLM");
 }
 
+TEST_P(MetatableTest, GlobalReadMissUsesIndexMetamethod)
+{
+    constexpr std::string_view code = R"(
+        let lookups = 0
+        setmetatable(_G, { __index = function(t, k) { lookups = lookups + 1; return k + "!" } })
+        let a = undefined_one
+        let b = undefined_two
+        existing = 5
+        let c = existing
+        return a, b, c, lookups
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_EQ(behl::to_string(S, -4), "undefined_one!");
+    ASSERT_EQ(behl::to_string(S, -3), "undefined_two!");
+    ASSERT_EQ(behl::to_integer(S, -2), 5);
+    ASSERT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_P(MetatableTest, GlobalStrictModeRaisesOnUndefinedRead)
+{
+    constexpr std::string_view code = R"(
+        setmetatable(_G, { __index = function(t, k) { error("undefined global " + k) } })
+        function probe() { return not_defined_anywhere }
+        let ok = pcall(probe)
+        return ok
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, GlobalWriteOfNewKeyUsesNewIndexMetamethod)
+{
+    constexpr std::string_view code = R"(
+        let seen = {}
+        existing = 1
+        setmetatable(_G, { __newindex = function(t, k, v) { seen[k] = v } })
+        brand_new = 42
+        existing = 2
+        setmetatable(_G, nil)
+        return brand_new, seen["brand_new"], existing, seen["existing"]
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl::is_nil(S, -4));
+    ASSERT_EQ(behl::to_integer(S, -3), 42);
+    ASSERT_EQ(behl::to_integer(S, -2), 2);
+    ASSERT_TRUE(behl::is_nil(S, -1));
+}
+
+TEST_P(MetatableTest, GlobalIndexMetamethodInsideHotLoop)
+{
+    constexpr std::string_view code = R"(
+        setmetatable(_G, { __index = function(t, k) { return 3 } })
+        function sum(n) {
+            let total = 0
+            for (let i = 0; i < n; i++) {
+                total = total + missing_global
+            }
+            return total
+        }
+        return sum(500)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 1500);
+}
+
+TEST_P(MetatableTest, SelfReferencingIndexRaisesCatchableError)
+{
+    constexpr std::string_view code = R"(
+        let a = {}
+        setmetatable(a, a)
+        a.__index = a
+        let ok = pcall(function() { return a.missing })
+        return ok
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, SelfReferencingNewIndexRaisesCatchableError)
+{
+    constexpr std::string_view code = R"(
+        let b = {}
+        setmetatable(b, b)
+        b.__newindex = b
+        let ok = pcall(function() { b.missing = 1 })
+        return ok
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, EqMetamethodRemovedAfterUseFallsBackToIdentity)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __eq = function(x, y) { return true } }
+        let a = setmetatable({}, mt)
+        let b = setmetatable({}, mt)
+        let before = a == b
+        mt.__eq = nil
+        let ok, after = pcall(function() { return a == b })
+        return before, ok, after
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, AddMetamethodRemovedAfterUseRaisesArithmeticError)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __add = function(x, y) { return 5 } }
+        let c = setmetatable({}, mt)
+        let before = c + 1
+        mt.__add = nil
+        let ok, err = pcall(function() { return c + 1 })
+        return before, ok, err
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 5);
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    EXPECT_NE(std::string(behl::to_string(S, -1)).find("arithmetic"), std::string::npos) << behl::to_string(S, -1);
+}
+
+TEST_P(MetatableTest, IndexMetamethodRemovedAfterUseReturnsNil)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __index = function(t, k) { return 7 } }
+        let d = setmetatable({}, mt)
+        let before = d.x
+        mt.__index = nil
+        let ok, after = pcall(function() { return d.x })
+        return before, ok, after
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 7);
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_TRUE(behl::is_nil(S, -1));
+}
+
+TEST_P(MetatableTest, LtMetamethodRemovedAfterUseRaisesCompareError)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __lt = function(x, y) { return true } }
+        let e = setmetatable({}, mt)
+        let f = setmetatable({}, mt)
+        let before = e < f
+        mt.__lt = nil
+        let ok, err = pcall(function() { return e < f })
+        return before, ok, err
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    EXPECT_NE(std::string(behl::to_string(S, -1)).find("compare"), std::string::npos) << behl::to_string(S, -1);
+}
+
+TEST_P(MetatableTest, LenMetamethodRemovedAfterUseFallsBackToRawlen)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __len = function(x) { return 9 } }
+        let g = setmetatable({1, 2}, mt)
+        let before = #g
+        mt.__len = nil
+        let ok, after = pcall(function() { return #g })
+        return before, ok, after
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 9);
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_P(MetatableTest, CallMetamethodRemovedAfterUseRaisesCallError)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __call = function(x) { return 3 } }
+        let h = setmetatable({}, mt)
+        let before = h()
+        mt.__call = nil
+        let ok = pcall(function() { return h() })
+        return before, ok
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 3);
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, TostringMetamethodRemovedAfterUseUsesDefault)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __tostring = function(x) { return "T" } }
+        let i = setmetatable({}, mt)
+        let before = tostring(i)
+        mt.__tostring = nil
+        let ok, after = pcall(function() { return tostring(i) })
+        return before, ok, typeof(after), after != "T"
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    EXPECT_EQ(behl::to_string(S, -4), "T");
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_EQ(behl::to_string(S, -2), "string");
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, EqualityOfSameTableDoesNotCallEq)
+{
+    constexpr std::string_view code = R"(
+        let calls = 0
+        let mt = { __eq = function(x, y) { calls++; return false } }
+        let a = setmetatable({}, mt)
+        let same = a == a
+        let different = true
+        if (a != a) { different = true } else { different = false }
+        return same, different, calls
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(MetatableTest, EqMetamethodReturningNilIsFalse)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __eq = function(x, y) { return nil } }
+        let p = setmetatable({}, mt)
+        let q = setmetatable({}, mt)
+        return p == q
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, EqMetamethodInBranchContextHonoursResult)
+{
+    constexpr std::string_view code = R"(
+        let mf = { __eq = function(x, y) { return false } }
+        let a = setmetatable({}, mf)
+        let b = setmetatable({}, mf)
+        let mn = { __eq = function(x, y) { return nil } }
+        let p = setmetatable({}, mn)
+        let q = setmetatable({}, mn)
+        let mt = { __eq = function(x, y) { return true } }
+        let c = setmetatable({}, mt)
+        let d = setmetatable({}, mt)
+        let log = ""
+        if (a == b) { log = log + "ab:eq " } else { log = log + "ab:ne " }
+        if (p == q) { log = log + "pq:eq " } else { log = log + "pq:ne " }
+        if (c == d) { log = log + "cd:eq" } else { log = log + "cd:ne" }
+        return log
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "ab:ne pq:ne cd:eq");
+}
+
+TEST_P(MetatableTest, NotEqualInValueContextNegatesEqMetamethod)
+{
+    constexpr std::string_view code = R"(
+        let mf = { __eq = function(x, y) { return false } }
+        let a = setmetatable({}, mf)
+        let b = setmetatable({}, mf)
+        let mn = { __eq = function(x, y) { return nil } }
+        let p = setmetatable({}, mn)
+        let q = setmetatable({}, mn)
+        let mt = { __eq = function(x, y) { return true } }
+        let c = setmetatable({}, mt)
+        let d = setmetatable({}, mt)
+        let r1 = a != b
+        let r2 = p != q
+        let r3 = c != d
+        return r1, r2, r3
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(MetatableTest, EqMetamethodNotUsedForTableKeyLookup)
+{
+    constexpr std::string_view code = R"(
+        let mt = { __eq = function(x, y) { return true } }
+        let k1 = setmetatable({}, mt)
+        let k2 = setmetatable({}, mt)
+        let t = {}
+        t[k1] = "one"
+        return k1 == k2, t[k2], t[k1]
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_TRUE(behl::is_nil(S, -2));
+    EXPECT_EQ(behl::to_string(S, -1), "one");
+}
+
+TEST_P(MetatableTest, PairsMetamethodDrivesForeachAndPairs)
+{
+    constexpr std::string_view code = R"(
+        let t = {}
+        setmetatable(t, { __pairs = function(self) {
+            let i = -1
+            return function(s, k) {
+                i++
+                if (i < 3) { return i, i * 10 }
+                return nil
+            }, self, nil
+        } })
+        let n = 0
+        let s = 0
+        foreach (let k, v in t) {
+            n++
+            s = s + v
+            if (n > 100) { break }
+        }
+        let s2 = 0
+        let n2 = 0
+        for (let k, v in pairs(t)) {
+            n2++
+            s2 = s2 + v
+            if (n2 > 100) { break }
+        }
+        return n, s, s2
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 3);
+    EXPECT_EQ(behl::to_integer(S, -2), 30);
+    EXPECT_EQ(behl::to_integer(S, -1), 30);
+}
+
+TEST_P(MetatableTest, NewIndexPointingAtOwnMetatableStoresInMetatable)
+{
+    constexpr std::string_view code = R"(
+        const table = import("table")
+        let mt = {}
+        mt.__newindex = mt
+        let o = setmetatable({}, mt)
+        o.x = 5
+        return table.rawget(o, "x"), table.rawget(mt, "x"), o.x
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::is_nil(S, -3));
+    EXPECT_EQ(behl::to_integer(S, -2), 5);
+    EXPECT_TRUE(behl::is_nil(S, -1));
+}
+
+TEST_P(MetatableTest, TableAsItsOwnMetatable)
+{
+    constexpr std::string_view code = R"(
+        let st = {}
+        setmetatable(st, st)
+        st.__index = { y = 9 }
+        return getmetatable(st) == st, st.y, st.zz
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_EQ(behl::to_integer(S, -2), 9);
+    EXPECT_TRUE(behl::is_nil(S, -1));
+}
+
+TEST_P(MetatableTest, NewIndexChainReachesGrandparent)
+{
+    constexpr std::string_view code = R"(
+        const table = import("table")
+        let gp = {}
+        let par = setmetatable({}, { __newindex = gp })
+        let ch = setmetatable({}, { __newindex = par })
+        ch.v = 42
+        return table.rawget(ch, "v"), table.rawget(par, "v"), gp.v
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_TRUE(behl::is_nil(S, -3));
+    EXPECT_TRUE(behl::is_nil(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 42);
+}
+
+TEST_P(MetatableTest, ProxyUsesSameTableForIndexAndNewIndex)
+{
+    constexpr std::string_view code = R"(
+        const table = import("table")
+        let store = {}
+        let proxy = setmetatable({}, { __index = store, __newindex = store })
+        proxy.a = 1
+        proxy.b = 2
+        proxy.a = 3
+        let count = 0
+        for (let k, v in pairs(proxy)) {
+            count++
+            if (count > 100) { break }
+        }
+        return proxy.a, proxy.b, store.a, store.b, count, table.rawget(proxy, "a")
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    EXPECT_EQ(behl::to_integer(S, -6), 3);
+    EXPECT_EQ(behl::to_integer(S, -5), 2);
+    EXPECT_EQ(behl::to_integer(S, -4), 3);
+    EXPECT_EQ(behl::to_integer(S, -3), 2);
+    EXPECT_EQ(behl::to_integer(S, -2), 0);
+    EXPECT_TRUE(behl::is_nil(S, -1));
+}
+
+TEST_P(MetatableTest, ThreeLevelIndexChainEndsInFunction)
+{
+    constexpr std::string_view code = R"(
+        let base = setmetatable({}, { __index = function(t, k) { return "fn:" + k } })
+        let mid = setmetatable({}, { __index = base })
+        let top = setmetatable({}, { __index = mid })
+        mid.m = "mid"
+        return top.m, top.zz
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_EQ(behl::to_string(S, -2), "mid");
+    EXPECT_EQ(behl::to_string(S, -1), "fn:zz");
+}
+
+TEST_P(MetatableTest, ComparisonBetweenNumberAndTableKeepsOperandOrder)
+{
+    constexpr std::string_view code = R"behl(
+        let log = ""
+        let mt = {
+            __lt = function(a, b) {
+                log = log + "lt(" + typeof(a) + "," + typeof(b) + ")"
+                return typeof(a) == "integer"
+            },
+            __le = function(a, b) {
+                log = log + "le(" + typeof(a) + "," + typeof(b) + ")"
+                return typeof(a) == "integer"
+            }
+        }
+        let t = setmetatable({}, mt)
+        let r1 = 1 < t
+        let r2 = t >= 1
+        let r3 = 1 <= t
+        let r4 = t > 1
+        let r5 = 1 > t
+        let r6 = 1 >= t
+        return r1, r2, r3, r4, r5, r6, log
+    )behl";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 7));
+    EXPECT_TRUE(behl::to_boolean(S, -7));
+    EXPECT_TRUE(behl::to_boolean(S, -6));
+    EXPECT_TRUE(behl::to_boolean(S, -5));
+    EXPECT_TRUE(behl::to_boolean(S, -4));
+    EXPECT_FALSE(behl::to_boolean(S, -3));
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_string(S, -1),
+        "lt(integer,table)lt(table,integer)le(integer,table)le(table,integer)le(integer,table)lt(integer,table)");
+}
+
+TEST_P(MetatableTest, ArithmeticMetamethodsKeepOperandOrderWithNumberOnLeft)
+{
+    constexpr std::string_view code = R"(
+        let mt = {
+            __add = function(a, b) { return typeof(a) + "+" + typeof(b) },
+            __sub = function(a, b) { return typeof(a) + "-" + typeof(b) },
+            __mul = function(a, b) { return typeof(a) + "*" + typeof(b) },
+            __div = function(a, b) { return typeof(a) + "/" + typeof(b) },
+            __mod = function(a, b) { return typeof(a) + "%" + typeof(b) },
+            __pow = function(a, b) { return typeof(a) + "**" + typeof(b) }
+        }
+        let x = setmetatable({}, mt)
+        let left = (1 + x) + " " + (1 - x) + " " + (1 * x) + " " + (1 / x) + " " + (1 % x) + " " + (2 ** x)
+        let right = (x + 1) + " " + (x - 1) + " " + (x * 1) + " " + (x / 1) + " " + (x % 1) + " " + (x ** 2)
+        return left, right
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_EQ(behl::to_string(S, -2),
+        "integer+table integer-table integer*table integer/table integer%table integer**table");
+    EXPECT_EQ(behl::to_string(S, -1),
+        "table+integer table-integer table*integer table/integer table%integer table**integer");
+}
+
+TEST_P(MetatableTest, BitwiseMetamethodsKeepOperandOrderWithNumberOnLeft)
+{
+    constexpr std::string_view code = R"(
+        let mt = {
+            __band = function(a, b) { return typeof(a) + "&" + typeof(b) },
+            __bor = function(a, b) { return typeof(a) + "|" + typeof(b) },
+            __bxor = function(a, b) { return typeof(a) + "^" + typeof(b) },
+            __shl = function(a, b) { return typeof(a) + "<<" + typeof(b) },
+            __shr = function(a, b) { return typeof(a) + ">>" + typeof(b) }
+        }
+        let x = setmetatable({}, mt)
+        let left = (1 & x) + " " + (1 | x) + " " + (1 ^ x) + " " + (1 << x) + " " + (1 >> x)
+        let right = (x & 1) + " " + (x | 1) + " " + (x ^ 1) + " " + (x << 1) + " " + (x >> 1)
+        return left, right
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_EQ(behl::to_string(S, -2), "integer&table integer|table integer^table integer<<table integer>>table");
+    EXPECT_EQ(behl::to_string(S, -1), "table&integer table|integer table^integer table<<integer table>>integer");
+}
+
+TEST_P(MetatableTest, LenMetamethodNonIntegerResultIsReturnedAsIs)
+{
+    constexpr std::string_view code = R"(
+        let lt = setmetatable({}, { __len = function(t) { return 2.5 } })
+        let ls = setmetatable({}, { __len = function(t) { return "abc" } })
+        return #lt, typeof(#lt), #ls
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    EXPECT_DOUBLE_EQ(behl::to_number(S, -3), 2.5);
+    EXPECT_EQ(behl::to_string(S, -2), "number");
+    EXPECT_EQ(behl::to_string(S, -1), "abc");
+}
+
+TEST_P(MetatableTest, RawlenOfNonTableIsZero)
+{
+    constexpr std::string_view code = R"(
+        return rawlen("abc") + rawlen(5) + rawlen(nil) + rawlen(true)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(MetatableTest, GetmetatableOfNonTableIsNil)
+{
+    constexpr std::string_view code = R"(
+        return getmetatable(5) == nil, getmetatable(nil) == nil, getmetatable(true) == nil, getmetatable(print) == nil
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    EXPECT_TRUE(behl::to_boolean(S, -4));
+    EXPECT_TRUE(behl::to_boolean(S, -3));
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, MetatableTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

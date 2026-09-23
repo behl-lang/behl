@@ -38,6 +38,16 @@ namespace behl
             return internal_name_len > 0;
         }
 
+        static constexpr int32_t array_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCTable, array));
+        }
+
+        static constexpr int32_t color_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCTable, header) + offsetof(GCOHeader, color));
+        }
+
         void clear_name()
         {
             internal_name_len = 0;

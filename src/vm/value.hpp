@@ -6,6 +6,7 @@
 
 #include <behl/config.hpp>
 #include <behl/types.hpp>
+#include <bit>
 #include <cassert>
 #include <compare>
 #include <cstdint>
@@ -137,6 +138,11 @@ namespace behl
                 if (lhs_t == Type::kNil) [[unlikely]]
                 {
                     return std::partial_ordering::equivalent;
+                }
+
+                if (lhs_t == Type::kCFunction)
+                {
+                    return std::bit_cast<uintptr_t>(get_cfunction()) <=> std::bit_cast<uintptr_t>(other.get_cfunction());
                 }
 
                 // Everything else is a GC object → pointer comparison

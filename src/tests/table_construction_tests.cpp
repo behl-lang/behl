@@ -77,5 +77,26 @@ TEST_P(TableConstructionTest, EmptyTableCreation)
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
+TEST_P(TableConstructionTest, ManyFixedItemsBeforeVarargKeepAllEntries)
+{
+    behl::load_stdlib(S);
+    std::string code = "function f(...) { return {";
+    for (int i = 0; i < 300; ++i)
+    {
+        code += std::to_string(i) + ",";
+    }
+    code += " ...} }\n"
+            "let t = f(1000, 1001)\n"
+            "let bad = 0\n"
+            "for (let i = 0; i < 300; i++) { if (t[i] != i) { bad++ } }\n"
+            "return bad, t[300], t[301], rawlen(t)\n";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    EXPECT_EQ(behl::to_integer(S, -4), 0);
+    EXPECT_EQ(behl::to_integer(S, -3), 1000);
+    EXPECT_EQ(behl::to_integer(S, -2), 1001);
+    EXPECT_EQ(behl::to_integer(S, -1), 302);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, TableConstructionTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

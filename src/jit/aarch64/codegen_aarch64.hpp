@@ -61,6 +61,7 @@ namespace behl
         void emit_helper_call(const CgOp& op);
         void emit_tail_jump_native(const CgOp& op);
         void emit_return_dispatch(const CgOp& op);
+        void emit_table_int(const CgOp& op);
         void emit_return_fast(const CgOp& op);
         void emit_return_self_site(const CgOp& op);
         void emit_frame_push_fast(const CgOp& op);

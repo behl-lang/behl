@@ -227,10 +227,9 @@ namespace behl
                 ++prev_it;
                 it = prev_it;
             }
-            else if (!prev_key.is_integer())
+            else if (!in_array_phase || start_i > t->array.size())
             {
-                // Non-integer key not found in hash - error
-                return false;
+                error(S, "invalid key to 'next'");
             }
 
             // integer key not in hash means we just finished array part, start hash iteration

@@ -81,5 +81,119 @@ TEST_P(ControflowTest, CStyleForLoopNested)
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
+TEST_P(ControflowTest, IfConditionOnFieldAccess)
+{
+    constexpr std::string_view code = R"(
+        let t = {f = 1}
+        let r = 0
+        if (t.f) {
+            r = 1
+        }
+        return r
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(ControflowTest, IfConditionOnFieldAccessInFunction)
+{
+    constexpr std::string_view code = R"(
+        function f(t) {
+            if (t.f) {
+                return 1
+            }
+            return 2
+        }
+        return f({f = 1}) * 10 + f({})
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 12);
+}
+
+TEST_P(ControflowTest, WhileConditionOnFieldAccess)
+{
+    constexpr std::string_view code = R"(
+        let t = {f = 1}
+        let n = 0
+        while (t.f) {
+            n++
+            t.f = nil
+        }
+        return n
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(ControflowTest, IfNilConstantPreservesLocals)
+{
+    constexpr std::string_view code = R"(
+        let a = 7
+        let b = 8
+        if (nil) {}
+        return a * 10 + b
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 78);
+}
+
+TEST_P(ControflowTest, IfNilConstantPreservesLocalsInFunction)
+{
+    constexpr std::string_view code = R"(
+        function g() {
+            let a = 7
+            let b = 8
+            if (nil) {}
+            return a * 10 + b
+        }
+        return g()
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 78);
+}
+
+TEST_P(ControflowTest, WhileNilConstantPreservesLocals)
+{
+    constexpr std::string_view code = R"(
+        function g() {
+            let a = 7
+            let b = 8
+            while (nil) {}
+            return a * 10 + b
+        }
+        let c = 7
+        let d = 8
+        while (nil) {}
+        return g() * 100 + c * 10 + d
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7878);
+}
+
+TEST_P(ControflowTest, IfFalseConstantPreservesLocals)
+{
+    constexpr std::string_view code = R"(
+        function g() {
+            let a = 7
+            let b = 8
+            if (false) {}
+            return a * 10 + b
+        }
+        let c = 7
+        let d = 8
+        if (false) {}
+        return g() * 100 + c * 10 + d
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7878);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ControflowTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

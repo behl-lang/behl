@@ -438,6 +438,59 @@ TEST_P(ModuleFileTest, ImportFailureNamesTheModule)
         << "error message should name the module, got: " << message;
 }
 
+TEST_P(ModuleFileTest, SecondImportReturnsSameTable)
+{
+    write_file("helper.behl", "module;\nexport const V = 1;\n");
+
+    constexpr std::string_view code = R"(
+        const a = import("./helper");
+        const b = import("./helper");
+        return a == b, a.V;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(ModuleFileTest, FailingModuleIsNotCachedAndRunsAgain)
+{
+    write_file("flaky.behl",
+        "attempts = (attempts || 0) + 1\n"
+        "if (attempts == 1) { error(\"first load fails\") }\n"
+        "return { n = attempts }\n");
+
+    const std::string code = "let p = \"" + (root / "flaky").generic_string() + "\"\n"
+        "let ok1 = pcall(import, p)\n"
+        "let ok2, m2 = pcall(import, p)\n"
+        "let ok3, m3 = pcall(import, p)\n"
+        "return ok1, ok2, ok2 && m2.n, ok3 && m2 == m3, attempts\n";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    EXPECT_FALSE(behl::to_boolean(S, -5));
+    EXPECT_TRUE(behl::to_boolean(S, -4));
+    EXPECT_EQ(behl::to_integer(S, -3), 2);
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_P(ModuleFileTest, ImportInsideFunctionResolvesRelativeToImporter)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 3;\n");
+
+    constexpr std::string_view code = R"(
+        function load_dot() { return import("./helper"); }
+        function load_plain() { return import("helper"); }
+        let ok1, a = pcall(load_dot);
+        let ok2, b = pcall(load_plain);
+        return ok1 && a.VALUE, ok2 && b.VALUE;
+    )";
+    ASSERT_NO_THROW(behl::load_buffer(S, code, main_path()));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 3);
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ModuleTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 

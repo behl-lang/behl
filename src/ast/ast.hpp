@@ -375,6 +375,7 @@ namespace behl
         AstNode* func;
         AstNode* first_arg = nullptr;
         bool is_self_call = false; // Set by semantic analysis if calling the current function
+        bool is_method_call = false;
         AstFuncCall(AstNode* f, AstNode* first_a = nullptr)
             : AstNode(AstNodeType::kFuncCall)
             , func(std::move(f))
@@ -385,6 +386,7 @@ namespace behl
         {
             auto* c = make_clone<AstFuncCall>(holder, func->clone(holder));
             c->is_self_call = is_self_call;
+            c->is_method_call = is_method_call;
             // Clone args linked list
             AstNode** tail = &c->first_arg;
             for (AstNode* arg = first_arg; arg; arg = arg->next_child)

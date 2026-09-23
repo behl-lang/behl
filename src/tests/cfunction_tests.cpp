@@ -1078,5 +1078,40 @@ TEST_P(CFunctionTest, CFunction_CallsBackIntoBehl_EvalLoop)
     behl::pop(S, 1);
 }
 
+TEST_P(CFunctionTest, GcCollectInsideCFunctionKeepsArgumentsCallerAndResultsAlive)
+{
+    behl::register_function(S, "collect_and_read", [](behl::State* L) -> int {
+        behl::gc_collect(L);
+        behl::table_getfield(L, 0, "inner");
+        behl::table_getfield(L, -1, "v");
+        const behl::Integer v = behl::to_integer(L, -1);
+        behl::pop(L, 2);
+
+        behl::push_string(L, "made in C during collection");
+        behl::table_new(L);
+        behl::push_integer(L, 5);
+        behl::table_setfield(L, -2, "k");
+        behl::gc_collect(L);
+        behl::push_integer(L, v + 1);
+        return 3;
+    });
+
+    constexpr std::string_view code = R"(
+        let caller_local = {x = 9}
+        let s, t, v = collect_and_read({inner = {v = 41}})
+        let keep = {}
+        for (let i = 0; i < 2000; i = i + 1) { keep[i % 50] = {pad = i} }
+        return s, t.k, v, caller_local.x
+    )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_EQ(behl::get_top(S), 4);
+    EXPECT_EQ(behl::to_string(S, 0), "made in C during collection");
+    EXPECT_EQ(behl::to_integer(S, 1), 5);
+    EXPECT_EQ(behl::to_integer(S, 2), 42);
+    EXPECT_EQ(behl::to_integer(S, 3), 9);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, CFunctionTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

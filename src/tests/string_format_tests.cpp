@@ -372,6 +372,127 @@ namespace behl
         EXPECT_EQ(to_string(S, -1), "-1000000000000000000.00");
     }
 
+    TEST_P(StringFormatTest, DecimalOfIntegerExtremes)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            let maxi = 9223372036854775807;
+            let mini = -9223372036854775807 - 1;
+            return string.format("{:d}|{:d}|{}|{}", maxi, mini, maxi, mini);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "9223372036854775807|-9223372036854775808|9223372036854775807|-9223372036854775808");
+    }
+
+    TEST_P(StringFormatTest, HexOfIntegerMaximum)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{:x}|{:X}|{:x}", 9223372036854775807, 9223372036854775807, 0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "7fffffffffffffff|7FFFFFFFFFFFFFFF|0");
+    }
+
+    TEST_P(StringFormatTest, StringWidthAndAlignment)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("[{:5}][{:>5}][{:^6}][{:<4}][{:3}]", "ab", "ab", "ab", "ab", "abcdef");
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "[ab   ][   ab][  ab  ][ab  ][abcdef]");
+    }
+
+    TEST_P(StringFormatTest, NumericWidthAndPrecision)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("[{:8.3}][{:<8.1}][{:5}][{:>6}][{:.3}]", 3.14159, -2.26, -42, 7, 0.1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "[   3.142][-2.3    ][  -42][     7][0.100]");
+    }
+
+    TEST_P(StringFormatTest, NilAndBooleanArguments)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{} {} {}|{:>6}|{:>6}", nil, true, false, nil, true);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "nil true false|   nil|  true");
+    }
+
+    TEST_P(StringFormatTest, EmptyAndLiteralOnlyFormats)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format(""), string.format("", 1, 2), string.format("abc");
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 3));
+        EXPECT_EQ(to_string(S, -3), "");
+        EXPECT_EQ(to_string(S, -2), "");
+        EXPECT_EQ(to_string(S, -1), "abc");
+    }
+
+    TEST_P(StringFormatTest, DefaultFloatFormattingIsShortest)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{}|{}|{}|{}|{}", 1.0, -1203.0, 0.1, 1.0 / 0.0, 0.0 - 1.0 / 0.0);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        ASSERT_NO_THROW(call(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "1.0|-1203.0|0.1|inf|-inf");
+    }
+
+    TEST_P(StringFormatTest, MissingArgumentIsAnError)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{} {}", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        EXPECT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, UnmatchedOpeningBraceIsAnError)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("value {", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        EXPECT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
+    TEST_P(StringFormatTest, UnmatchedClosingBraceIsAnError)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("value }", 1);
+        )";
+
+        ASSERT_NO_THROW(load_string(S, code));
+        EXPECT_THROW(call(S, 0, 1), RuntimeError);
+    }
+
     INSTANTIATE_TEST_SUITE_P(Mode, StringFormatTest, ::testing::Bool(),
         [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 

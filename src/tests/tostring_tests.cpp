@@ -331,5 +331,79 @@ TEST_P(ToStringTest, ToString_NestedCalls)
     EXPECT_EQ(to_string(S, -1), "42");
 }
 
+TEST_P(ToStringTest, ToString_IntegerMinimum)
+{
+    constexpr std::string_view code = R"(
+        let mini = -9223372036854775807 - 1;
+        return tostring(mini);
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_EQ(to_string(S, -1), "-9223372036854775808");
+}
+
+TEST_P(ToStringTest, ToString_Infinities)
+{
+    constexpr std::string_view code = R"(
+        let one = 1.0;
+        let zero = 0.0;
+        return tostring(one / zero), tostring(zero - one / zero);
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 2));
+    EXPECT_EQ(to_string(S, -2), "inf");
+    EXPECT_EQ(to_string(S, -1), "-inf");
+}
+
+TEST_P(ToStringTest, ToString_NaN)
+{
+    constexpr std::string_view code = R"(
+        let zero = 0.0;
+        return tostring(zero / zero);
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_EQ(to_string(S, -1), "nan");
+}
+
+TEST_P(ToStringTest, ToString_LargeFloatUsesExponent)
+{
+    constexpr std::string_view code = R"(
+        let ten = 10.0;
+        return tostring(ten ** 100);
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_EQ(to_string(S, -1), "1e+100");
+}
+
+TEST_P(ToStringTest, ToString_ShortestRoundTrip)
+{
+    constexpr std::string_view code = R"(
+        let a = 0.1;
+        let b = 0.2;
+        return tostring(a), tostring(a + b);
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 2));
+    EXPECT_EQ(to_string(S, -2), "0.1");
+    EXPECT_EQ(to_string(S, -1), "0.30000000000000004");
+}
+
+TEST_P(ToStringTest, ToString_WholeFloatsKeepDecimalPoint)
+{
+    constexpr std::string_view code = R"(
+        let a = -1203.0;
+        let b = 100.0;
+        let c = 1.0;
+        return tostring(a), tostring(b), tostring(c);
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 3));
+    EXPECT_EQ(to_string(S, -3), "-1203.0");
+    EXPECT_EQ(to_string(S, -2), "100.0");
+    EXPECT_EQ(to_string(S, -1), "1.0");
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ToStringTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

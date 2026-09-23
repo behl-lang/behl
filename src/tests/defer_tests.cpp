@@ -1009,5 +1009,64 @@ TEST_P(DeferTest, EmptyDeferBlock)
     ASSERT_EQ(to_integer(S, 0), 42);
 }
 
+TEST_P(DeferTest, DeferRunsWhenRuntimeTypeErrorsUnwind)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+
+        function viaNilCall() {
+            defer count = count + 1
+            let f = nil
+            f()
+        }
+
+        function viaIndex(x) {
+            defer { count = count + 10 }
+            return x.field.deeper
+        }
+
+        let mt = { __add = function(a, b) { error("add failed") } }
+        function viaMetamethod() {
+            defer count = count + 100
+            let o = setmetatable({}, mt)
+            return o + 1
+        }
+
+        let r1 = pcall(viaNilCall)
+        let r2 = pcall(viaIndex, 5)
+        let r3 = pcall(viaMetamethod)
+        return r1, r2, r3, count
+    )";
+
+    ASSERT_NO_THROW(run_script(code));
+    ASSERT_EQ(get_top(S), 4);
+    EXPECT_FALSE(to_boolean(S, 0));
+    EXPECT_FALSE(to_boolean(S, 1));
+    EXPECT_FALSE(to_boolean(S, 2));
+    EXPECT_EQ(to_integer(S, 3), 111);
+}
+
+TEST_P(DeferTest, DeferRunsWhenErrorEscapesToTheHost)
+{
+    constexpr std::string_view code = R"(
+        ran = 0
+        function inner() {
+            defer ran = ran + 1
+            let t = nil
+            return t.x
+        }
+        function outer() {
+            defer ran = ran + 10
+            return inner() + 1
+        }
+        outer()
+    )";
+
+    EXPECT_ANY_THROW(run_script(code));
+    set_top(S, 0);
+    get_global(S, "ran");
+    EXPECT_EQ(to_integer(S, -1), 11);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, DeferTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

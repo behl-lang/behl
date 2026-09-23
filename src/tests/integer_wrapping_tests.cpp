@@ -211,5 +211,46 @@ TEST_P(IntegerWrappingTest, IncrementDecrement)
     ASSERT_EQ(behl::to_integer(S, -1), 9223372036854775807LL);
 }
 
+TEST_P(IntegerWrappingTest, ShiftCountsAtAndBeyondWidthFolded)
+{
+    constexpr std::string_view code = R"(
+        let r = ""
+        r = r + tostring(1 << 63) + "," + tostring(1 << 64) + "," + tostring(1 << -1) + "," + tostring(4 >> -1)
+        r = r + "," + tostring(1 << 9223372036854775807) + "," + tostring(1 << (-9223372036854775807 - 1))
+        r = r + "," + tostring(-8 >> 63) + "," + tostring(-8 >> 64) + "," + tostring(8 >> 64)
+        r = r + "," + tostring(8 >> 9223372036854775807) + "," + tostring(-8 >> 9223372036854775807)
+        r = r + "," + tostring(8 >> (-9223372036854775807 - 1)) + "," + tostring(1 >> -1)
+        return r
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "-9223372036854775808,0,0,8,0,0,-1,-1,0,0,-1,0,2");
+}
+
+TEST_P(IntegerWrappingTest, ShiftCountsAtAndBeyondWidthRuntime)
+{
+    constexpr std::string_view code = R"(
+        let one = 1
+        let four = 4
+        let eight = 8
+        let neg8 = -8
+        let c63 = 63
+        let c64 = 64
+        let cm1 = -1
+        let maxint = 9223372036854775807
+        let minint = -9223372036854775807 - 1
+        let r = ""
+        r = r + tostring(one << c63) + "," + tostring(one << c64) + "," + tostring(one << cm1) + "," + tostring(four >> cm1)
+        r = r + "," + tostring(one << maxint) + "," + tostring(one << minint)
+        r = r + "," + tostring(neg8 >> c63) + "," + tostring(neg8 >> c64) + "," + tostring(eight >> c64)
+        r = r + "," + tostring(eight >> maxint) + "," + tostring(neg8 >> maxint)
+        r = r + "," + tostring(eight >> minint) + "," + tostring(one >> cm1)
+        return r
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "-9223372036854775808,0,0,8,0,0,-1,-1,0,0,-1,0,2");
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, IntegerWrappingTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

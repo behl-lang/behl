@@ -7,6 +7,8 @@
 #include "gc/gc.hpp"
 
 #include <behl/exceptions.hpp>
+#include <bit>
+#include <cstdint>
 #include <stdexcept>
 
 namespace behl
@@ -416,7 +418,16 @@ namespace behl
                 if (is_hex)
                 {
                     // Parse hexadecimal (skip "0x" or "0X" prefix)
-                    res = behl::from_chars(tok.value.data() + 2, tok.value.data() + tok.value.size(), ival, 16);
+                    constexpr size_t kMaxHexDigits = 16;
+                    const char* digits = tok.value.data() + 2;
+                    const char* const digits_end = tok.value.data() + tok.value.size();
+                    if (static_cast<size_t>(digits_end - digits) > kMaxHexDigits)
+                    {
+                        digits = digits_end - kMaxHexDigits;
+                    }
+                    uint64_t bits = 0;
+                    res = behl::from_chars(digits, digits_end, bits, 16);
+                    ival = std::bit_cast<int64_t>(bits);
                 }
                 else
                 {
@@ -527,6 +538,7 @@ namespace behl
                     // Insert table_clone as first arg (for method call syntax)
                     table_clone->next_child = call->first_arg;
                     call->first_arg = table_clone;
+                    call->is_method_call = true;
                     left = call;
                 }
                 else

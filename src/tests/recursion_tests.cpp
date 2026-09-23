@@ -274,5 +274,21 @@ TEST_P(RecursionTest, ComprehensiveHandlerCoverageDeep)
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
+TEST_P(RecursionTest, DeepTailRecursion30000)
+{
+    constexpr std::string_view code = R"(
+        function loop(n, acc) {
+            if (n == 0) {
+                return acc
+            }
+            return loop(n - 1, acc + 1)
+        }
+        return loop(30000, 0)
+    )";
+    ASSERT_NO_THROW(load_string(S, code));
+    ASSERT_NO_THROW(call(S, 0, 1));
+    EXPECT_EQ(to_integer(S, -1), 30000);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, RecursionTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -4,6 +4,7 @@
 
 #    include "gc/gco_closure.hpp"
 #    include "gc/gco_proto.hpp"
+#    include "gc/gco_table.hpp"
 #    include "state.hpp"
 #    include "vm/frame.hpp"
 
@@ -424,6 +425,73 @@ namespace behl
         e_.strw(kTmpA, mem(kTmpB, kCallHeaderTop));
 
         base_valid_ = false;
+    }
+
+    void CodegenAArch64::emit_table_int(const CgOp& op)
+    {
+        constexpr A64Reg kTable = A64Reg::x17;
+        constexpr A64Reg kIdx = A64Reg::x11;
+        constexpr int32_t kArraySize = GCTable::array_offset() + Vector<Value>::size_offset();
+        constexpr int32_t kArrayData = GCTable::array_offset() + Vector<Value>::data_offset();
+
+        const bool is_get = op.kind == CgOpKind::kTableGetInt;
+        const A64Label slow = label(op.label);
+        const int32_t table_slot = static_cast<int32_t>(op.var);
+
+        ensure_base();
+        e_.ldr(kTable, slot_payload(table_slot));
+        e_.ldr(kScratch, mem(kTable, kArraySize));
+
+        if (op.flag)
+        {
+            e_.cmp(kScratch, static_cast<uint32_t>(op.imm));
+            e_.bcond(A64Cond::ls, slow);
+        }
+        else
+        {
+            e_.ldr(kIdx, slot_payload(static_cast<int32_t>(op.imm)));
+            e_.cmp(kIdx, kScratch);
+            e_.bcond(A64Cond::hs, slow);
+        }
+
+        if (!is_get)
+        {
+            const A64Label no_barrier = e_.new_label();
+            e_.ldrb(kScratch, slot_tag(op.slot));
+            e_.lsl(kScratch, kScratch, 57);
+            e_.cmp(kScratch, 0u);
+            e_.bcond(A64Cond::pl, no_barrier);
+            e_.ldrb(kScratch, mem(kTable, GCTable::color_offset()));
+            e_.cmpw(kScratch, static_cast<uint32_t>(GCColor::kBlack));
+            e_.bcond(A64Cond::eq, slow);
+            e_.bind(no_barrier);
+        }
+
+        e_.ldr(kTable, mem(kTable, kArrayData));
+        A64Mem elem = mem(kTable, 0);
+        if (op.flag)
+        {
+            elem = mem(kTable, static_cast<int32_t>(op.imm) * Value::size());
+        }
+        else
+        {
+            e_.lsl(kIdx, kIdx, 4);
+            e_.add(kTable, kTable, kIdx);
+        }
+
+        if (is_get)
+        {
+            e_.ldr_q(kCopyVec, elem);
+            e_.ldrb(kScratch, elem);
+            e_.cmpw(kScratch, static_cast<uint32_t>(Type::kNil));
+            e_.bcond(A64Cond::eq, slow);
+            e_.str_q(kCopyVec, slot_tag(op.slot));
+        }
+        else
+        {
+            e_.ldr_q(kCopyVec, slot_tag(op.slot));
+            e_.str_q(kCopyVec, elem);
+        }
     }
 
     void CodegenAArch64::emit_return_self_site(const CgOp& op)
@@ -1681,6 +1749,11 @@ namespace behl
                 e_.ldrb(kScratch, slot_tag(op.slot));
                 e_.cmpw(kScratch, static_cast<uint32_t>(Type::kNil));
                 e_.bcond(A64Cond::eq, falsy);
+                if (op.flag)
+                {
+                    e_.b(truthy);
+                    break;
+                }
                 e_.cmpw(kScratch, static_cast<uint32_t>(Type::kBoolean));
                 e_.bcond(A64Cond::ne, truthy);
                 e_.ldrb(kScratch, slot_payload(op.slot));
@@ -1780,6 +1853,15 @@ namespace behl
                     cache_drop_all();
                 }
                 emit_return_dispatch(op);
+                break;
+
+            case CgOpKind::kTableGetInt:
+            case CgOpKind::kTableSetInt:
+                if (cache_enabled_ && op.kind == CgOpKind::kTableGetInt)
+                {
+                    cache_drop_slot(op.slot);
+                }
+                emit_table_int(op);
                 break;
 
             case CgOpKind::kHelperCall:

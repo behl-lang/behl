@@ -135,6 +135,7 @@ namespace behl
         void cmp(GpReg reg, int32_t imm);
         void cmp(Mem mem_op, int32_t imm);
         void cmp8(Mem mem_op, uint8_t imm);
+        void test8(Mem mem_op, uint8_t imm);
         void shl(GpReg reg, uint8_t imm);
         void shl32(GpReg reg, uint8_t imm);
         void test(GpReg lhs, GpReg rhs);

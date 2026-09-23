@@ -894,5 +894,165 @@ TEST_P(UserdataTest, ThrowingFinalizerLeavesAutomaticCollectionRunning)
     EXPECT_LT(behl::to_integer(S, -1), 50000) << "automatic collection never ran again after a finalizer threw";
 }
 
+TEST_P(UserdataTest, FinalizerResurrectedUserdataKeepsItsMetatable)
+{
+    constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let calls = 0
+            let mt = {}
+            mt.tag = "alive"
+            mt.__gc = function(u) { calls = calls + 1; saved = u }
+
+            let ud = create_test_userdata()
+            set_userdata_value(ud, 77)
+            setmetatable(ud, mt)
+            mt = nil
+            ud = nil
+            gc.collect()
+
+            let resurrected = saved != nil
+
+            for (let c = 0; c < 5; c = c + 1) {
+                let churn = {}
+                for (let i = 0; i < 5000; i = i + 1) { churn[i % 100] = {pad = i} }
+                gc.collect()
+            }
+
+            let m = getmetatable(saved)
+            let tag_ok = m != nil && m.tag == "alive"
+            return resurrected, tag_ok, get_userdata_value(saved), calls
+        )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl::to_boolean(S, -4)) << "finalizer never stored the userdata";
+    EXPECT_TRUE(behl::to_boolean(S, -3)) << "metatable of the resurrected userdata was freed";
+    EXPECT_EQ(behl::to_integer(S, -2), 77) << "payload of the resurrected userdata was corrupted";
+    EXPECT_EQ(behl::to_integer(S, -1), 1) << "finalizer must run exactly once";
+}
+
+TEST_P(UserdataTest, CloseRunsPendingFinalizers)
+{
+    behl::State* L = behl::new_state();
+    L->jit_enabled = GetParam();
+    behl::load_stdlib(L);
+    behl::register_function(L, "create_test_userdata", create_test_userdata);
+    behl::register_function(L, "finalizer_counter", finalizer_counter);
+    gc_counter = 0;
+
+    constexpr std::string_view code = R"(
+            let mt = {}
+            mt["__gc"] = finalizer_counter
+            for (let i = 0; i < 3; i = i + 1) {
+                let ud = create_test_userdata()
+                setmetatable(ud, mt)
+            }
+            kept = create_test_userdata()
+            setmetatable(kept, mt)
+        )";
+
+    bool ran = false;
+    try
+    {
+        behl::load_string(L, code);
+        behl::call(L, 0, 0);
+        ran = true;
+    }
+    catch (const std::exception& e)
+    {
+        ADD_FAILURE() << "script failed: " << e.what();
+    }
+
+    behl::close(L);
+
+    ASSERT_TRUE(ran);
+    EXPECT_EQ(gc_counter, 4) << "close() released finalizable userdata without running __gc";
+}
+
+TEST_P(UserdataTest, FinalizersRunInReverseCreationOrder)
+{
+    constexpr std::string_view code = R"(
+            const gc = import("gc")
+            let order = {}
+            let n = 0
+            let mt = {}
+            mt.__gc = function(u) { order[n] = get_userdata_value(u); n = n + 1 }
+
+            function make(id) {
+                let u = create_test_userdata()
+                set_userdata_value(u, id)
+                setmetatable(u, mt)
+            }
+
+            for (let i = 0; i < 5; i = i + 1) { make(i) }
+            gc.collect()
+
+            return n, order[0], order[1], order[2], order[3], order[4]
+        )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_EQ(behl::to_integer(S, -6), 5);
+    EXPECT_EQ(behl::to_integer(S, -5), 4);
+    EXPECT_EQ(behl::to_integer(S, -4), 3);
+    EXPECT_EQ(behl::to_integer(S, -3), 2);
+    EXPECT_EQ(behl::to_integer(S, -2), 1);
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(UserdataTest, OtherFinalizersStillRunAfterOneThrows)
+{
+    constexpr std::string_view code = R"(
+            const gc = import("gc")
+            let ran = 0
+
+            function make(throws) {
+                let u = create_test_userdata()
+                setmetatable(u, {__gc = function(x) {
+                    if (throws) { error("finalizer failed") }
+                    ran = ran + 1
+                }})
+            }
+
+            make(false)
+            make(true)
+            make(false)
+
+            let ok = pcall(gc.collect)
+            gc.collect()
+            gc.collect()
+            return ok, ran
+        )";
+
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    EXPECT_FALSE(behl::to_boolean(S, -2)) << "the throwing finalizer did not surface its error";
+    EXPECT_EQ(behl::to_integer(S, -1), 2) << "a throwing finalizer prevented the other finalizers from running";
+}
+
+TEST_P(UserdataTest, ZeroSizeUserdataSurvivesCollectionWhileReferenced)
+{
+    constexpr uint32_t ZeroUID = behl::make_uid("ZeroSized");
+
+    behl::userdata_new(S, 0, ZeroUID);
+    behl::set_global(S, "zero");
+
+    ASSERT_NO_THROW(behl::load_string(S, R"(
+            const gc = import("gc")
+            for (let i = 0; i < 5000; i = i + 1) { let junk = {pad = i} }
+            gc.collect()
+            gc.collect()
+            return typeof(zero)
+        )"));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "userdata");
+    behl::pop(S, 1);
+
+    behl::get_global(S, "zero");
+    EXPECT_TRUE(behl::is_userdata(S, -1));
+    EXPECT_EQ(behl::userdata_get_uid(S, -1), ZeroUID);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, UserdataTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
