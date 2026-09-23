@@ -904,5 +904,142 @@ TEST_P(RegressionTest, SelfCallLeavesUnpassedParamsNil)
     EXPECT_TRUE(behl::to_boolean(S, -1)) << "unpassed parameters must read nil after a self call";
 }
 
+TEST_P(RegressionTest, JitSelfCallWithoutInliningKeepsLocals)
+{
+    constexpr std::string_view code = R"(
+        function walk(n, acc) {
+            if (n <= 0) { return acc }
+            let before = n * 3
+            let sub = walk(n - 1, 0)
+            if (sub < 0) { return walk(0, -1) }
+            return before + sub
+        }
+        let total = 0
+        for (let i = 0; i < 200; i++) {
+            total = total + walk(50, 0)
+        }
+        return total, walk(1, 0), walk(0, 9)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_EQ(behl::to_integer(S, -3), 200 * 3 * 50 * 51 / 2);
+    ASSERT_EQ(behl::to_integer(S, -2), 3);
+    ASSERT_EQ(behl::to_integer(S, -1), 9);
+}
+
+TEST_P(RegressionTest, JitSelfCallDeepRecursionGrowsStack)
+{
+    constexpr std::string_view code = R"(
+        function walk(n, acc) {
+            if (n <= 0) { return acc }
+            let before = n * 3
+            let sub = walk(n - 1, 0)
+            if (sub < 0) { return walk(0, -1) }
+            return before + sub
+        }
+        function sum(n) {
+            if (n <= 0) { return 0 }
+            return n + sum(n - 1)
+        }
+        return walk(3000, 0), sum(3000)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 3 * 3000 * 3001 / 2);
+    ASSERT_EQ(behl::to_integer(S, -1), 3000 * 3001 / 2);
+}
+
+TEST_P(RegressionTest, JitSelfCallDiscardedResultsBeyondInlineDepth)
+{
+    constexpr std::string_view code = R"(
+        let count = 0
+        function visit(n) {
+            if (n <= 0) { return }
+            count = count + 1
+            visit(n - 1)
+            visit(n - 1)
+        }
+        for (let i = 0; i < 20; i++) {
+            visit(10)
+        }
+        return count
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 20 * 1023);
+}
+
+TEST_P(RegressionTest, JitSelfCallMultipleResultsBeyondInlineDepth)
+{
+    constexpr std::string_view code = R"(
+        function two(n) {
+            if (n <= 0) { return 1, 2 }
+            let a, b = two(n - 1)
+            return a + 1, b + 2
+        }
+        let x = 0
+        let y = 0
+        for (let i = 0; i < 100; i++) {
+            x, y = two(20)
+        }
+        return x, y
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 21);
+    ASSERT_EQ(behl::to_integer(S, -1), 42);
+}
+
+TEST_P(RegressionTest, JitSelfCallInlinedBodyLocalsAcrossCalls)
+{
+    constexpr std::string_view code = R"(
+        function f(n) {
+            if (n < 2) { return n }
+            let a = n * 10
+            let b = f(n - 1)
+            let c = n * 100
+            let d = f(n - 2)
+            return a + b + c + d - n * 110
+        }
+        let total = 0
+        for (let i = 0; i < 50; i++) {
+            total = total + f(18)
+        }
+        return total, f(10)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_EQ(behl::to_integer(S, -2), 50 * 2584);
+    ASSERT_EQ(behl::to_integer(S, -1), 55);
+}
+
+TEST_P(RegressionTest, JitFusedCompareJumpColdPathWithFloats)
+{
+    constexpr std::string_view code = R"(
+        function fib(n) {
+            if (n < 2) { return n }
+            return fib(n - 1) + fib(n - 2)
+        }
+        function classify(x) {
+            if (x >= 10) { return 1 }
+            if (x != 3) { return 2 }
+            return 3
+        }
+        let total = 0
+        for (let i = 0; i < 30; i++) {
+            total = total + fib(12) + classify(i) + classify(i + 0.5)
+        }
+        return total, fib(12.0), fib(7.5), classify(3), classify(3.0), classify(10.0)
+    )";
+    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_EQ(behl::to_integer(S, -6), 30 * 144 + (20 * 1 + 9 * 2 + 1 * 3) + (20 * 1 + 10 * 2));
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -5), 144.0);
+    ASSERT_DOUBLE_EQ(behl::to_number(S, -4), 23.5);
+    ASSERT_EQ(behl::to_integer(S, -3), 3);
+    ASSERT_EQ(behl::to_integer(S, -2), 3);
+    ASSERT_EQ(behl::to_integer(S, -1), 1);
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, RegressionTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

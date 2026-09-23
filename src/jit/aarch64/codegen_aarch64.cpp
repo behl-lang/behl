@@ -476,7 +476,8 @@ namespace behl
         e_.str(kReq, mem(kStateReg, State::stack_size_offset()));
         e_.bind(done);
 
-        base_valid_ = false;
+        emit_add_imm(kFrameBase, a * Value::size());
+        base_valid_ = true;
     }
 
     void CodegenAArch64::emit_tail_frame_fast(const CgOp& op)
@@ -1458,6 +1459,14 @@ namespace behl
                 }
                 break;
 
+            case CgOpKind::kReturnSelfSite:
+                if (cache_enabled_)
+                {
+                    cache_drop_all();
+                }
+                e_.b(label(op.label));
+                break;
+
             case CgOpKind::kReturnDispatch:
                 if (cache_enabled_)
                 {
@@ -1480,7 +1489,14 @@ namespace behl
                     cache_drop_all();
                 }
                 assert(gp_used_ == 0 && fp_used_ == 0 && "frame sync with live variables");
-                emit_base_refresh();
+                if (op.flag)
+                {
+                    emit_add_imm(kFrameBase, op.imm);
+                }
+                else
+                {
+                    emit_base_refresh();
+                }
                 base_valid_ = true;
                 break;
 

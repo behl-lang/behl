@@ -61,6 +61,7 @@ namespace behl
         kFramePushFast,
         kTailFrameFast,
         kReturnFast,
+        kReturnSelfSite,
         kReturnDispatch,
         kHelperCall,
         kSyncFrame,

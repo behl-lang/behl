@@ -75,9 +75,31 @@ namespace behl
         return Cond::e;
     }
 
-    Label CodegenX86::label(uint32_t id) const noexcept
+    Label CodegenX86::label(uint32_t id) noexcept
     {
+        if (!base_valid_)
+        {
+            uint8_t& flow = label_flow_[id];
+            assert((flow & kFlowAssumedValid) == 0 && "stale frame base on a backward edge into a label bound as valid");
+            if ((flow & kFlowAssumedValid) != 0)
+            {
+                failed_ = true;
+            }
+            flow |= kFlowEdgeInvalid;
+        }
         return Label{ id };
+    }
+
+    void CodegenX86::bind_label(uint32_t id)
+    {
+        e_.bind(Label{ id });
+        const bool fallthrough_valid = !reachable_ || base_valid_;
+        base_valid_ = fallthrough_valid && (label_flow_[id] & kFlowEdgeInvalid) == 0;
+        if (base_valid_)
+        {
+            label_flow_[id] |= kFlowAssumedValid;
+        }
+        reachable_ = true;
     }
 
     GpReg CodegenX86::gp(uint32_t var) const
@@ -256,6 +278,7 @@ namespace behl
             e_.pop(kFrameBase);
             e_.pop(kStateReg);
             e_.jmp(kTarget);
+            reachable_ = false;
         }
     }
 
@@ -337,12 +360,12 @@ namespace behl
             e_.add(kStackPtr, 16);
         }
 
-        e_.cmp32(kScratchA, kJitError);
-        e_.jcc(Cond::e, label(op.label));
         if (!op.flag)
         {
             base_valid_ = false;
         }
+        e_.cmp32(kScratchA, kJitError);
+        e_.jcc(Cond::e, label(op.label));
         alloc_result(op.var);
     }
 
@@ -359,6 +382,7 @@ namespace behl
             e_.cmp(kScratchA, mem(kStackPtr, kEntryDepthSlot));
             e_.jcc(Cond::ae, label(op.label));
             e_.jmp(label(op.label2));
+            reachable_ = false;
         }
     }
 
@@ -381,6 +405,42 @@ namespace behl
             constexpr GpReg kTmpB = GpReg::r10;
 
             ensure_base();
+
+            if (op.flag)
+            {
+                const int32_t moved = static_cast<int32_t>(op.var);
+                const int32_t delta_slots = static_cast<int32_t>(op.imm) / static_cast<int32_t>(Value::size());
+                const int32_t window = static_cast<int32_t>(op.var2);
+
+                if (moved == 1)
+                {
+                    e_.mov(kTmpB, mem(kFrameBase, a * Value::size()));
+                    e_.mov(mem(kFrameBase, 0), kTmpB);
+                    e_.mov(kTmpB, mem(kFrameBase, a * Value::size() + 8));
+                    e_.mov(mem(kFrameBase, 8), kTmpB);
+                }
+
+                e_.mov(kDest, kFrameBase);
+                e_.sub(kDest, mem(kStateReg, State::stack_data_offset()));
+                e_.sar(kDest, 4);
+                e_.lea(kTmpA, mem(kDest, window - delta_slots));
+                e_.mov(mem(kStateReg, State::stack_size_offset()), kTmpA);
+
+                e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+                e_.sub(kIdx, 1);
+                e_.mov(mem(kStateReg, State::call_stack_size_offset()), kIdx);
+                e_.mov(mem(kStateReg, State::call_headers_size_offset()), kIdx);
+
+                e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+                e_.lea(kIdx, mem(kIdx, -1));
+                e_.lea(kIdx, mem(kIdx, kIdx, 2));
+                e_.lea(kTmpB, mem(kTmpB, kIdx, 8));
+                e_.lea(kTmpA, mem(kDest, moved));
+                e_.mov32(mem(kTmpB, 0), kTmpA);
+
+                base_valid_ = false;
+                return;
+            }
 
             e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
             e_.cmp(kIdx, 2);
@@ -448,6 +508,84 @@ namespace behl
             e_.mov32(mem(kTmpB, 0), kTmpA);
 
             base_valid_ = false;
+        }
+    }
+
+    void CodegenX86::emit_return_self_site(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            reachable_ = false;
+            return;
+        }
+        else
+        {
+            const int32_t slot = op.slot;
+            const int32_t moved = static_cast<int32_t>(op.var);
+            const int32_t window = static_cast<int32_t>(op.var2);
+            const int32_t a = static_cast<int32_t>(op.raw);
+
+            constexpr GpReg kIdx = GpReg::r0;
+            constexpr GpReg kDest = GpReg::r1;
+            constexpr GpReg kSize = GpReg::r2;
+            constexpr GpReg kTmpA = GpReg::r9;
+            constexpr GpReg kTmpB = GpReg::r10;
+
+            ensure_base();
+            const Label next = label(op.label);
+
+            e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+            e_.cmp(kIdx, 2);
+            e_.jcc(Cond::b, next);
+            e_.lea(kSize, mem(kIdx, -1));
+            e_.cmp(kSize, mem(kStackPtr, kEntryDepthSlot));
+            e_.jcc(Cond::b, next);
+
+            e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+            e_.lea(kTmpB, mem(kIdx, -2));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+            e_.mov(kTmpB, static_cast<uint64_t>(op.imm));
+            e_.cmp(kTmpB, mem(kTmpA, CallFrame::proto_offset()));
+            e_.jcc(Cond::ne, next);
+            e_.mov32(kTmpB, mem(kTmpA, CallFrame::pc_offset()));
+            e_.cmp32(kTmpB, op.pcn);
+            e_.jcc(Cond::ne, next);
+
+            e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kDest, mem(kSize, kSize, 2));
+            e_.lea(kTmpB, mem(kTmpB, kDest, 8));
+            e_.mov32(kDest, mem(kTmpB, 4));
+
+            e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+            e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+            e_.lea(kTmpA, mem(kTmpA, kDest, 8));
+            if (moved == 1)
+            {
+                e_.mov(kTmpB, mem(kFrameBase, slot * Value::size()));
+                e_.mov(mem(kTmpA, 0), kTmpB);
+                e_.mov(kTmpB, mem(kFrameBase, slot * Value::size() + 8));
+                e_.mov(mem(kTmpA, 8), kTmpB);
+            }
+            e_.lea(kFrameBase, mem(kTmpA, -a * Value::size()));
+
+            e_.lea(kTmpA, mem(kDest, window - a));
+            e_.mov(mem(kStateReg, State::stack_size_offset()), kTmpA);
+
+            e_.mov(mem(kStateReg, State::call_stack_size_offset()), kSize);
+            e_.mov(mem(kStateReg, State::call_headers_size_offset()), kSize);
+
+            e_.mov(kTmpB, mem(kStateReg, State::call_headers_data_offset()));
+            e_.lea(kIdx, mem(kSize, -1));
+            e_.lea(kIdx, mem(kIdx, kIdx, 2));
+            e_.lea(kTmpB, mem(kTmpB, kIdx, 8));
+            e_.lea(kTmpA, mem(kDest, moved));
+            e_.mov32(mem(kTmpB, 0), kTmpA);
+
+            base_valid_ = true;
+            e_.jmp(label(op.label2));
+            reachable_ = false;
         }
     }
 
@@ -553,7 +691,8 @@ namespace behl
             e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
             e_.bind(done);
 
-            base_valid_ = false;
+            e_.lea(kFrameBase, mem(kFrameBase, a * Value::size()));
+            base_valid_ = true;
         }
     }
 
@@ -677,7 +816,7 @@ namespace behl
                 e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
                 e_.bind(grow_done);
 
-                base_valid_ = false;
+                base_valid_ = true;
                 return;
             }
 
@@ -727,7 +866,7 @@ namespace behl
             e_.bind(done);
             e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
 
-            base_valid_ = false;
+            base_valid_ = true;
         }
     }
 
@@ -768,6 +907,7 @@ namespace behl
             if (op.flag)
             {
                 e_.jmp(label(static_cast<uint32_t>(op.slot)));
+                reachable_ = false;
                 return;
             }
 
@@ -787,6 +927,7 @@ namespace behl
             e_.cmp32(kScratchA, kJitResultError);
             e_.jcc(Cond::e, label(op.var));
             e_.jmp(label(op.var2));
+            reachable_ = false;
         }
     }
 
@@ -1353,14 +1494,14 @@ namespace behl
                 {
                     e_.align(16);
                 }
-                e_.bind(label(op.label));
-                if (op.flag)
-                {
-                    base_valid_ = false;
-                }
+                bind_label(op.label);
                 break;
 
             case CgOpKind::kJump:
+                if (!base_valid_ && (label_flow_[op.label] & kFlowAssumedValid) != 0)
+                {
+                    ensure_base();
+                }
                 if (cache_enabled_)
                 {
                     cache_flush_dirty();
@@ -1378,6 +1519,7 @@ namespace behl
                     }
                 }
                 e_.jmp(label(op.label));
+                reachable_ = false;
                 break;
 
             case CgOpKind::kGuardTag:
@@ -2133,6 +2275,18 @@ namespace behl
                 }
                 break;
 
+            case CgOpKind::kReturnSelfSite:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    cache_drop_all();
+                }
+                if (!failed_)
+                {
+                    emit_return_self_site(op);
+                }
+                break;
+
             case CgOpKind::kReturnDispatch:
                 if (cache_enabled_)
                 {
@@ -2157,7 +2311,14 @@ namespace behl
                     cache_drop_all();
                 }
                 assert(gp_used_ == 0 && xmm_used_ == 0 && "frame sync with live variables");
-                emit_base_refresh();
+                if (op.flag)
+                {
+                    e_.lea(kFrameBase, mem(kFrameBase, static_cast<int32_t>(op.imm)));
+                }
+                else
+                {
+                    emit_base_refresh();
+                }
                 base_valid_ = true;
                 break;
 
@@ -2168,6 +2329,7 @@ namespace behl
                     cache_drop_all();
                 }
                 emit_epilogue(static_cast<uint32_t>(op.imm));
+                reachable_ = false;
                 break;
         }
 
@@ -2229,6 +2391,8 @@ namespace behl
         }
 
         loop_header_.assign(program.num_labels, false);
+        label_flow_.assign(program.num_labels, 0);
+        reachable_ = true;
         {
             AutoVector<uint32_t> bind_pos(state_);
             bind_pos.assign(program.num_labels, UINT32_MAX);
