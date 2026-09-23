@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bytecode.hpp"
+#include "common/arithmetic.hpp"
 #include "frame.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_table.hpp"
@@ -194,21 +195,14 @@ namespace behl
     BEHL_INLINE
     void handler_getglobal(State* S, CallFrame& frame, Reg a, uint32_t k)
     {
-        const Value& key = get_string_constant(frame.proto, k);
+        const Value key = get_string_constant(frame.proto, k);
 
         const Value& globals = S->globals_table;
         assert(globals.is_table());
 
         auto* table = globals.get_table();
-
-        if (auto it = table->hash.find(key); it != table->hash.end())
-        {
-            get_register(S, frame, a) = it->second;
-        }
-        else
-        {
-            get_register(S, frame, a).set_nil();
-        }
+        const Value result = table_getfield_vm(S, table, key);
+        get_register(S, S->call_stack.back(), a) = result;
     }
 
     BEHL_INLINE
@@ -220,11 +214,7 @@ namespace behl
         assert(globals.is_table());
 
         auto* table = globals.get_table();
-
-        const Value& v = get_register(S, frame, a);
-        gc_barrier(S, table, v);
-        gc_barrier(S, table, key);
-        table->hash.insert_or_assign(S, key, v);
+        table_setfield_vm(S, table, key, get_register(S, frame, a));
     }
 
     // Common implementation for all getfield operations

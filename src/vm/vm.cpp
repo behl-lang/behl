@@ -125,10 +125,10 @@ namespace behl
 
                 case OpCode::kOpGetGlobal:
                     handler_getglobal(S, *frame, instr.a(), instr.const_or_proto_index());
-                    continue;
+                    break;
                 case OpCode::kOpSetGlobal:
                     handler_setglobal(S, *frame, instr.a(), instr.const_or_proto_index());
-                    continue;
+                    break;
 
                 case OpCode::kOpGetUpval:
                     handler_getupval(S, *frame, instr.a(), instr.b());

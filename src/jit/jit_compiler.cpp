@@ -1521,9 +1521,9 @@ namespace behl
                         frame_push_fast(ins, pcn, slow);
                         jump(pc_labels_[0]);
                         bind(slow, true);
-                        const uint32_t r = helper_call(jit_op_call, ins.raw, pcn);
-                        branch_var_eq_u32(r, kJitCallPushed, call_stub_);
+                        helper_call(jit_call_push, ins.raw, pcn);
                         push(CgOpKind::kSyncFrame);
+                        jump(pc_labels_[0]);
                         add_resume_pc(pcn);
                         break;
                     }

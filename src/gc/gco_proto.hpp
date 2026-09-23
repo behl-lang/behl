@@ -67,6 +67,11 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(GCProto, is_vararg));
         }
+
+        static constexpr int32_t num_params_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCProto, num_params));
+        }
     };
 
     static_assert(std::is_standard_layout_v<GCProto>);

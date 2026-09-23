@@ -1,5 +1,6 @@
 #include "jit.hpp"
 
+#include "common/print.hpp"
 #include "gc/gc.hpp"
 #include "gc/gc_object.hpp"
 #include "jit_helpers.hpp"
@@ -7,6 +8,9 @@
 #include "state.hpp"
 #include "vm/vm.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cassert>
 #include <cstring>
 #include <utility>
 
@@ -21,6 +25,62 @@
 
 namespace behl
 {
+#if BEHL_JIT_SUPPORTED
+    struct JitStatsRegistry
+    {
+        std::array<const char*, kJitStatsMaxHelpers> names{};
+        uint32_t count{};
+    };
+
+    static JitStatsRegistry& jit_stats_registry() noexcept
+    {
+        static JitStatsRegistry registry;
+        return registry;
+    }
+
+    uint32_t jit_stats_register_helper(const char* name) noexcept
+    {
+        JitStatsRegistry& registry = jit_stats_registry();
+        assert(registry.count < kJitStatsMaxHelpers && "raise kJitStatsMaxHelpers");
+        const uint32_t index = (registry.count < kJitStatsMaxHelpers) ? registry.count++ : kJitStatsMaxHelpers - 1;
+        registry.names[index] = name;
+        return index;
+    }
+
+    void jit_stats_print(State* S)
+    {
+        const JitStats& stats = S->jit_stats;
+        const JitStatsRegistry& registry = jit_stats_registry();
+
+        println("JIT stats");
+        println("  driver entries           {}", stats.driver_entries);
+        println("  driver result ok         {}", stats.driver_results[kJitResultOk]);
+        println("  driver result error      {}", stats.driver_results[kJitResultError]);
+        println("  driver result tail call  {}", stats.driver_results[kJitResultTailCall]);
+        println("  driver result call       {}", stats.driver_results[kJitResultCall]);
+        println("  driver interpreter runs  {}", stats.driver_interpreter_runs);
+
+        std::array<uint32_t, kJitStatsMaxHelpers> order{};
+        for (uint32_t i = 0; i < registry.count; ++i)
+        {
+            order[i] = i;
+        }
+        std::sort(order.begin(), order.begin() + registry.count,
+            [&](uint32_t lhs, uint32_t rhs) { return stats.helper_calls[lhs] > stats.helper_calls[rhs]; });
+
+        println("  helper calls");
+        for (uint32_t i = 0; i < registry.count; ++i)
+        {
+            const uint32_t index = order[i];
+            if (stats.helper_calls[index] == 0)
+            {
+                break;
+            }
+            println("    {:>14} {}", stats.helper_calls[index], registry.names[index]);
+        }
+    }
+#endif
+
     struct JitChunk
     {
         uint8_t* base;
@@ -235,9 +295,11 @@ namespace behl
     bool jit_drive(State* S, const GCProto* proto, uint32_t entry_depth)
     {
 #if BEHL_JIT_SUPPORTED
+        ++S->jit_stats.driver_entries;
         for (;;)
         {
             const uint32_t result = proto->jit_code(S);
+            ++S->jit_stats.driver_results[result < kJitStatsResultCodes ? result : kJitResultError];
             if (result == kJitResultError)
             {
                 std::rethrow_exception(std::exchange(S->jit_exception, nullptr));
@@ -263,6 +325,7 @@ namespace behl
             }
 
             const auto size = static_cast<uint32_t>(S->call_stack.size());
+            ++S->jit_stats.driver_interpreter_runs;
             run_interpreter(S, jit_return_entry_depth(S, S->call_stack.back()), size - 1);
             if (S->call_stack.size() < entry_depth)
             {

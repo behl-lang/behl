@@ -27,9 +27,19 @@
 
 namespace behl
 {
+#if BEHL_JIT_SUPPORTED
+#    define BEHL_JIT_STAT(NAME) static const uint32_t kJitStat_##NAME = jit_stats_register_helper(#NAME);
+#    define BEHL_JIT_COUNT(NAME) ++S->jit_stats.helper_calls[kJitStat_##NAME];
+#else
+#    define BEHL_JIT_STAT(NAME)
+#    define BEHL_JIT_COUNT(NAME)
+#endif
+
 #define BEHL_JIT_WRAP(NAME, ...)                                                                                               \
+    BEHL_JIT_STAT(NAME)                                                                                                        \
     uint32_t BEHL_CALLCONV NAME(State* S, uint32_t raw, uint32_t pc_next) noexcept                                             \
     {                                                                                                                          \
+        BEHL_JIT_COUNT(NAME)                                                                                                   \
         const Instruction instr{ raw };                                                                                        \
         (void)instr;                                                                                                           \
         try                                                                                                                    \
@@ -192,17 +202,23 @@ namespace behl
         (handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_const_fp>(
             S, frame, instr.b(), instr.small_const_index())))
     BEHL_JIT_WRAP(jit_op_ltimm,
-        (handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLt, false, CmpLtOp, operand_reg, operand_imm>(
+            S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_geimm,
-        (handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLt, true, CmpGeOp, operand_reg, operand_imm>(
+            S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_leimm,
-        (handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLe, false, CmpLeOp, operand_reg, operand_imm>(
+            S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_gtimm,
-        (handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kLe, true, CmpGtOp, operand_reg, operand_imm>(
+            S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_eqimm,
-        (handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kEq, false, CmpEqOp, operand_reg, operand_imm>(
+            S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_neimm,
-        (handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_imm>(S, frame, instr.a(), instr.signed_immediate())))
+        (handler_cmp<MetaMethodType::kEq, false, CmpNeOp, operand_reg, operand_imm>(
+            S, frame, instr.a(), instr.signed_immediate())))
     BEHL_JIT_WRAP(jit_op_test, handler_test(S, frame, instr.a(), instr.b() != 0))
     BEHL_JIT_WRAP(jit_op_testset, handler_testset(S, frame, instr.a(), instr.b(), instr.c() != 0))
     BEHL_JIT_WRAP(jit_op_forprep, handler_forprep(S, frame, instr.a(), instr.signed_offset()))
@@ -243,8 +259,10 @@ namespace behl
         return static_cast<uint32_t>(size - 1);
     }
 
+    BEHL_JIT_STAT(jit_op_return)
     uint32_t BEHL_CALLCONV jit_op_return(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_op_return)
         const Instruction instr{ raw };
         try
         {
@@ -260,8 +278,10 @@ namespace behl
         }
     }
 
+    BEHL_JIT_STAT(jit_op_return0)
     uint32_t BEHL_CALLCONV jit_op_return0(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_op_return0)
         (void)raw;
         try
         {
@@ -277,8 +297,10 @@ namespace behl
         }
     }
 
+    BEHL_JIT_STAT(jit_op_return1)
     uint32_t BEHL_CALLCONV jit_op_return1(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_op_return1)
         const Instruction instr{ raw };
         try
         {
@@ -294,8 +316,10 @@ namespace behl
         }
     }
 
+    BEHL_JIT_STAT(jit_op_retsaved)
     uint32_t BEHL_CALLCONV jit_op_retsaved(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_op_retsaved)
         (void)raw;
         try
         {
@@ -311,16 +335,20 @@ namespace behl
         }
     }
 
+    BEHL_JIT_STAT(jit_op_endunwind)
     uint32_t BEHL_CALLCONV jit_op_endunwind(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_op_endunwind)
         (void)raw;
         (void)pc_next;
         S->jit_exception = std::make_exception_ptr(RuntimeError("defer unwind chain reached from compiled code"));
         return kJitError;
     }
 
+    BEHL_JIT_STAT(jit_call_push)
     uint32_t BEHL_CALLCONV jit_call_push(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_call_push)
         const Instruction instr{ raw };
         try
         {
@@ -336,8 +364,10 @@ namespace behl
         }
     }
 
+    BEHL_JIT_STAT(jit_call_setup)
     uintptr_t BEHL_CALLCONV jit_call_setup(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_call_setup)
         const Instruction instr{ raw };
 
         if (!S->jit_enabled || S->debug.enabled)
@@ -393,8 +423,10 @@ namespace behl
         }
     }
 
+    BEHL_JIT_STAT(jit_op_call)
     uint32_t BEHL_CALLCONV jit_op_call(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_op_call)
         const Instruction instr{ raw };
         try
         {
@@ -438,8 +470,10 @@ namespace behl
         }
     }
 
+    BEHL_JIT_STAT(jit_op_tailcall)
     uint32_t BEHL_CALLCONV jit_op_tailcall(State* S, uint32_t raw, uint32_t pc_next) noexcept
     {
+        BEHL_JIT_COUNT(jit_op_tailcall)
         const Instruction instr{ raw };
         try
         {

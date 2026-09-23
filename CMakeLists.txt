@@ -148,6 +148,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_config.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.cpp

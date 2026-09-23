@@ -2,6 +2,8 @@
 
 #if BEHL_JIT_X86
 
+#    include "gc/gco_closure.hpp"
+#    include "gc/gco_proto.hpp"
 #    include "state.hpp"
 #    include "vm/frame.hpp"
 
@@ -447,8 +449,6 @@ namespace behl
             e_.jcc(Cond::b, slow);
 
             e_.lea(kSize, mem(kIdx, -1));
-            e_.cmp(kSize, mem(kStackPtr, kEntryDepthSlot));
-            e_.jcc(Cond::b, slow);
 
             e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
             e_.lea(kTmpB, mem(kSize, kSize, 2));
@@ -485,6 +485,8 @@ namespace behl
             e_.mov32(kTmpB, mem(kTmpB, GCProto::max_stack_size_offset()));
             e_.mov32(kTmpA, mem(kTmpA, CallFrame::base_offset()));
             e_.add(kTmpB, kTmpA);
+            e_.cmp(kDest, kTmpB);
+            e_.jcc(Cond::ae, slow);
 
             e_.lea(kTmpA, mem(kDest, moved));
 
@@ -870,6 +872,122 @@ namespace behl
         }
     }
 
+    void CodegenX86::emit_call_native_setup(const CgOp& op)
+    {
+        const Instruction ins{ op.raw };
+        const int32_t a = ins.a();
+        const int32_t items = static_cast<int32_t>(ins.b());
+        const int32_t num_args = items - 1;
+        const uint32_t nresults = ins.c();
+
+        constexpr GpReg kIdx = GpReg::r0;
+        constexpr GpReg kReq = GpReg::r1;
+        constexpr GpReg kPos = GpReg::r2;
+        constexpr GpReg kTmpA = GpReg::r9;
+        constexpr GpReg kTmpB = GpReg::r10;
+        constexpr GpReg kProto = GpReg::r11;
+
+        ensure_base();
+        const Label slow = label(op.label);
+
+        e_.mov(kIdx, mem(kStateReg, State::call_stack_size_offset()));
+        e_.cmp(kIdx, static_cast<int32_t>(kJitNestLimit));
+        e_.jcc(Cond::ae, slow);
+        e_.cmp8(mem(kStateReg, State::jit_enabled_offset()), 0);
+        e_.jcc(Cond::e, slow);
+        e_.cmp8(mem(kStateReg, State::debug_enabled_offset()), 0);
+        e_.jcc(Cond::ne, slow);
+        e_.cmp(mem(kStateReg, State::gc_debt_offset()), 0);
+        e_.jcc(Cond::g, slow);
+
+        e_.cmp8(mem(kFrameBase, a * Value::size() + Value::type_offset()), static_cast<uint8_t>(Type::kClosure));
+        e_.jcc(Cond::ne, slow);
+        e_.mov(kTmpA, mem(kFrameBase, a * Value::size() + Value::payload_offset()));
+        e_.mov(kProto, mem(kTmpA, GCClosure::proto_offset()));
+        e_.cmp(mem(kProto, GCProto::jit_code_offset()), 0);
+        e_.jcc(Cond::e, slow);
+        e_.cmp8(mem(kProto, GCProto::is_vararg_offset()), 0);
+        e_.jcc(Cond::ne, slow);
+
+        e_.cmp(kIdx, mem(kStateReg, State::call_stack_capacity_offset()));
+        e_.jcc(Cond::ae, slow);
+        e_.mov(kTmpA, mem(kStateReg, State::call_headers_size_offset()));
+        e_.cmp(kTmpA, mem(kStateReg, State::call_headers_capacity_offset()));
+        e_.jcc(Cond::ae, slow);
+
+        e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+        e_.lea(kTmpA, mem(kTmpA, kIdx, kCallFrameHalfScale));
+        e_.mov32(kPos, mem(kTmpA, kIdx, kCallFrameHalfScale, CallFrame::base_offset() - kCallFrameStride));
+        e_.add(kPos, a);
+
+        Label window_ok = e_.new_label();
+        e_.mov32(kReq, mem(kProto, GCProto::max_stack_size_offset()));
+        e_.cmp(kReq, items);
+        e_.jcc(Cond::ae, window_ok);
+        e_.mov32(kReq, static_cast<uint32_t>(items));
+        e_.bind(window_ok);
+        e_.add(kReq, kPos);
+        e_.cmp(kReq, mem(kStateReg, State::stack_capacity_offset()));
+        e_.jcc(Cond::a, slow);
+
+        Label params_done = e_.new_label();
+        Label params_loop = e_.new_label();
+        e_.mov32(kTmpB, mem(kProto, GCProto::num_params_offset()));
+        e_.sub(kTmpB, num_args);
+        e_.jcc(Cond::le, params_done);
+        e_.lea(kTmpA, mem(kFrameBase, (a + items) * Value::size()));
+        e_.bind(params_loop);
+        e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+        e_.add(kTmpA, Value::size());
+        e_.sub(kTmpB, 1);
+        e_.jcc(Cond::g, params_loop);
+        e_.bind(params_done);
+
+        e_.mov(kTmpA, mem(kStateReg, State::call_stack_data_offset()));
+        e_.lea(kTmpA, mem(kTmpA, kIdx, kCallFrameHalfScale));
+        e_.lea(kTmpA, mem(kTmpA, kIdx, kCallFrameHalfScale));
+        e_.mov32(mem(kTmpA, CallFrame::pc_offset() - kCallFrameStride), static_cast<uint32_t>(op.pcn));
+        e_.mov(mem(kTmpA, CallFrame::proto_offset()), kProto);
+        e_.mov32(mem(kTmpA, CallFrame::pc_offset()), 0);
+        e_.mov32(mem(kTmpA, CallFrame::base_offset()), kPos);
+
+        e_.mov(kTmpA, mem(kStateReg, State::call_headers_data_offset()));
+        e_.lea(kTmpB, mem(kIdx, kIdx, 2));
+        e_.lea(kTmpA, mem(kTmpA, kTmpB, 8));
+        e_.lea(kTmpB, mem(kPos, items));
+        e_.mov32(mem(kTmpA, -24), kTmpB);
+        e_.mov32(mem(kTmpA, 0), kTmpB);
+        e_.mov32(mem(kTmpA, 4), kPos);
+        e_.mov32(mem(kTmpA, 8), 0);
+        e_.mov32(mem(kTmpA, 12), 0);
+        e_.mov32(mem(kTmpA, 16), 0);
+        e_.mov32(mem(kTmpA, 20), nresults);
+
+        e_.lea(kTmpB, mem(kIdx, 1));
+        e_.mov(mem(kStateReg, State::call_stack_size_offset()), kTmpB);
+        e_.mov(mem(kStateReg, State::call_headers_size_offset()), kTmpB);
+
+        Label grow_done = e_.new_label();
+        Label grow_fill = e_.new_label();
+        e_.mov(kIdx, mem(kStateReg, State::stack_size_offset()));
+        e_.cmp(kIdx, kReq);
+        e_.jcc(Cond::ae, grow_done);
+        e_.mov(kTmpA, mem(kStateReg, State::stack_data_offset()));
+        e_.lea(kTmpA, mem(kTmpA, kIdx, 8));
+        e_.lea(kTmpA, mem(kTmpA, kIdx, 8));
+        e_.bind(grow_fill);
+        e_.mov32(mem(kTmpA, Value::type_offset()), 0);
+        e_.add(kTmpA, Value::size());
+        e_.add(kIdx, 1);
+        e_.cmp(kIdx, kReq);
+        e_.jcc(Cond::b, grow_fill);
+        e_.mov(mem(kStateReg, State::stack_size_offset()), kReq);
+        e_.bind(grow_done);
+
+        e_.mov(GpReg::r10, mem(kProto, GCProto::jit_code_offset()));
+        base_valid_ = false;
+    }
+
     void CodegenX86::emit_call_fast(const CgOp& op)
     {
         if constexpr (!kMode64)
@@ -881,37 +999,43 @@ namespace behl
         {
             assert(gp_used_ == 0 && xmm_used_ == 0 && "call fast with live variables");
 
-            if constexpr (kWinABI)
+            if (!op.flag)
             {
-                e_.mov(kScratchB, kStateReg);
-                e_.mov32(kScratchC, op.raw);
-                e_.mov32(GpReg::r8, op.pcn);
+                emit_call_native_setup(op);
             }
             else
             {
-                e_.mov(GpReg::r7, kStateReg);
-                e_.mov32(GpReg::r6, op.raw);
-                e_.mov32(kScratchC, op.pcn);
+                if constexpr (kWinABI)
+                {
+                    e_.mov(kScratchB, kStateReg);
+                    e_.mov32(kScratchC, op.raw);
+                    e_.mov32(GpReg::r8, op.pcn);
+                }
+                else
+                {
+                    e_.mov(GpReg::r7, kStateReg);
+                    e_.mov32(GpReg::r6, op.raw);
+                    e_.mov32(kScratchC, op.pcn);
+                }
+                e_.call(reinterpret_cast<uintptr_t>(&jit_call_setup));
+
+                base_valid_ = false;
+
+                e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupDecline));
+                e_.jcc(Cond::e, label(op.label));
+                e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupError));
+                e_.jcc(Cond::e, label(op.var));
+                e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupPushedOther));
+                e_.jcc(Cond::e, label(op.var2));
+
+                if (op.flag)
+                {
+                    e_.jmp(label(static_cast<uint32_t>(op.slot)));
+                    reachable_ = false;
+                    return;
+                }
+                e_.mov(GpReg::r10, kScratchA);
             }
-            e_.call(reinterpret_cast<uintptr_t>(&jit_call_setup));
-
-            base_valid_ = false;
-
-            e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupDecline));
-            e_.jcc(Cond::e, label(op.label));
-            e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupError));
-            e_.jcc(Cond::e, label(op.var));
-            e_.cmp(kScratchA, static_cast<int32_t>(kJitSetupPushedOther));
-            e_.jcc(Cond::e, label(op.var2));
-
-            if (op.flag)
-            {
-                e_.jmp(label(static_cast<uint32_t>(op.slot)));
-                reachable_ = false;
-                return;
-            }
-
-            e_.mov(GpReg::r10, kScratchA);
             if constexpr (kWinABI)
             {
                 e_.mov(kScratchB, kStateReg);

@@ -5,6 +5,7 @@
 #include "gc/gco_table.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
+#include "vm/vm_table.hpp"
 
 #include <cassert>
 #include <variant>
@@ -100,7 +101,7 @@ namespace behl
         auto* key_obj = gc_new_string(S, name);
 
         Value key(key_obj);
-        table->hash.insert_or_assign(S, key, value);
+        table_setfield_vm(S, table, key, value);
 
         S->stack.pop_back();
     }

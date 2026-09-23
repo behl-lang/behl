@@ -82,6 +82,7 @@ namespace behl
         void emit_epilogue(uint32_t result_code);
         void emit_helper_call(const CgOp& op);
         void emit_tail_jump_native(const CgOp& op);
+        void emit_call_native_setup(const CgOp& op);
         void emit_call_fast(const CgOp& op);
         void emit_frame_push_fast(const CgOp& op);
         void emit_tail_frame_fast(const CgOp& op);

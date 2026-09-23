@@ -4,10 +4,9 @@
 
 #if BEHL_JIT_AARCH64
 
+#    include "common/vector.hpp"
 #    include "jit/aarch64/emitter_aarch64.hpp"
 #    include "jit/jit_compiler.hpp"
-
-#    include "common/vector.hpp"
 
 #    include <cstdint>
 #    include <utility>
@@ -25,6 +24,7 @@ namespace behl
             , slots_(state)
             , label_states_(state)
             , guard_slots_(state)
+            , label_flow_(state)
             , state_(state)
         {
         }
@@ -62,8 +62,11 @@ namespace behl
         void emit_tail_jump_native(const CgOp& op);
         void emit_return_dispatch(const CgOp& op);
         void emit_return_fast(const CgOp& op);
+        void emit_return_self_site(const CgOp& op);
         void emit_frame_push_fast(const CgOp& op);
         void emit_tail_frame_fast(const CgOp& op);
+        void emit_load_state_byte(A64Reg dst, int32_t offset);
+        void emit_call_native_setup(const CgOp& op);
         void emit_call_fast(const CgOp& op);
         void emit_cmp_imm(A64Reg reg, int64_t imm);
         void emit_add_imm(A64Reg reg, int64_t imm);
@@ -86,7 +89,11 @@ namespace behl
 
         A64Reg gp(uint32_t var) const;
         A64Vec fp(uint32_t var) const;
-        A64Label label(uint32_t id) const noexcept;
+        A64Label label(uint32_t id) noexcept;
+        void bind_label(uint32_t id);
+
+        static constexpr uint8_t kFlowEdgeInvalid = 1;
+        static constexpr uint8_t kFlowAssumedValid = 2;
 
         A64Emitter e_;
         AutoVector<uint32_t> last_pos_;
@@ -95,6 +102,7 @@ namespace behl
         AutoVector<SlotState> slots_;
         AutoVector<LabelState> label_states_;
         AutoVector<AutoVector<int32_t>> guard_slots_;
+        AutoVector<uint8_t> label_flow_;
         State* state_{};
         const CgProgram* program_{};
         uint32_t cur_index_{};
@@ -102,6 +110,7 @@ namespace behl
         uint32_t gp_used_{};
         uint32_t fp_used_{};
         bool base_valid_{};
+        bool reachable_{};
         bool failed_{};
     };
 

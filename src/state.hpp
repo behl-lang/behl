@@ -9,6 +9,7 @@
 #include "gc/gc_state.hpp"
 #include "gc/gc_types.hpp"
 #include "gc/gco_string.hpp"
+#include "jit/jit_config.hpp"
 #include "platform/platform.hpp"
 #include "state_debug.hpp"
 #include "vm/frame.hpp"
@@ -56,11 +57,14 @@ namespace behl
 
         PrintHandler print_handler{};
 
+#if BEHL_JIT_SUPPORTED
         JitArena* jit_arena{};
         std::exception_ptr jit_exception{};
         uint32_t jit_depth{};
         bool jit_enabled{ true };
         bool jit_pending_clear{};
+        JitStats jit_stats{};
+#endif
 
         std::chrono::steady_clock::time_point start_time{};
 
@@ -112,6 +116,16 @@ namespace behl
         static constexpr int32_t gc_debt_offset()
         {
             return static_cast<int32_t>(offsetof(State, gc) + offsetof(GCState, gc_debt));
+        }
+
+        static constexpr int32_t jit_enabled_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, jit_enabled));
+        }
+
+        static constexpr int32_t debug_enabled_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, debug) + offsetof(DebugState, enabled));
         }
     };
 

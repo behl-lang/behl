@@ -37,6 +37,7 @@ struct Options
     std::string script;
     std::vector<std::string> script_args;
     bool disable_jit = false;
+    bool jit_stats = false;
 };
 
 template<typename... TArgs>
@@ -106,6 +107,10 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         else if (arg == "--nojit")
         {
             opts.disable_jit = true;
+        }
+        else if (arg == "--jit-stats")
+        {
+            opts.jit_stats = true;
         }
         else if (arg.starts_with('-'))
         {
@@ -365,6 +370,13 @@ int main(int argc, char* argv[])
     {
         fatal_error("{}", ex.what());
     }
+
+#if BEHL_JIT_SUPPORTED
+    if (opts.jit_stats)
+    {
+        behl::jit_stats_print(S);
+    }
+#endif
 
     behl::close(S);
     return exit_code;
