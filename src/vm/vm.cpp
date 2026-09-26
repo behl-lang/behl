@@ -20,6 +20,7 @@
 #include "vm_controlflow.hpp"
 #include "vm_debug.hpp"
 #include "vm_detail.hpp"
+#include "vm_fields.hpp"
 #include "vm_handlers.hpp"
 #include "vm_load.hpp"
 #include "vm_metatable.hpp"

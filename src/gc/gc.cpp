@@ -5,6 +5,7 @@
 #include "config_internal.hpp"
 #include "gc_object.hpp"
 #include "gc_types_fmt.hpp"
+#include "gco_buffer.hpp"
 #include "gco_closure.hpp"
 #include "gco_proto.hpp"
 #include "gco_string.hpp"
@@ -18,6 +19,7 @@
 #include "vm/vm_metatable.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 
 namespace behl
@@ -60,6 +62,12 @@ namespace behl
                 {
                     auto* userdata = static_cast<UserdataData*>(obj);
                     type_info = behl::format<"Userdata[{}b]">(userdata->size);
+                    break;
+                }
+                case GCType::kBuffer:
+                {
+                    auto* buffer = static_cast<GCBuffer*>(obj);
+                    type_info = behl::format<"Buffer[{}b]">(buffer->len);
                     break;
                 }
                 default:
@@ -355,6 +363,87 @@ namespace behl
         return new_obj;
     }
 
+    GCBuffer* gc_new_buffer(State* S, SysInt len)
+    {
+        auto* new_obj = gc_allocate_object<GCBuffer>(S);
+        new_obj->owner = new_obj;
+        new_obj->data = nullptr;
+        new_obj->offset = 0;
+        new_obj->len = 0;
+
+        if (len > 0)
+        {
+            auto* data = static_cast<std::byte*>(mem_alloc(S, len));
+            std::memset(data, 0, len);
+            new_obj->data = data;
+            new_obj->len = len;
+        }
+
+        gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
+
+        return new_obj;
+    }
+
+    GCBuffer* gc_new_buffer_slice(State* S, GCBuffer* source, SysInt offset, SysInt len)
+    {
+        assert(offset <= source->size() && len <= source->size() - offset);
+
+        GCBuffer* root = source->owner;
+        const SysInt root_offset = source->offset + offset;
+
+        auto* new_obj = gc_allocate_object<GCBuffer>(S);
+        new_obj->owner = root;
+        new_obj->data = nullptr;
+        new_obj->offset = root_offset;
+        new_obj->len = len;
+
+        if (root->header.color == GCColor::kWhite)
+        {
+            gc_barrier_slow(S, root);
+        }
+
+        gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
+
+        return new_obj;
+    }
+
+    void gc_buffer_resize(State* S, GCBuffer* root, SysInt new_len)
+    {
+        assert(root->is_root());
+
+        const SysInt old_len = root->len;
+        if (new_len == old_len)
+        {
+            return;
+        }
+
+        if (new_len == 0)
+        {
+            mem_free(S, root->data, old_len);
+            root->data = nullptr;
+            root->len = 0;
+            return;
+        }
+
+        std::byte* data = nullptr;
+        if (root->data == nullptr)
+        {
+            data = static_cast<std::byte*>(mem_alloc(S, new_len));
+            std::memset(data, 0, new_len);
+        }
+        else
+        {
+            data = static_cast<std::byte*>(mem_realloc(S, root->data, old_len, new_len));
+            if (new_len > old_len)
+            {
+                std::memset(data + old_len, 0, new_len - old_len);
+            }
+        }
+
+        root->data = data;
+        root->len = new_len;
+    }
+
     GCClosure* gc_new_closure(State* S, GCProto* proto_owner)
     {
         GCClosure* new_obj = nullptr;
@@ -525,6 +614,16 @@ namespace behl
         mem_destroy(S, userdata);
     }
 
+    static void destroy_buffer(State* S, GCBuffer* buffer)
+    {
+        if (buffer->is_root() && buffer->data != nullptr)
+        {
+            mem_free(S, buffer->data, buffer->len);
+        }
+
+        mem_destroy(S, buffer);
+    }
+
     static void destroy_object(State* S, GCObject* obj, bool poolable)
     {
         gc_log("Destroying: {}", gc_object_to_string(obj));
@@ -550,6 +649,9 @@ namespace behl
                 break;
             case GCType::kUserdata:
                 destroy_userdata(S, static_cast<UserdataData*>(obj));
+                break;
+            case GCType::kBuffer:
+                destroy_buffer(S, static_cast<GCBuffer*>(obj));
                 break;
             case GCType::kDead:
                 break;
@@ -688,6 +790,14 @@ namespace behl
         }
     }
 
+    static void blacken_buffer(State* S, GCBuffer* buffer)
+    {
+        if (!buffer->is_root())
+        {
+            mark_gray(S, buffer->owner);
+        }
+    }
+
     static void blacken_object(State* S, GCObject* obj)
     {
         gc_log("blacken_object: {}", gc_object_to_string(obj));
@@ -706,6 +816,9 @@ namespace behl
                 break;
             case GCType::kUserdata:
                 blacken_userdata(S, static_cast<UserdataData*>(obj));
+                break;
+            case GCType::kBuffer:
+                blacken_buffer(S, static_cast<GCBuffer*>(obj));
                 break;
             case GCType::kString:
                 // Strings have no references

@@ -4,6 +4,7 @@
 #include "gc_object.hpp"
 #include "gc_types.hpp"
 
+#include <behl/config.hpp>
 #include <behl/export.hpp>
 #include <memory>
 #include <span>
@@ -17,6 +18,7 @@ namespace behl
     struct GCString;
     struct GCTable;
     struct UserdataData;
+    struct GCBuffer;
     struct GCClosure;
     struct GCProto;
     struct Proto;
@@ -48,6 +50,12 @@ namespace behl
     }
 
     UserdataData* gc_new_userdata(State* S, size_t size);
+
+    GCBuffer* gc_new_buffer(State* S, SysInt len);
+
+    GCBuffer* gc_new_buffer_slice(State* S, GCBuffer* source, SysInt offset, SysInt len);
+
+    void gc_buffer_resize(State* S, GCBuffer* root, SysInt new_len);
 
     GCClosure* gc_new_closure(State* S, GCProto* proto_owner);
 

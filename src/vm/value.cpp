@@ -124,6 +124,7 @@ namespace behl
             case Type::kClosure:
             case Type::kTable:
             case Type::kUserdata:
+            case Type::kBuffer:
             case Type::kCFunction:
             {
                 return std::bit_cast<uintptr_t>(gc_object_);

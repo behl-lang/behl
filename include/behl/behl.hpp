@@ -3,6 +3,7 @@
 #include <behl/config.hpp>
 #include <behl/export.hpp>
 #include <behl/types.hpp>
+#include <cstddef>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -131,6 +132,9 @@ namespace behl
     // Throws a type error if not userdata or if the uid doesn't match.
     BEHL_API void* check_userdata(State* S, int32_t idx, uint32_t uid);
 
+    // Checks if the value is a buffer and returns its bytes, raises a type error if not.
+    BEHL_API std::span<std::byte> check_buffer(State* S, int32_t idx);
+
     // Type operations
     ///////////////////////////////////////////////////////////////////////////
 
@@ -163,6 +167,22 @@ namespace behl
 
     // Returns the UID of the userdata at the given index, or 0 if not userdata.
     BEHL_API uint32_t userdata_get_uid(State* S, int32_t idx);
+
+    // Buffer operations
+    ///////////////////////////////////////////////////////////////////////////
+
+    // Pushes a new zero-filled buffer of len bytes onto the stack and returns its bytes.
+    BEHL_API std::span<std::byte> buffer_new(State* S, SysInt len);
+
+    // Returns the bytes of the buffer at idx, if the value is not a buffer returns an empty span.
+    BEHL_API std::span<std::byte> buffer_get(State* S, int32_t idx);
+
+    // Returns the length in bytes of the buffer at idx, if the value is not a buffer returns 0.
+    BEHL_API SysInt buffer_len(State* S, int32_t idx);
+
+    // Resizes the buffer at idx to new_len bytes, zero-filling new space, and returns its new bytes.
+    // Spans obtained earlier are invalidated. The value must be a buffer that is not a slice.
+    BEHL_API std::span<std::byte> buffer_resize(State* S, int32_t idx, SysInt new_len);
 
     // GC pinning operations
     //////////////////////////////////////////////////////////////////////////

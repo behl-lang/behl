@@ -94,6 +94,12 @@ namespace behl
         {
             return get_header().type == GCType::kUserdata;
         }
+
+        BEHL_FORCEINLINE
+        bool is_buffer() const
+        {
+            return get_header().type == GCType::kBuffer;
+        }
     };
 
 } // namespace behl

@@ -24,6 +24,7 @@ namespace behl
     struct GCClosure;
     struct GCProto;
     struct UserdataData;
+    struct GCBuffer;
 
     constexpr uint16_t kTypePairNilNil = (static_cast<uint16_t>(Type::kNil) << 8) | static_cast<uint16_t>(Type::kNil);
     constexpr uint16_t kTypePairIntInt = (static_cast<uint16_t>(Type::kInteger) << 8) | static_cast<uint16_t>(Type::kInteger);
@@ -102,6 +103,11 @@ namespace behl
         constexpr explicit Value(UserdataData* val) noexcept
             : type_{ Type::kUserdata }
             , userdata_{ val }
+        {
+        }
+        constexpr explicit Value(GCBuffer* val) noexcept
+            : type_{ Type::kBuffer }
+            , buffer_{ val }
         {
         }
 
@@ -225,6 +231,11 @@ namespace behl
             {
                 type_ = Type::kUserdata;
                 userdata_ = std::forward<U>(new_value);
+            }
+            else if constexpr (std::is_same_v<StoredType, GCBuffer*>)
+            {
+                type_ = Type::kBuffer;
+                buffer_ = std::forward<U>(new_value);
             }
         }
 
@@ -410,6 +421,17 @@ namespace behl
         }
 
         BEHL_FORCEINLINE
+        constexpr bool is_buffer() const noexcept
+        {
+            return type_ == Type::kBuffer;
+        }
+        BEHL_FORCEINLINE
+        constexpr GCBuffer* get_buffer() const noexcept
+        {
+            return buffer_;
+        }
+
+        BEHL_FORCEINLINE
         constexpr bool is_truthy() const noexcept
         {
             if (is_nil())
@@ -480,6 +502,8 @@ namespace behl
                     return "function";
                 case Type::kUserdata:
                     return "userdata";
+                case Type::kBuffer:
+                    return "buffer";
                 case Type::kNullOpt:
                     return "nullopt";
             }
@@ -516,6 +540,7 @@ namespace behl
             alignas(8) GCTable* table_;
             alignas(8) GCClosure* closure_;
             alignas(8) UserdataData* userdata_;
+            alignas(8) GCBuffer* buffer_;
             alignas(8) CFunction cfunction_;
         };
     };

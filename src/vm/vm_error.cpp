@@ -41,6 +41,8 @@ namespace behl
                 return "(error object is a table value)";
             case Type::kUserdata:
                 return "(error object is a userdata value)";
+            case Type::kBuffer:
+                return "(error object is a buffer value)";
             case Type::kClosure:
             case Type::kCFunction:
                 return "(error object is a function value)";
@@ -131,6 +133,9 @@ namespace behl
                 break;
             case Type::kUserdata:
                 msg = "attempt to call userdata value";
+                break;
+            case Type::kBuffer:
+                msg = "attempt to call buffer value";
                 break;
             default:
                 msg = "attempt to call unknown value";

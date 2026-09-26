@@ -16,6 +16,7 @@
 #include "vm/vm_bitwise.hpp"
 #include "vm/vm_controlflow.hpp"
 #include "vm/vm_detail.hpp"
+#include "vm/vm_fields.hpp"
 #include "vm/vm_handlers.hpp"
 #include "vm/vm_load.hpp"
 #include "vm/vm_metatable.hpp"

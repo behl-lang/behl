@@ -85,6 +85,7 @@ if(BEHL_BUILD_TESTS OR BEHL_BUILD_BENCHMARKS)
 endif()
 
 set(BEHL_PRIVATE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_call.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_internal.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_debug.cpp
@@ -207,6 +208,8 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_metatable.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_operands.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_table.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_buffer.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_fields.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_upvalues.hpp
 )
 
@@ -293,6 +296,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/api_tests.cpp
         src/tests/api_stack_tests.cpp
         src/tests/bitwise_tests.cpp
+        src/tests/buffer_tests.cpp
         src/tests/callstack_tests.cpp
         src/tests/charconv_tests.cpp
         src/tests/cfunction_tests.cpp

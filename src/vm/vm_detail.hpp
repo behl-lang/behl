@@ -169,6 +169,8 @@ namespace behl
                 return vm_makestring(S, behl::format<"function:{:p}">(static_cast<const void*>(val.get_closure())));
             case Type::kCFunction:
                 return vm_makestring(S, behl::format<"cfunction:{:p}">(reinterpret_cast<const void*>(val.get_cfunction())));
+            case Type::kBuffer:
+                return vm_makestring(S, behl::format<"buffer:{:p}">(static_cast<const void*>(val.get_buffer())));
             default:
                 break;
         }

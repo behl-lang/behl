@@ -28,6 +28,7 @@ namespace behl
         kClosure,
         kProto,
         kUserdata,
+        kBuffer,
     };
 
 } // namespace behl

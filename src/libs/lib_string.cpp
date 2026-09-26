@@ -296,6 +296,7 @@ namespace behl
                     args.emplace_back(to_string(S, stack_idx));
                     break;
                 case Type::kUserdata:
+                case Type::kBuffer:
                 case Type::kTable:
                 case Type::kClosure:
                 case Type::kCFunction:

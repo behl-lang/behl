@@ -14,6 +14,7 @@
 #include "vm_controlflow.hpp"
 #include "vm_detail.hpp"
 #include "vm_error.hpp"
+#include "vm_fields.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
 #include "vm_table.hpp"
@@ -218,6 +219,10 @@ namespace behl
         {
             auto* str_data = val.get_string();
             get_register(S, frame, a).emplace<Integer>(static_cast<Integer>(str_data->size()));
+        }
+        else if (val.is_buffer())
+        {
+            get_register(S, frame, a).emplace<Integer>(static_cast<Integer>(val.get_buffer()->size()));
         }
         else
         {

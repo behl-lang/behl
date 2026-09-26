@@ -30,6 +30,7 @@ namespace behl
         kString = kGCTypeBit | 5,
         kTable = kGCTypeBit | kTableLikeTypeBit | 6,
         kUserdata = kGCTypeBit | kTableLikeTypeBit | 9,
+        kBuffer = kGCTypeBit | 10,
         kClosure = kGCTypeBit | kCallableTypeBit | 7,
         kCFunction = kCallableTypeBit | 8,
 
