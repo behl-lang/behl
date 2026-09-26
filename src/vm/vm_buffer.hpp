@@ -34,7 +34,8 @@ namespace behl
     {
         if (!key.is_numeric())
         {
-            raise_type_error(S, get_current_location(frame), "attempt to index a buffer with a '{}' value", key.get_type_string());
+            raise_type_error(
+                S, get_current_location(frame), "attempt to index a buffer with a '{}' value", key.get_type_string());
         }
 
         Integer index = 0;
@@ -64,7 +65,8 @@ namespace behl
     {
         if (!val.is_numeric())
         {
-            raise_type_error(S, get_current_location(frame), "attempt to store a '{}' value in a buffer", val.get_type_string());
+            raise_type_error(
+                S, get_current_location(frame), "attempt to store a '{}' value in a buffer", val.get_type_string());
         }
 
         Integer byte_value = 0;

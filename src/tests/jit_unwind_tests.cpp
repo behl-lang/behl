@@ -1,6 +1,7 @@
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string>
 
 class JitUnwindTest : public ::testing::Test

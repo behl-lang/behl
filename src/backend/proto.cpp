@@ -195,7 +195,7 @@ namespace behl
 
         println("{}Proto: {} params, {}, max_stack_size: {}, source: {}", ind, proto.num_params,
             (proto.is_vararg ? "vararg" : "fixed"), proto.max_stack_size,
-            proto.source_path ? proto.source_path->view() : std::string_view{"<unknown>"});
+            proto.source_path ? proto.source_path->view() : std::string_view{ "<unknown>" });
 
         const auto print_constants = [&](const std::span<const Value> constants) {
             for (size_t i = 0; i < constants.size(); ++i)

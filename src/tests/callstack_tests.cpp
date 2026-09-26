@@ -1,8 +1,8 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string>
 
 class CallStackTest : public ::testing::TestWithParam<bool>

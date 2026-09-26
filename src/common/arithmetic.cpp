@@ -253,8 +253,7 @@ namespace behl::arithmetic
             const bool negative_zero = std::signbit(base) && is_odd_integer(exp);
             if (exp < 0.0)
             {
-                return negative_zero ? -std::numeric_limits<FP>::infinity()
-                                     : std::numeric_limits<FP>::infinity();
+                return negative_zero ? -std::numeric_limits<FP>::infinity() : std::numeric_limits<FP>::infinity();
             }
             return negative_zero ? -0.0 : 0.0;
         }

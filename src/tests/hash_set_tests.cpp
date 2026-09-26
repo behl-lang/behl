@@ -1,9 +1,8 @@
 #include "common/hash_set.hpp"
 
+#include <algorithm>
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-
-#include <algorithm>
 #include <string>
 #include <vector>
 

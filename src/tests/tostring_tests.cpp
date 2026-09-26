@@ -1,8 +1,8 @@
 #include "behl/behl.hpp"
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string>
 
 class ToStringTest : public ::testing::TestWithParam<bool>

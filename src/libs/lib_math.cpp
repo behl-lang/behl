@@ -1,6 +1,6 @@
 #include "behl.hpp"
-#include "state.hpp"
 #include "common/arithmetic.hpp"
+#include "state.hpp"
 
 #include <cmath>
 #include <limits>

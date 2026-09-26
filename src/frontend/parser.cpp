@@ -5,8 +5,8 @@
 #include "common/charconv.hpp"
 #include "frontend/lexer.hpp"
 #include "gc/gc.hpp"
-
 #include "vm/vm_error.hpp"
+
 #include <bit>
 #include <cstdint>
 #include <stdexcept>

@@ -1,8 +1,8 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string>
 
 class ErrorTest : public ::testing::TestWithParam<bool>
@@ -415,14 +415,16 @@ TEST_P(ErrorTest, IndexNonTableWriteMessageNamesTheProblemAndLocation)
 TEST_P(ErrorTest, ArithmeticOnNilMessageNamesTheProblemAndLocation)
 {
     expect_runtime_error_text(S, "return a + b", "nil, 1", "attempt to perform arithmetic");
-    const std::string what = run_and_capture_error(S, "let pad = 0\nlet f = function(a, b) { return a + b }\nreturn f(nil, 1)\n");
+    const std::string what = run_and_capture_error(
+        S, "let pad = 0\nlet f = function(a, b) { return a + b }\nreturn f(nil, 1)\n");
     EXPECT_NE(what.find("nil"), std::string::npos) << what;
 }
 
 TEST_P(ErrorTest, ArithmeticOnTableMessageNamesTheProblemAndLocation)
 {
     expect_runtime_error_text(S, "return a * b", "{}, 2", "attempt to perform arithmetic");
-    const std::string what = run_and_capture_error(S, "let pad = 0\nlet f = function(a, b) { return a * b }\nreturn f({}, 2)\n");
+    const std::string what = run_and_capture_error(
+        S, "let pad = 0\nlet f = function(a, b) { return a * b }\nreturn f({}, 2)\n");
     EXPECT_NE(what.find("table"), std::string::npos) << what;
 }
 
@@ -438,7 +440,8 @@ TEST_P(ErrorTest, ConcatInvalidMessageNamesTheProblemAndLocation)
 
 TEST_P(ErrorTest, RuntimeErrorCaughtByPcallCarriesLocation)
 {
-    constexpr std::string_view code = "let pad = 0\nlet f = function(a) { return a.field }\nlet ok, err = pcall(f, 5)\nreturn ok, err\n";
+    constexpr std::string_view code = "let pad = 0\nlet f = function(a) { return a.field }\nlet ok, err = pcall(f, 5)\nreturn "
+                                      "ok, err\n";
     ASSERT_TRUE(behl_test::load_ok(S, code, false));
     ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_FALSE(behl::to_boolean(S, -2));

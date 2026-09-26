@@ -1,13 +1,13 @@
 #include "gc/gc.hpp"
 #include "gc/gco_buffer.hpp"
 #include "state.hpp"
+#include "test_helpers.hpp"
 #include "vm/value.hpp"
 
-#include <behl/behl.hpp>
-#include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <algorithm>
+#include <behl/behl.hpp>
 #include <cstddef>
+#include <gtest/gtest.h>
 #include <string>
 #include <string_view>
 

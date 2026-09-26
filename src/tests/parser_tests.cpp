@@ -2,7 +2,6 @@
 #include "behl/behl.hpp"
 #include "frontend/lexer.hpp"
 #include "frontend/parser.hpp"
-
 #include "vm/vm_error.hpp"
 
 using namespace behl;

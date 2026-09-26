@@ -4,10 +4,9 @@
 
 #if BEHL_JIT_X86
 
+#    include "common/vector.hpp"
 #    include "jit/jit_compiler.hpp"
 #    include "jit/x86/emitter_x86.hpp"
-
-#    include "common/vector.hpp"
 
 #    include <cstdint>
 #    include <utility>

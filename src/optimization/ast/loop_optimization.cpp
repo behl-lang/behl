@@ -61,8 +61,7 @@ namespace behl
             for (const AstNode* n = table_ctor->first_field; n; n = n->next_child)
             {
                 auto* field = static_cast<const TableField*>(n);
-                if ((field->key && expr_writes_variable(field->key, var_name))
-                    || expr_writes_variable(field->value, var_name))
+                if ((field->key && expr_writes_variable(field->key, var_name)) || expr_writes_variable(field->value, var_name))
                 {
                     return true;
                 }
@@ -204,8 +203,7 @@ namespace behl
             {
                 return true;
             }
-            for (const ElseIf* elseif = if_stat->first_elseif; elseif;
-                elseif = static_cast<const ElseIf*>(elseif->next_child))
+            for (const ElseIf* elseif = if_stat->first_elseif; elseif; elseif = static_cast<const ElseIf*>(elseif->next_child))
             {
                 if ((elseif->cond && expr_writes_variable(elseif->cond, var_name))
                     || block_writes_variable(elseif->block, var_name, direct))

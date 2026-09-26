@@ -292,8 +292,7 @@ TEST(PowAccuracy, SpecialCasesMatchStdPow)
                 continue;
             }
 
-            EXPECT_EQ(ulp_distance(mine, theirs), 0)
-                << "pow(" << b << ", " << e << ") mine=" << mine << " std=" << theirs;
+            EXPECT_EQ(ulp_distance(mine, theirs), 0) << "pow(" << b << ", " << e << ") mine=" << mine << " std=" << theirs;
             if (mine == 0.0 && theirs == 0.0)
             {
                 EXPECT_EQ(std::signbit(mine), std::signbit(theirs)) << "sign of zero for pow(" << b << ", " << e << ")";

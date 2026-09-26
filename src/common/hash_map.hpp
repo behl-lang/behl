@@ -283,8 +283,8 @@ namespace behl
                     return iterator(ctrl_ + (existing - slots_), ctrl_ + capacity_, existing);
                 }
 
-                return rehash_and_insert(state, capacity_ == 0 ? kMinCapacity : capacity_ * 2,
-                    std::forward<KeyType>(key), std::forward<ValueType>(value));
+                return rehash_and_insert(state, capacity_ == 0 ? kMinCapacity : capacity_ * 2, std::forward<KeyType>(key),
+                    std::forward<ValueType>(value));
             }
 
             const auto hash = hasher_(key);
@@ -334,8 +334,7 @@ namespace behl
 
             // Table is full - shouldn't happen with load factor management
             // Force rehash and retry
-            return rehash_and_insert(
-                state, capacity_ * 2, std::forward<KeyType>(key), std::forward<ValueType>(value));
+            return rehash_and_insert(state, capacity_ * 2, std::forward<KeyType>(key), std::forward<ValueType>(value));
         }
 
         // Insert a new key-value pair (does not update if key exists)

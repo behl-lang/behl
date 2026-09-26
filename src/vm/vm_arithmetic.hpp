@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bytecode.hpp"
+#include "common/arithmetic.hpp"
 #include "common/format.hpp"
 #include "frame.hpp"
 #include "gc/gco_string.hpp"
@@ -9,7 +10,6 @@
 #include "state.hpp"
 #include "types.hpp"
 #include "value.hpp"
-#include "common/arithmetic.hpp"
 #include "vm_detail.hpp"
 #include "vm_error.hpp"
 #include "vm_metatable.hpp"
@@ -467,7 +467,8 @@ namespace behl
 
         if (!lhs.is_string()) [[unlikely]]
         {
-            raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}", lhs.get_type_string());
+            raise_type_error(
+                S, get_current_location(frame), "can only concatenate string with string, not with {}", lhs.get_type_string());
         }
 
         const Value& rhs = get_string_constant(frame.proto, k);
@@ -499,12 +500,14 @@ namespace behl
                     gc_step(S);
                     return;
                 }
-                raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}", rhs.get_type_string());
+                raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}",
+                    rhs.get_type_string());
             }
 
             if (rhs.is_string())
             {
-                raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}", lhs.get_type_string());
+                raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}",
+                    lhs.get_type_string());
             }
         }
 

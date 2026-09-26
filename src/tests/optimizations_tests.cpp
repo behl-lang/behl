@@ -2,14 +2,13 @@
 #include "gc/gco_closure.hpp"
 #include "gc/gco_proto.hpp"
 #include "state.hpp"
+#include "test_helpers.hpp"
 #include "vm/bytecode.hpp"
 #include "vm/value.hpp"
 
+#include <array>
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
-
-#include <array>
 #include <limits>
 #include <string>
 
@@ -322,10 +321,11 @@ TEST_P(OptimizationsTest, RuntimeExactDivisionIsFloat)
 TEST_P(OptimizationsTest, FoldedArithmeticMatchesRuntime)
 {
     behl::load_stdlib(S);
-    constexpr std::array<std::string_view, 8> values = {"7", "-7", "3", "-3", "2.5", "-2.5", "0.5", "2"};
-    constexpr std::array<std::string_view, 6> ops = {"+", "-", "*", "/", "**", "%"};
+    constexpr std::array<std::string_view, 8> values = { "7", "-7", "3", "-3", "2.5", "-2.5", "0.5", "2" };
+    constexpr std::array<std::string_view, 6> ops = { "+", "-", "*", "/", "**", "%" };
     std::string code = "let bad = \"\"\n"
-                       "function same(x, y, s) { if (typeof(x) != typeof(y) || tostring(x) != tostring(y)) { bad = bad + s + \";\" } }\n";
+                       "function same(x, y, s) { if (typeof(x) != typeof(y) || tostring(x) != tostring(y)) { bad = bad + s + "
+                       "\";\" } }\n";
     for (const auto a : values)
     {
         for (const auto b : values)

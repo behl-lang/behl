@@ -115,7 +115,8 @@ namespace behl
             t = metamethod.get_table();
         }
 
-        raise_runtime_error(state, state->call_stack.empty() ? SourceLocation{} : get_current_location(state->call_stack.back()),
+        raise_runtime_error(state,
+            state->call_stack.empty() ? SourceLocation{} : get_current_location(state->call_stack.back()),
             "'__index' chain too long; possible loop");
     }
 

@@ -1,10 +1,9 @@
 #include "state.hpp"
-
-#include <behl/behl.hpp>
-#include <gtest/gtest.h>
 #include "test_helpers.hpp"
 
 #include <array>
+#include <behl/behl.hpp>
+#include <gtest/gtest.h>
 #include <string>
 
 class OperatorTest : public ::testing::TestWithParam<bool>
@@ -308,7 +307,7 @@ TEST_P(OperatorTest, BitwisePrecedenceWithoutParentheses)
 
 TEST_P(OperatorTest, LogicalOperatorsAllCombinations)
 {
-    constexpr std::array<std::string_view, 6> values = {"nil", "false", "true", "0", "1", "'s'"};
+    constexpr std::array<std::string_view, 6> values = { "nil", "false", "true", "0", "1", "'s'" };
     const auto truthy = [](std::string_view v) { return v != "nil" && v != "false"; };
     std::string code = "let bad = \"\"\n"
                        "function chk(ok, s) { if (ok != true) { bad = bad + s + \";\" } }\n";
@@ -338,11 +337,14 @@ TEST_P(OperatorTest, LogicalOperatorsAllCombinations)
             code += "  chk((" + a + " || " + b + ") == " + or_v + ", \"or lit " + lab + "\")\n";
             code += "  chk((a || b) == " + or_v + ", \"or var " + lab + "\")\n";
             code += "  chk((!(a && b)) == " + nt_and + ", \"not and var " + lab + "\")\n";
-            code += "  if (" + a + " && " + b + ") { r = true } else { r = false }; chk(r == " + t_and + ", \"if and lit " + lab + "\")\n";
+            code += "  if (" + a + " && " + b + ") { r = true } else { r = false }; chk(r == " + t_and + ", \"if and lit " + lab
+                + "\")\n";
             code += "  if (a && b) { r = true } else { r = false }; chk(r == " + t_and + ", \"if and var " + lab + "\")\n";
-            code += "  if (" + a + " || " + b + ") { r = true } else { r = false }; chk(r == " + t_or + ", \"if or lit " + lab + "\")\n";
+            code += "  if (" + a + " || " + b + ") { r = true } else { r = false }; chk(r == " + t_or + ", \"if or lit " + lab
+                + "\")\n";
             code += "  if (a || b) { r = true } else { r = false }; chk(r == " + t_or + ", \"if or var " + lab + "\")\n";
-            code += "  r = 0; while (a && b) { r = true; break }; chk(r == (" + t_and + " ? true : 0), \"while and var " + lab + "\")\n";
+            code += "  r = 0; while (a && b) { r = true; break }; chk(r == (" + t_and + " ? true : 0), \"while and var " + lab
+                + "\")\n";
             code += "  r = (a || b) ? 1 : 2; chk(r == (" + t_or + " ? 1 : 2), \"ternary or var " + lab + "\")\n";
             code += "}\n";
         }

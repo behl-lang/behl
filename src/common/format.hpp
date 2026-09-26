@@ -906,7 +906,8 @@ namespace behl
         }
 
         template<typename Tuple, size_t... Is>
-        BEHL_CONSTEXPR_STRING std::string format_impl_dynamic(std::string_view fmt, const Tuple& args, std::index_sequence<Is...> seq)
+        BEHL_CONSTEXPR_STRING std::string format_impl_dynamic(
+            std::string_view fmt, const Tuple& args, std::index_sequence<Is...> seq)
         {
             std::string result;
             result.reserve(fmt.size());
@@ -915,7 +916,8 @@ namespace behl
         }
 
         template<typename ArgsTuple, size_t... Is>
-        BEHL_CONSTEXPR_STRING std::string format_parts_tuple(const auto& parts_tuple, const ArgsTuple& args, std::index_sequence<Is...>)
+        BEHL_CONSTEXPR_STRING std::string format_parts_tuple(
+            const auto& parts_tuple, const ArgsTuple& args, std::index_sequence<Is...>)
         {
             std::string result;
             auto process_part = [&](const auto& part) {

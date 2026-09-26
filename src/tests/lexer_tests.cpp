@@ -1,9 +1,9 @@
 #include "frontend/lexer.hpp"
+#include "test_helpers.hpp"
+#include "vm/vm_error.hpp"
 
 #include <behl/behl.hpp>
-#include "vm/vm_error.hpp"
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 
 using namespace behl;
 

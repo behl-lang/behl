@@ -2,10 +2,10 @@
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string>
 using namespace behl;
 
@@ -2148,10 +2148,8 @@ TEST_P(MetatableTest, ArithmeticMetamethodsKeepOperandOrderWithNumberOnLeft)
     )";
     ASSERT_TRUE(behl_test::load_ok(S, code));
     ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
-    EXPECT_EQ(behl::to_string(S, -2),
-        "integer+table integer-table integer*table integer/table integer%table integer**table");
-    EXPECT_EQ(behl::to_string(S, -1),
-        "table+integer table-integer table*integer table/integer table%integer table**integer");
+    EXPECT_EQ(behl::to_string(S, -2), "integer+table integer-table integer*table integer/table integer%table integer**table");
+    EXPECT_EQ(behl::to_string(S, -1), "table+integer table-integer table*integer table/integer table%integer table**integer");
 }
 
 TEST_P(MetatableTest, BitwiseMetamethodsKeepOperandOrderWithNumberOnLeft)

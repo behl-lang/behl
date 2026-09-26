@@ -4,10 +4,10 @@
 #include "common/vector.hpp"
 #include "gc/gc.hpp"
 #include "state.hpp"
+#include "vm/vm_error.hpp"
 
 #include <algorithm>
 #include <array>
-#include "vm/vm_error.hpp"
 #include <cassert>
 #include <functional>
 #include <ranges>

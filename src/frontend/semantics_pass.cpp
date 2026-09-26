@@ -3,9 +3,9 @@
 #include "ast/ast_holder.hpp"
 #include "common/format.hpp"
 #include "common/hash_map.hpp"
-#include "vm/vm_error.hpp"
 #include "memory.hpp"
 #include "state.hpp"
+#include "vm/vm_error.hpp"
 
 namespace behl
 {
@@ -495,7 +495,8 @@ namespace behl
         {
             if (!state.is_module)
             {
-                raise_semantic_error(state.state, SourceLocation{}, "'export' can only be used in module mode. Add 'module;' at the top of the file.");
+                raise_semantic_error(state.state, SourceLocation{},
+                    "'export' can only be used in module mode. Add 'module;' at the top of the file.");
             }
 
             // Transform the inner declaration and collect export name
@@ -515,7 +516,8 @@ namespace behl
                 // Can only export const, not let
                 if (!local_decl->is_const)
                 {
-                    raise_semantic_error(state.state, SourceLocation{}, "Cannot export mutable variables. Only 'const' can be exported.");
+                    raise_semantic_error(
+                        state.state, SourceLocation{}, "Cannot export mutable variables. Only 'const' can be exported.");
                 }
                 for (AstNode* n = reinterpret_cast<AstNode*>(local_decl->first_name); n; n = n->next_child)
                 {
@@ -531,7 +533,8 @@ namespace behl
         {
             if (!state.is_module)
             {
-                raise_semantic_error(state.state, SourceLocation{}, "'export' can only be used in module mode. Add 'module;' at the top of the file.");
+                raise_semantic_error(state.state, SourceLocation{},
+                    "'export' can only be used in module mode. Add 'module;' at the top of the file.");
             }
 
             // Add all names to exported list (need to clone to avoid breaking the chain)

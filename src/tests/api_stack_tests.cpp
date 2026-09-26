@@ -1,7 +1,7 @@
 #include "state.hpp"
+#include "vm/vm_error.hpp"
 
 #include <behl/behl.hpp>
-#include "vm/vm_error.hpp"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <limits>

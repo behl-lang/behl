@@ -1,9 +1,9 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <behl/debug.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <queue>
 #include <vector>
 

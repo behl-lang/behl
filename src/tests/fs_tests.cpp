@@ -1,11 +1,11 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <algorithm>
 #include <behl/behl.hpp>
 #include <cctype>
 #include <filesystem>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string>
 #include <string_view>
 
@@ -239,8 +239,9 @@ TEST_P(FsTest, ReadReturnsWholeFileContents)
     )",
         2);
     EXPECT_EQ(behl::to_string(S, -2), "hello");
-    EXPECT_EQ(behl::to_string(S, -1), "a\0\xff"
-                                      "b\0"sv);
+    EXPECT_EQ(behl::to_string(S, -1),
+        "a\0\xff"
+        "b\0"sv);
 }
 
 TEST_P(FsTest, BinaryRoundTripThroughHandles)
@@ -258,8 +259,9 @@ TEST_P(FsTest, BinaryRoundTripThroughHandles)
     )",
         4);
     EXPECT_TRUE(behl::to_boolean(S, -4));
-    EXPECT_EQ(behl::to_string(S, -3), "a\0\xff"
-                                      "b\0"sv);
+    EXPECT_EQ(behl::to_string(S, -3),
+        "a\0\xff"
+        "b\0"sv);
     EXPECT_EQ(behl::to_integer(S, -2), 5);
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 5.0);
 }

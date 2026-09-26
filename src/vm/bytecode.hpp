@@ -526,8 +526,8 @@ namespace behl
     constexpr Instruction make_op_test(Reg a, bool invert, bool nil_only = false) noexcept
     {
         Instruction i{};
-        i.raw = (static_cast<uint32_t>(OpCode::kOpTest) << 25) | static_cast<uint32_t>(a)
-            | (static_cast<uint32_t>(invert) << 8) | (static_cast<uint32_t>(nil_only) << 16);
+        i.raw = (static_cast<uint32_t>(OpCode::kOpTest) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(invert) << 8)
+            | (static_cast<uint32_t>(nil_only) << 16);
         return i;
     }
 
@@ -805,8 +805,7 @@ namespace behl
     constexpr Instruction make_op_saveret(Reg a, uint8_t b) noexcept
     {
         Instruction i{};
-        i.raw = (static_cast<uint32_t>(OpCode::kOpSaveRet) << 25) | static_cast<uint32_t>(a)
-            | (static_cast<uint32_t>(b) << 8);
+        i.raw = (static_cast<uint32_t>(OpCode::kOpSaveRet) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8);
         return i;
     }
 

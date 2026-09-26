@@ -1,10 +1,10 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string>
 
 class ModuleTest : public ::testing::TestWithParam<bool>
@@ -453,11 +453,12 @@ TEST_P(ModuleFileTest, FailingModuleIsNotCachedAndRunsAgain)
         "if (attempts == 1) { error(\"first load fails\") }\n"
         "return { n = attempts }\n");
 
-    const std::string code = "let p = \"" + (root / "flaky").generic_string() + "\"\n"
-        "let ok1 = pcall(import, p)\n"
-        "let ok2, m2 = pcall(import, p)\n"
-        "let ok3, m3 = pcall(import, p)\n"
-        "return ok1, ok2, ok2 && m2.n, ok3 && m2 == m3, attempts\n";
+    const std::string code = "let p = \"" + (root / "flaky").generic_string()
+        + "\"\n"
+          "let ok1 = pcall(import, p)\n"
+          "let ok2, m2 = pcall(import, p)\n"
+          "let ok3, m3 = pcall(import, p)\n"
+          "return ok1, ok2, ok2 && m2.n, ok3 && m2 == m3, attempts\n";
     ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
     ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     EXPECT_FALSE(behl::to_boolean(S, -5));

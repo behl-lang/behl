@@ -69,9 +69,8 @@ namespace behl
     {
         assert(S != nullptr && "State can not be null");
 
-        const auto base = S->stack.size() >= static_cast<size_t>(nargs) + 1
-            ? S->stack.size() - static_cast<size_t>(nargs) - 1
-            : size_t{ 0 };
+        const auto base = S->stack.size() >= static_cast<size_t>(nargs) + 1 ? S->stack.size() - static_cast<size_t>(nargs) - 1
+                                                                            : size_t{ 0 };
 
         try
         {

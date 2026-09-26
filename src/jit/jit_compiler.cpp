@@ -829,7 +829,8 @@ namespace behl
 
                 if (inline_depth_ > 0)
                 {
-                    if (!proto_->is_vararg && (inline_nresults_ == moved || inline_nresults_ == static_cast<uint32_t>(kMultRet)))
+                    if (!proto_->is_vararg
+                        && (inline_nresults_ == moved || inline_nresults_ == static_cast<uint32_t>(kMultRet)))
                     {
                         fast.flag = true;
                         fast.imm = inline_base_delta_;

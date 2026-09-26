@@ -1046,8 +1046,8 @@ namespace behl
         if (r || x || b)
         {
             assert(mode64_ && "extended registers unavailable in 32 bit mode");
-            emit8(static_cast<uint8_t>(0x40 | (static_cast<uint8_t>(r) << 2) | (static_cast<uint8_t>(x) << 1)
-                | static_cast<uint8_t>(b)));
+            emit8(static_cast<uint8_t>(
+                0x40 | (static_cast<uint8_t>(r) << 2) | (static_cast<uint8_t>(x) << 1) | static_cast<uint8_t>(b)));
         }
     }
 

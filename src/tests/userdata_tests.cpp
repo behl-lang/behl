@@ -1,10 +1,10 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
+#include "vm/vm_error.hpp"
 
 #include <behl/behl.hpp>
-#include "vm/vm_error.hpp"
 #include <cstring>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 
 struct TestData
 {

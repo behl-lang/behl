@@ -908,8 +908,8 @@ namespace behl
         else
         {
             // Ordering comparison on incompatible types
-            raise_type_error(S, get_current_location(frame), "attempt to compare {} with {}", lhs.get_type_string(),
-                rhs.get_type_string());
+            raise_type_error(
+                S, get_current_location(frame), "attempt to compare {} with {}", lhs.get_type_string(), rhs.get_type_string());
         }
     }
 

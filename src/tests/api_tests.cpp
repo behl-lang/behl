@@ -1,8 +1,8 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <set>
 #include <string>
 using namespace behl;

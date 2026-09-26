@@ -1,5 +1,6 @@
 #include "value.hpp"
 
+#include "common/arithmetic.hpp"
 #include "gc/gc.hpp"
 #include "gc/gc_object.hpp"
 #include "gc/gc_types.hpp"
@@ -7,7 +8,6 @@
 #include "gc/gco_proto.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
-#include "common/arithmetic.hpp"
 
 #include <bit>
 #include <cassert>
@@ -37,7 +37,6 @@ namespace behl
     {
         return StringHash32{}(key);
     }
-
 
     static inline uint64_t fmix64(uint64_t k) noexcept
     {

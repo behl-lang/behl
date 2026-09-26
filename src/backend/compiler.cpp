@@ -12,8 +12,8 @@
 #include "gc/gco_string.hpp"
 #include "state.hpp"
 #include "vm/bytecode.hpp"
-
 #include "vm/vm_error.hpp"
+
 #include <bit>
 #include <cmath>
 #include <iostream>
@@ -2135,9 +2135,8 @@ namespace behl
 
         const uint32_t window = array_total < kFieldsPerFlush ? array_total : kFieldsPerFlush;
         const uint32_t list_base = static_cast<uint32_t>(reg) + 1U;
-        const bool batched = array_total != 0 && hash_total == 0 && list_base >= C.freereg
-            && list_base >= C.min_freereg && list_base + window <= kMaxRegisters
-            && array_total <= kFieldsPerFlush * 256U;
+        const bool batched = array_total != 0 && hash_total == 0 && list_base >= C.freereg && list_base >= C.min_freereg
+            && list_base + window <= kMaxRegisters && array_total <= kFieldsPerFlush * 256U;
 
         if (batched)
         {
@@ -2151,8 +2150,7 @@ namespace behl
         uint32_t array_idx = 0; // Start from 0
         uint32_t pending = 0;
 
-        auto flush_list = [&]()
-        {
+        auto flush_list = [&]() {
             if (pending == 0)
             {
                 return;
@@ -2202,7 +2200,8 @@ namespace behl
                     // Check if there are any fields after this vararg
                     if (n->next_child)
                     {
-                        raise_syntax_error(C.S, get_location(C), "Table constructor: vararg expansion (...) must be the last element");
+                        raise_syntax_error(
+                            C.S, get_location(C), "Table constructor: vararg expansion (...) must be the last element");
                     }
 
                     flush_list();
@@ -2836,7 +2835,8 @@ namespace behl
 
     void VisitorAdapter::visit(const AstCompoundAssign&)
     {
-        raise_semantic_error(C.S, get_location(C), "Unresolved AstCompoundAssign - semantic analyzer should have transformed this");
+        raise_semantic_error(
+            C.S, get_location(C), "Unresolved AstCompoundAssign - semantic analyzer should have transformed this");
     }
 
     void VisitorAdapter::visit(const AstCompoundLocal& node)

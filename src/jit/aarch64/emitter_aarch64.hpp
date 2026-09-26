@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cstddef>
 #include "common/vector.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace behl

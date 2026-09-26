@@ -1,8 +1,8 @@
 #include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 #include <string_view>
 
 using namespace std::string_view_literals;
@@ -301,4 +301,4 @@ namespace behl
     INSTANTIATE_TEST_SUITE_P(Mode, StringLibTest, ::testing::Bool(),
         [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
-}
+} // namespace behl

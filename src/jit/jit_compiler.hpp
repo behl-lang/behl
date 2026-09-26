@@ -1,12 +1,11 @@
 #pragma once
 
+#include "common/vector.hpp"
 #include "jit/jit.hpp"
 #include "jit/jit_helpers.hpp"
 #include "vm/bytecode.hpp"
 
 #include <behl/types.hpp>
-#include "common/vector.hpp"
-
 #include <cstdint>
 
 namespace behl

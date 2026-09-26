@@ -76,30 +76,27 @@ namespace behl
 
         if (op_name)
         {
-            raise_type_error(S, loc, "attempt to {} a '{}' with a '{}'", op_name, a.get_type_string(),
-                b.get_type_string());
+            raise_type_error(S, loc, "attempt to {} a '{}' with a '{}'", op_name, a.get_type_string(), b.get_type_string());
         }
-        raise_type_error(S, loc, "attempt to perform arithmetic on a '{}' value and a '{}' value", a.get_type_string(),
-            b.get_type_string());
+        raise_type_error(
+            S, loc, "attempt to perform arithmetic on a '{}' value and a '{}' value", a.get_type_string(), b.get_type_string());
     }
 
     void raise_bad_arith(State* S, const Value& a, const CallFrame& frame)
     {
-        raise_type_error(S, get_current_location(frame), "attempt to perform arithmetic on a {} value",
-            a.get_type_string());
+        raise_type_error(S, get_current_location(frame), "attempt to perform arithmetic on a {} value", a.get_type_string());
     }
 
     void raise_bad_bitwise(State* S, const Value& a, const Value& b, const CallFrame& frame)
     {
         raise_type_error(S, get_current_location(frame),
-            "attempt to perform bitwise operation on a '{}' value and a '{}' value", a.get_type_string(),
-            b.get_type_string());
+            "attempt to perform bitwise operation on a '{}' value and a '{}' value", a.get_type_string(), b.get_type_string());
     }
 
     void raise_bad_bitwise(State* S, const Value& a, const CallFrame& frame)
     {
-        raise_type_error(S, get_current_location(frame), "attempt to perform bitwise operation on a {} value",
-            a.get_type_string());
+        raise_type_error(
+            S, get_current_location(frame), "attempt to perform bitwise operation on a {} value", a.get_type_string());
     }
 
     void raise_no_integer_representation(State* S, const CallFrame& frame)

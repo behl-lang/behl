@@ -1,10 +1,10 @@
 #include "common/format.hpp"
 #include "state.hpp"
+#include "test_helpers.hpp"
+#include "vm/vm_error.hpp"
 
 #include <behl/behl.hpp>
-#include "vm/vm_error.hpp"
 #include <gtest/gtest.h>
-#include "test_helpers.hpp"
 
 class TypecheckTest : public ::testing::TestWithParam<bool>
 {

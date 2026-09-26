@@ -265,7 +265,8 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
 
     // Loads a chunk from the given buffer and pushes the resulting function onto the stack, throws on error.
-    [[nodiscard]] BEHL_API int32_t load_buffer(State* S, std::string_view str, std::string_view chunkname, bool optimize = true);
+    [[nodiscard]] BEHL_API int32_t load_buffer(
+        State* S, std::string_view str, std::string_view chunkname, bool optimize = true);
 
     // Nearly identical to load_buffer but uses "<string>" as the chunk name.
     [[nodiscard]] BEHL_API int32_t load_string(State* S, std::string_view str, bool optimize = true);
