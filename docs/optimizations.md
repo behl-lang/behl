@@ -536,13 +536,15 @@ When using the C++ embedding API, you can disable all AST-level optimizations by
 
 ```cpp
 // Load with optimizations (default)
-behl::load_string(S, code);
-behl::load_string(S, code, true);
+int32_t status = behl::load_string(S, code);
+status = behl::load_string(S, code, true);
 
 // Load without optimizations
-behl::load_string(S, code, false);
-behl::load_buffer(S, code, "script.behl", false);
+status = behl::load_string(S, code, false);
+status = behl::load_buffer(S, code, "script.behl", false);
 ```
+
+Each call returns `0` on success or a negative status code with the error message on the stack; see [Error Handling](embedding/error-handling).
 
 When optimizations are disabled:
 - Constant folding is **not** performed

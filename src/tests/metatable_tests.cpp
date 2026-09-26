@@ -5,6 +5,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 using namespace behl;
 
@@ -32,8 +33,8 @@ TEST_P(MetatableTest, GetMetatableReturnsNilForNoMetatable)
         let t = {a = 1}
         return getmetatable(t) == nil
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -46,8 +47,8 @@ TEST_P(MetatableTest, SetAndGetMetatable)
         let result = getmetatable(t)
         return result.__name == "MyTable"
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -59,8 +60,8 @@ TEST_P(MetatableTest, SetMetatableReturnsTable)
         let result = setmetatable(t, mt)
         return result == t
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -73,8 +74,8 @@ TEST_P(MetatableTest, SetMetatableToNilRemovesMetatable)
         setmetatable(t, nil)
         return getmetatable(t) == nil
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -93,8 +94,8 @@ TEST_P(MetatableTest, IndexMetamethodWithFunction)
         setmetatable(t, mt)
         return t.a == 1 && t.b == 42 && t.c == nil
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -107,8 +108,8 @@ TEST_P(MetatableTest, IndexMetamethodWithTable)
         setmetatable(t, mt)
         return t.a == 1 && t.b == 2 && t.c == 3
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -124,8 +125,8 @@ TEST_P(MetatableTest, IndexMetamethodChaining)
         
         return t.a == 1 && t.b == 2 && t.c == 3
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -144,8 +145,8 @@ TEST_P(MetatableTest, IndexMetamethodNotCalledForExistingKey)
         let val = t.a
         return val == 1 && called == false
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -163,8 +164,8 @@ TEST_P(MetatableTest, NewIndexMetamethodWithFunction)
         t.a = 42
         return storage.a == 42 && t.a == nil
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -178,8 +179,8 @@ TEST_P(MetatableTest, NewIndexMetamethodWithTable)
         t.a = 123
         return proxy.a == 123 && t.a == nil
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -197,8 +198,8 @@ TEST_P(MetatableTest, NewIndexMetamethodNotCalledForExistingKey)
         t.a = 2
         return t.a == 2 && called == false
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -217,8 +218,8 @@ TEST_P(MetatableTest, AddMetamethod)
         let result = t1 + t2
         return result.value == 15
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -237,8 +238,8 @@ TEST_P(MetatableTest, SubMetamethod)
         let result = t1 - t2
         return result.value == 7
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -257,8 +258,8 @@ TEST_P(MetatableTest, MulMetamethod)
         let result = t1 * t2
         return result.value == 42
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -277,8 +278,8 @@ TEST_P(MetatableTest, DivMetamethod)
         let result = t1 / t2
         return result.value == 5
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -297,8 +298,8 @@ TEST_P(MetatableTest, ModMetamethod)
         let result = t1 % t2
         return result.value == 2
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -317,8 +318,8 @@ TEST_P(MetatableTest, PowMetamethod)
         let result = t1 ** t2
         return result.value == 256
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -335,8 +336,8 @@ TEST_P(MetatableTest, UnmMetamethod)
         let result = -t
         return result.value == -10
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -358,8 +359,8 @@ TEST_P(MetatableTest, ArithmeticWithMixedTypes)
         let result2 = 5 + t
         return result1.value == 15 && result2.value == 15
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -379,8 +380,8 @@ TEST_P(MetatableTest, EqMetamethod)
         setmetatable(t3, mt)
         return (t1 == t2) && !(t1 == t3)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -398,8 +399,8 @@ TEST_P(MetatableTest, LtMetamethod)
         setmetatable(t2, mt)
         return (t1 < t2) && !(t2 < t1)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -419,8 +420,8 @@ TEST_P(MetatableTest, LeMetamethod)
         setmetatable(t3, mt)
         return (t1 <= t2) && (t1 <= t3) && !(t2 <= t1)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -437,8 +438,8 @@ TEST_P(MetatableTest, CallMetamethod)
         let result = t(5)
         return result == 15
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -455,8 +456,8 @@ TEST_P(MetatableTest, CallMetamethodWithMultipleArgs)
         let result = t(1, 2, 3)
         return result == 6
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -473,8 +474,8 @@ TEST_P(MetatableTest, ToStringMetamethod)
         let str = tostring(t)
         return str
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "Table: MyObject");
 }
 
@@ -490,8 +491,8 @@ TEST_P(MetatableTest, LenMetamethod)
         setmetatable(t, mt)
         return #t == 999
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -508,8 +509,8 @@ TEST_P(MetatableTest, RawGetBypassesMetatable)
         setmetatable(t, mt)
         return t.b == 999 && table.rawget(t, "b") == nil
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -528,8 +529,8 @@ TEST_P(MetatableTest, RawSetBypassesMetatable)
         table.rawset(t, "a", 42)
         return t.a == 42 && called == false
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -545,8 +546,8 @@ TEST_P(MetatableTest, RawLenBypassesMetatable)
         setmetatable(t, mt)
         return #t == 999 && rawlen(t) == 3
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -569,8 +570,8 @@ TEST_P(MetatableTest, SimpleClassPattern)
         let cat = newAnimal("Fluffy")
         return cat.name == "Fluffy" && cat.speak(cat) == "Some sound"
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -601,8 +602,8 @@ TEST_P(MetatableTest, InheritancePattern)
         let dog = newDog("Rex")
         return dog.name == "Rex" && dog.speak(dog) == "Woof!"
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -619,8 +620,8 @@ TEST_P(MetatableTest, MetatableOnMetatable)
         
         return mt.x == 42
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -637,8 +638,8 @@ TEST_P(MetatableTest, MetamethodReturnsMultipleValues)
         let a = t.x
         return a == 1
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -660,8 +661,8 @@ TEST_P(MetatableTest, RecursiveIndexLookup)
         let result = t.x
         return result == 5
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -682,8 +683,8 @@ TEST_P(MetatableTest, ArithmeticMetamethodOnlyOneOperand)
         let result = t + 5
         return result == 15
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -701,8 +702,8 @@ TEST_P(MetatableTest, ComparisonRequiresBothMetamethods)
         
         return !(t1 == t2)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -735,8 +736,8 @@ TEST_P(MetatableTest, DeepNestedAddMetamethod32Levels)
         let result = obj1 + obj2;
         return result.value == 62;  // 10 + 20 + 32
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -793,8 +794,8 @@ TEST_P(MetatableTest, DeepNestedMultipleArithmeticOps)
         
         return diff.value == 151 && call_count == 3;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -838,8 +839,8 @@ TEST_P(MetatableTest, DeepNestedWithTableCreation)
         let result = obj1 + obj2;
         return result.value == 340;  // 100 + 200 + 40
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -888,8 +889,8 @@ TEST_P(MetatableTest, DeepNestedChainedMetamethods)
         
         return result.value == 20 && result.chain == 51;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -948,8 +949,8 @@ TEST_P(MetatableTest, ExtremeMixedOperationsDepth64)
         
         return global_counter > 100;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -989,8 +990,8 @@ TEST_P(MetatableTest, DeepNestedWithUpvalues)
         let result = obj1 + obj2;
         return result.value == 66;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1032,8 +1033,8 @@ TEST_P(MetatableTest, StressTestMassiveStackGrowth)
         let result = obj1 + obj2;
         return result.value == 3045;  // 1000 + 2000 + 45 (size 20 + depth 25)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1054,8 +1055,8 @@ TEST_P(MetatableTest, BitwiseAndMetamethod)
         let result = obj1 & obj2;
         return result.value == 0;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1076,8 +1077,8 @@ TEST_P(MetatableTest, BitwiseOrMetamethod)
         let result = obj1 | obj2;
         return result.value == 0xFF;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1098,8 +1099,8 @@ TEST_P(MetatableTest, BitwiseXorMetamethod)
         let result = obj1 ^ obj2;
         return result.value == 0x55;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1120,8 +1121,8 @@ TEST_P(MetatableTest, BitwiseLeftShiftMetamethod)
         let result = obj1 << obj2;
         return result.value == 16;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1142,8 +1143,8 @@ TEST_P(MetatableTest, BitwiseRightShiftMetamethod)
         let result = obj1 >> obj2;
         return result.value == 4;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1162,8 +1163,8 @@ TEST_P(MetatableTest, BitwiseNotMetamethod)
         let result = ~obj;
         return result.value == -1;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1195,8 +1196,8 @@ TEST_P(MetatableTest, BitwiseMixedOperations)
         let final = and_result | xor_result;  // 14 (0b1110)
         return final.value == 14;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1230,8 +1231,8 @@ TEST_P(MetatableTest, BitwiseDeepNested)
         let result = obj1 & obj2;
         return result.value == 116;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1258,8 +1259,8 @@ TEST_P(MetatableTest, BitwiseWithUpvalues)
         let result = obj1 & obj2;
         return result.value == 115;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1417,8 +1418,8 @@ TEST_P(MetatableTest, GtMetamethodValueContext)
         setmetatable(t2, mt)
         return (t2 > t1) && !(t1 > t2) && !(t1 > t1)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1438,8 +1439,8 @@ TEST_P(MetatableTest, GeMetamethodValueContext)
         setmetatable(t3, mt)
         return (t2 >= t1) && (t1 >= t3) && !(t1 >= t2)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1461,8 +1462,8 @@ TEST_P(MetatableTest, LtMetamethodJumpContext)
         if (t2 < t1) { not_taken = true }
         return taken && !not_taken
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1488,8 +1489,8 @@ TEST_P(MetatableTest, LeMetamethodJumpContext)
         if (t2 <= t1) { not_taken = true }
         return taken && equal_taken && !not_taken
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1513,8 +1514,8 @@ TEST_P(MetatableTest, GtMetamethodJumpContext)
         if (t1 > t1) { equal_not_taken = true }
         return taken && !not_taken && !equal_not_taken
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1540,8 +1541,8 @@ TEST_P(MetatableTest, GeMetamethodJumpContext)
         if (t1 >= t2) { not_taken = true }
         return taken && equal_taken && !not_taken
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1563,8 +1564,8 @@ TEST_P(MetatableTest, LtFamilyServesBothContextsWithoutLe)
         if (t2 >= t1) { jump_ge = true }
         return (t1 < t2) && (t2 >= t1) && jump_lt && jump_ge
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1586,8 +1587,8 @@ TEST_P(MetatableTest, LeFamilyServesBothContextsWithoutLt)
         if (t2 > t1) { jump_gt = true }
         return (t1 <= t2) && (t2 > t1) && jump_le && jump_gt
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
 
@@ -1609,8 +1610,8 @@ TEST_P(MetatableTest, ComparisonMetamethodReceivesOperandsInSourceOrder)
         let ignored2 = t1 >= t2
         return seen
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "ab;ab;");
 }
 
@@ -1651,8 +1652,8 @@ TEST_P(MetatableTest, ComparisonMetamethodsAgreeUnderJit)
         }
         return tostring(interpreted == jitted) + "|" + interpreted
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "true|truetruefalsefalseLM");
 }
 
@@ -1667,8 +1668,8 @@ TEST_P(MetatableTest, GlobalReadMissUsesIndexMetamethod)
         let c = existing
         return a, b, c, lookups
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::to_string(S, -4), "undefined_one!");
     ASSERT_EQ(behl::to_string(S, -3), "undefined_two!");
     ASSERT_EQ(behl::to_integer(S, -2), 5);
@@ -1683,8 +1684,8 @@ TEST_P(MetatableTest, GlobalStrictModeRaisesOnUndefinedRead)
         let ok = pcall(probe)
         return ok
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
@@ -1699,8 +1700,8 @@ TEST_P(MetatableTest, GlobalWriteOfNewKeyUsesNewIndexMetamethod)
         setmetatable(_G, nil)
         return brand_new, seen["brand_new"], existing, seen["existing"]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_TRUE(behl::is_nil(S, -4));
     ASSERT_EQ(behl::to_integer(S, -3), 42);
     ASSERT_EQ(behl::to_integer(S, -2), 2);
@@ -1720,8 +1721,8 @@ TEST_P(MetatableTest, GlobalIndexMetamethodInsideHotLoop)
         }
         return sum(500)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1500);
 }
 
@@ -1734,8 +1735,8 @@ TEST_P(MetatableTest, SelfReferencingIndexRaisesCatchableError)
         let ok = pcall(function() { return a.missing })
         return ok
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_FALSE(behl::to_boolean(S, -1));
 }
 
@@ -1748,8 +1749,8 @@ TEST_P(MetatableTest, SelfReferencingNewIndexRaisesCatchableError)
         let ok = pcall(function() { b.missing = 1 })
         return ok
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_FALSE(behl::to_boolean(S, -1));
 }
 
@@ -1764,8 +1765,8 @@ TEST_P(MetatableTest, EqMetamethodRemovedAfterUseFallsBackToIdentity)
         let ok, after = pcall(function() { return a == b })
         return before, ok, after
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_TRUE(behl::to_boolean(S, -2));
     EXPECT_FALSE(behl::to_boolean(S, -1));
@@ -1781,8 +1782,8 @@ TEST_P(MetatableTest, AddMetamethodRemovedAfterUseRaisesArithmeticError)
         let ok, err = pcall(function() { return c + 1 })
         return before, ok, err
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), 5);
     EXPECT_FALSE(behl::to_boolean(S, -2));
     EXPECT_NE(std::string(behl::to_string(S, -1)).find("arithmetic"), std::string::npos) << behl::to_string(S, -1);
@@ -1798,8 +1799,8 @@ TEST_P(MetatableTest, IndexMetamethodRemovedAfterUseReturnsNil)
         let ok, after = pcall(function() { return d.x })
         return before, ok, after
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), 7);
     EXPECT_TRUE(behl::to_boolean(S, -2));
     EXPECT_TRUE(behl::is_nil(S, -1));
@@ -1816,8 +1817,8 @@ TEST_P(MetatableTest, LtMetamethodRemovedAfterUseRaisesCompareError)
         let ok, err = pcall(function() { return e < f })
         return before, ok, err
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_FALSE(behl::to_boolean(S, -2));
     EXPECT_NE(std::string(behl::to_string(S, -1)).find("compare"), std::string::npos) << behl::to_string(S, -1);
@@ -1833,8 +1834,8 @@ TEST_P(MetatableTest, LenMetamethodRemovedAfterUseFallsBackToRawlen)
         let ok, after = pcall(function() { return #g })
         return before, ok, after
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), 9);
     EXPECT_TRUE(behl::to_boolean(S, -2));
     EXPECT_EQ(behl::to_integer(S, -1), 2);
@@ -1850,8 +1851,8 @@ TEST_P(MetatableTest, CallMetamethodRemovedAfterUseRaisesCallError)
         let ok = pcall(function() { return h() })
         return before, ok
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 3);
     EXPECT_FALSE(behl::to_boolean(S, -1));
 }
@@ -1866,8 +1867,8 @@ TEST_P(MetatableTest, TostringMetamethodRemovedAfterUseUsesDefault)
         let ok, after = pcall(function() { return tostring(i) })
         return before, ok, typeof(after), after != "T"
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_EQ(behl::to_string(S, -4), "T");
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_EQ(behl::to_string(S, -2), "string");
@@ -1885,8 +1886,8 @@ TEST_P(MetatableTest, EqualityOfSameTableDoesNotCallEq)
         if (a != a) { different = true } else { different = false }
         return same, different, calls
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_FALSE(behl::to_boolean(S, -2));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
@@ -1900,8 +1901,8 @@ TEST_P(MetatableTest, EqMetamethodReturningNilIsFalse)
         let q = setmetatable({}, mt)
         return p == q
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_FALSE(behl::to_boolean(S, -1));
 }
 
@@ -1923,8 +1924,8 @@ TEST_P(MetatableTest, EqMetamethodInBranchContextHonoursResult)
         if (c == d) { log = log + "cd:eq" } else { log = log + "cd:ne" }
         return log
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "ab:ne pq:ne cd:eq");
 }
 
@@ -1945,8 +1946,8 @@ TEST_P(MetatableTest, NotEqualInValueContextNegatesEqMetamethod)
         let r3 = c != d
         return r1, r2, r3
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_TRUE(behl::to_boolean(S, -2));
     EXPECT_FALSE(behl::to_boolean(S, -1));
@@ -1962,8 +1963,8 @@ TEST_P(MetatableTest, EqMetamethodNotUsedForTableKeyLookup)
         t[k1] = "one"
         return k1 == k2, t[k2], t[k1]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_TRUE(behl::is_nil(S, -2));
     EXPECT_EQ(behl::to_string(S, -1), "one");
@@ -1997,8 +1998,8 @@ TEST_P(MetatableTest, PairsMetamethodDrivesForeachAndPairs)
         }
         return n, s, s2
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), 3);
     EXPECT_EQ(behl::to_integer(S, -2), 30);
     EXPECT_EQ(behl::to_integer(S, -1), 30);
@@ -2014,8 +2015,8 @@ TEST_P(MetatableTest, NewIndexPointingAtOwnMetatableStoresInMetatable)
         o.x = 5
         return table.rawget(o, "x"), table.rawget(mt, "x"), o.x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::is_nil(S, -3));
     EXPECT_EQ(behl::to_integer(S, -2), 5);
     EXPECT_TRUE(behl::is_nil(S, -1));
@@ -2029,8 +2030,8 @@ TEST_P(MetatableTest, TableAsItsOwnMetatable)
         st.__index = { y = 9 }
         return getmetatable(st) == st, st.y, st.zz
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_EQ(behl::to_integer(S, -2), 9);
     EXPECT_TRUE(behl::is_nil(S, -1));
@@ -2046,8 +2047,8 @@ TEST_P(MetatableTest, NewIndexChainReachesGrandparent)
         ch.v = 42
         return table.rawget(ch, "v"), table.rawget(par, "v"), gp.v
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_TRUE(behl::is_nil(S, -3));
     EXPECT_TRUE(behl::is_nil(S, -2));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
@@ -2069,8 +2070,8 @@ TEST_P(MetatableTest, ProxyUsesSameTableForIndexAndNewIndex)
         }
         return proxy.a, proxy.b, store.a, store.b, count, table.rawget(proxy, "a")
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 6));
     EXPECT_EQ(behl::to_integer(S, -6), 3);
     EXPECT_EQ(behl::to_integer(S, -5), 2);
     EXPECT_EQ(behl::to_integer(S, -4), 3);
@@ -2088,8 +2089,8 @@ TEST_P(MetatableTest, ThreeLevelIndexChainEndsInFunction)
         mid.m = "mid"
         return top.m, top.zz
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_string(S, -2), "mid");
     EXPECT_EQ(behl::to_string(S, -1), "fn:zz");
 }
@@ -2117,8 +2118,8 @@ TEST_P(MetatableTest, ComparisonBetweenNumberAndTableKeepsOperandOrder)
         let r6 = 1 >= t
         return r1, r2, r3, r4, r5, r6, log
     )behl";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 7));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 7));
     EXPECT_TRUE(behl::to_boolean(S, -7));
     EXPECT_TRUE(behl::to_boolean(S, -6));
     EXPECT_TRUE(behl::to_boolean(S, -5));
@@ -2145,8 +2146,8 @@ TEST_P(MetatableTest, ArithmeticMetamethodsKeepOperandOrderWithNumberOnLeft)
         let right = (x + 1) + " " + (x - 1) + " " + (x * 1) + " " + (x / 1) + " " + (x % 1) + " " + (x ** 2)
         return left, right
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_string(S, -2),
         "integer+table integer-table integer*table integer/table integer%table integer**table");
     EXPECT_EQ(behl::to_string(S, -1),
@@ -2168,8 +2169,8 @@ TEST_P(MetatableTest, BitwiseMetamethodsKeepOperandOrderWithNumberOnLeft)
         let right = (x & 1) + " " + (x | 1) + " " + (x ^ 1) + " " + (x << 1) + " " + (x >> 1)
         return left, right
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_string(S, -2), "integer&table integer|table integer^table integer<<table integer>>table");
     EXPECT_EQ(behl::to_string(S, -1), "table&integer table|integer table^integer table<<integer table>>integer");
 }
@@ -2181,8 +2182,8 @@ TEST_P(MetatableTest, LenMetamethodNonIntegerResultIsReturnedAsIs)
         let ls = setmetatable({}, { __len = function(t) { return "abc" } })
         return #lt, typeof(#lt), #ls
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -3), 2.5);
     EXPECT_EQ(behl::to_string(S, -2), "number");
     EXPECT_EQ(behl::to_string(S, -1), "abc");
@@ -2193,8 +2194,8 @@ TEST_P(MetatableTest, RawlenOfNonTableIsZero)
     constexpr std::string_view code = R"(
         return rawlen("abc") + rawlen(5) + rawlen(nil) + rawlen(true)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -2203,8 +2204,8 @@ TEST_P(MetatableTest, GetmetatableOfNonTableIsNil)
     constexpr std::string_view code = R"(
         return getmetatable(5) == nil, getmetatable(nil) == nil, getmetatable(true) == nil, getmetatable(print) == nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_TRUE(behl::to_boolean(S, -4));
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_TRUE(behl::to_boolean(S, -2));

@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 using namespace behl;
 
@@ -85,8 +86,8 @@ TEST_P(PinningTest, PinFunction)
         return test;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     const auto handle = pin(S);
     ASSERT_EQ(get_top(S), 0);
@@ -95,7 +96,7 @@ TEST_P(PinningTest, PinFunction)
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(type(S, -1), Type::kClosure);
 
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(to_integer(S, -1), 123);
 
     pop(S, 1);
@@ -223,14 +224,14 @@ TEST_P(PinningTest, PinClosure)
         return make_closure();
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     const auto handle = pin(S);
     ASSERT_EQ(get_top(S), 0);
 
     pinned_push(S, handle);
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(to_integer(S, -1), 100);
 
     pop(S, 1);
@@ -286,7 +287,10 @@ TEST_P(PinningTest, PinInCFunction)
             error(s, "No callback registered");
         }
         pinned_push(s, callback_handle);
-        call(s, 0, 1);
+        if (call(s, 0, 1) < 0)
+        {
+            error_value(s);
+        }
 
         EXPECT_EQ(type(s, -1), Type::kInteger);
         EXPECT_EQ(to_integer(s, -1), 42);
@@ -305,8 +309,8 @@ TEST_P(PinningTest, PinInCFunction)
         return invoke_callback();
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(to_integer(S, -1), 42);
 
     if (callback_handle != PinHandle::kInvalid)
@@ -329,8 +333,8 @@ TEST_P(PinningTest, PinTableWithMetatable)
         return t;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     const auto handle = pin(S);
 

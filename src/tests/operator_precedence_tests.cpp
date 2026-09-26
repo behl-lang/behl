@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class OperatorPrecedenceTest : public ::testing::TestWithParam<bool>
 {
@@ -29,8 +30,8 @@ TEST_P(OperatorPrecedenceTest, ArithmeticPrecedence)
         if (2 * 1 + 3 / 3 != 3) { return false }
         return true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -42,8 +43,8 @@ TEST_P(OperatorPrecedenceTest, ModuloOperations)
         if (20 % 6 != 2) { return false }
         return true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -56,8 +57,8 @@ TEST_P(OperatorPrecedenceTest, BitwiseOperations)
         if ((0xFF ^ 0xAA) != 0x55) { return false }
         return true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -69,8 +70,8 @@ TEST_P(OperatorPrecedenceTest, PowerOperator)
         if (2 ** 3 * 2 != 16) { return false }
         return true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -94,8 +95,8 @@ TEST_P(OperatorPrecedenceTest, ShortCircuitEvaluation)
         
         return true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -110,8 +111,8 @@ TEST_P(OperatorPrecedenceTest, StringComparisons)
         if ("\0" < "\1") { result = result + 1 }
         return result
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
@@ -125,8 +126,8 @@ TEST_P(OperatorPrecedenceTest, MixedArithmetic)
         let e = a / 2
         return c + d + e
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 13.5 + 35.0 + 5.0);
 }
 
@@ -136,8 +137,8 @@ TEST_P(OperatorPrecedenceTest, NilComparisons)
         if (nil == nil) { return 1 }
         return 0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
@@ -147,8 +148,8 @@ TEST_P(OperatorPrecedenceTest, BooleanComparisons)
         if ((true == true) && (false == false)) { return 1 }
         return 0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 

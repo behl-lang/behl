@@ -2,8 +2,9 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
+#include "vm/vm_error.hpp"
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class TypecheckTest : public ::testing::TestWithParam<bool>
 {
@@ -55,13 +56,13 @@ TEST_P(TypecheckTest, CheckType_WrongType_ThrowsTypeError)
             {
                 behl::check_type(S, -1, behl::Type::kString);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected string, got integer"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected string, got integer"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckType_MultipleTypes)
@@ -108,13 +109,13 @@ TEST_P(TypecheckTest, CheckInteger_FromFloatWithFraction_Throws)
             {
                 behl::check_integer(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected integer"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected integer"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckInteger_WrongTypes_Throw)
@@ -126,13 +127,13 @@ TEST_P(TypecheckTest, CheckInteger_WrongTypes_Throw)
             {
                 behl::check_integer(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected integer, got string"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected integer, got string"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_nil(S);
     EXPECT_THROW(
@@ -141,13 +142,13 @@ TEST_P(TypecheckTest, CheckInteger_WrongTypes_Throw)
             {
                 behl::check_integer(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected integer, got nil"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected integer, got nil"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_boolean(S, true);
     EXPECT_THROW(
@@ -156,13 +157,13 @@ TEST_P(TypecheckTest, CheckInteger_WrongTypes_Throw)
             {
                 behl::check_integer(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected integer, got boolean"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected integer, got boolean"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::table_new(S);
     EXPECT_THROW(
@@ -171,20 +172,20 @@ TEST_P(TypecheckTest, CheckInteger_WrongTypes_Throw)
             {
                 behl::check_integer(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected integer, got table"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected integer, got table"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckInteger_InvalidIndex_Throws)
 {
     behl::push_integer(S, 42);
-    EXPECT_THROW(behl::check_integer(S, 10), behl::TypeError);
-    EXPECT_THROW(behl::check_integer(S, -10), behl::TypeError);
+    EXPECT_THROW(behl::check_integer(S, 10), behl::Exception);
+    EXPECT_THROW(behl::check_integer(S, -10), behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckInteger_MultipleArguments)
@@ -231,13 +232,13 @@ TEST_P(TypecheckTest, CheckNumber_WrongTypes_Throw)
             {
                 behl::check_number(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected number, got string"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected number, got string"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_nil(S);
     EXPECT_THROW(
@@ -246,13 +247,13 @@ TEST_P(TypecheckTest, CheckNumber_WrongTypes_Throw)
             {
                 behl::check_number(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected number, got nil"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected number, got nil"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_boolean(S, false);
     EXPECT_THROW(
@@ -261,13 +262,13 @@ TEST_P(TypecheckTest, CheckNumber_WrongTypes_Throw)
             {
                 behl::check_number(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected number, got boolean"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected number, got boolean"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::table_new(S);
     EXPECT_THROW(
@@ -276,20 +277,20 @@ TEST_P(TypecheckTest, CheckNumber_WrongTypes_Throw)
             {
                 behl::check_number(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected number, got table"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected number, got table"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckNumber_InvalidIndex_Throws)
 {
     behl::push_number(S, 3.14);
-    EXPECT_THROW(behl::check_number(S, 10), behl::TypeError);
-    EXPECT_THROW(behl::check_number(S, -10), behl::TypeError);
+    EXPECT_THROW(behl::check_number(S, 10), behl::Exception);
+    EXPECT_THROW(behl::check_number(S, -10), behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckNumber_MixedNumericTypes)
@@ -324,13 +325,13 @@ TEST_P(TypecheckTest, CheckString_WrongTypes_Throw)
             {
                 behl::check_string(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected string, got integer"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected string, got integer"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_number(S, 3.14);
     EXPECT_THROW(
@@ -339,13 +340,13 @@ TEST_P(TypecheckTest, CheckString_WrongTypes_Throw)
             {
                 behl::check_string(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected string, got number"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected string, got number"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_nil(S);
     EXPECT_THROW(
@@ -354,13 +355,13 @@ TEST_P(TypecheckTest, CheckString_WrongTypes_Throw)
             {
                 behl::check_string(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected string, got nil"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected string, got nil"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_boolean(S, true);
     EXPECT_THROW(
@@ -369,13 +370,13 @@ TEST_P(TypecheckTest, CheckString_WrongTypes_Throw)
             {
                 behl::check_string(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected string, got boolean"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected string, got boolean"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::table_new(S);
     EXPECT_THROW(
@@ -384,20 +385,20 @@ TEST_P(TypecheckTest, CheckString_WrongTypes_Throw)
             {
                 behl::check_string(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected string, got table"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected string, got table"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckString_InvalidIndex_Throws)
 {
     behl::push_string(S, "test");
-    EXPECT_THROW(behl::check_string(S, 10), behl::TypeError);
-    EXPECT_THROW(behl::check_string(S, -10), behl::TypeError);
+    EXPECT_THROW(behl::check_string(S, 10), behl::Exception);
+    EXPECT_THROW(behl::check_string(S, -10), behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckString_MultipleStrings)
@@ -432,13 +433,13 @@ TEST_P(TypecheckTest, CheckBoolean_WrongTypes_Throw)
             {
                 behl::check_boolean(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected boolean, got integer"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected boolean, got integer"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_number(S, 1.0);
     EXPECT_THROW(
@@ -447,13 +448,13 @@ TEST_P(TypecheckTest, CheckBoolean_WrongTypes_Throw)
             {
                 behl::check_boolean(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected boolean, got number"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected boolean, got number"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_string(S, "true");
     EXPECT_THROW(
@@ -462,13 +463,13 @@ TEST_P(TypecheckTest, CheckBoolean_WrongTypes_Throw)
             {
                 behl::check_boolean(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected boolean, got string"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected boolean, got string"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_nil(S);
     EXPECT_THROW(
@@ -477,13 +478,13 @@ TEST_P(TypecheckTest, CheckBoolean_WrongTypes_Throw)
             {
                 behl::check_boolean(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected boolean, got nil"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected boolean, got nil"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::table_new(S);
     EXPECT_THROW(
@@ -492,20 +493,20 @@ TEST_P(TypecheckTest, CheckBoolean_WrongTypes_Throw)
             {
                 behl::check_boolean(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected boolean, got table"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected boolean, got table"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckBoolean_InvalidIndex_Throws)
 {
     behl::push_boolean(S, true);
-    EXPECT_THROW(behl::check_boolean(S, 10), behl::TypeError);
-    EXPECT_THROW(behl::check_boolean(S, -10), behl::TypeError);
+    EXPECT_THROW(behl::check_boolean(S, 10), behl::Exception);
+    EXPECT_THROW(behl::check_boolean(S, -10), behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckBoolean_MultipleBooleans)
@@ -549,13 +550,13 @@ TEST_P(TypecheckTest, CheckUserdata_WrongUID_Throws)
             {
                 behl::check_userdata(S, -1, TestUID2);
             }
-            catch (const behl::RuntimeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("uid"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("uid"), std::string::npos);
                 throw;
             }
         },
-        behl::RuntimeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckUserdata_WrongType_Throws)
@@ -569,13 +570,13 @@ TEST_P(TypecheckTest, CheckUserdata_WrongType_Throws)
             {
                 behl::check_userdata(S, -1, TestUID);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected userdata, got integer"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected userdata, got integer"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_string(S, "test");
     EXPECT_THROW(
@@ -584,13 +585,13 @@ TEST_P(TypecheckTest, CheckUserdata_WrongType_Throws)
             {
                 behl::check_userdata(S, -1, TestUID);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected userdata, got string"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected userdata, got string"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::push_nil(S);
     EXPECT_THROW(
@@ -599,13 +600,13 @@ TEST_P(TypecheckTest, CheckUserdata_WrongType_Throws)
             {
                 behl::check_userdata(S, -1, TestUID);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected userdata, got nil"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected userdata, got nil"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 
     behl::table_new(S);
     EXPECT_THROW(
@@ -614,13 +615,13 @@ TEST_P(TypecheckTest, CheckUserdata_WrongType_Throws)
             {
                 behl::check_userdata(S, -1, TestUID);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("expected userdata, got table"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected userdata, got table"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckUserdata_InvalidIndex_Throws)
@@ -628,8 +629,8 @@ TEST_P(TypecheckTest, CheckUserdata_InvalidIndex_Throws)
     constexpr uint32_t TestUID = behl::make_uid("TestType");
     behl::userdata_new(S, 64, TestUID);
 
-    EXPECT_THROW(behl::check_userdata(S, 10, TestUID), behl::TypeError);
-    EXPECT_THROW(behl::check_userdata(S, -10, TestUID), behl::TypeError);
+    EXPECT_THROW(behl::check_userdata(S, 10, TestUID), behl::Exception);
+    EXPECT_THROW(behl::check_userdata(S, -10, TestUID), behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckUserdata_MultipleUserdataWithDifferentUIDs)
@@ -646,9 +647,9 @@ TEST_P(TypecheckTest, CheckUserdata_MultipleUserdataWithDifferentUIDs)
     EXPECT_NO_THROW(behl::check_userdata(S, 1, UID2));
     EXPECT_NO_THROW(behl::check_userdata(S, 2, UID3));
 
-    EXPECT_THROW(behl::check_userdata(S, 0, UID2), behl::RuntimeError);
-    EXPECT_THROW(behl::check_userdata(S, 1, UID3), behl::RuntimeError);
-    EXPECT_THROW(behl::check_userdata(S, 2, UID1), behl::RuntimeError);
+    EXPECT_THROW(behl::check_userdata(S, 0, UID2), behl::Exception);
+    EXPECT_THROW(behl::check_userdata(S, 1, UID3), behl::Exception);
+    EXPECT_THROW(behl::check_userdata(S, 2, UID1), behl::Exception);
 }
 
 TEST_P(TypecheckTest, CheckMixedTypes_AllValid)
@@ -679,14 +680,14 @@ TEST_P(TypecheckTest, CheckMixedTypes_OneInvalid_Throws)
             {
                 behl::check_integer(S, 2);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("argument #3"), std::string::npos);
-                EXPECT_NE(std::string(e.what()).find("expected integer, got boolean"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("argument #3"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("expected integer, got boolean"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, ArgumentNumbering_NegativeIndices)
@@ -701,13 +702,13 @@ TEST_P(TypecheckTest, ArgumentNumbering_NegativeIndices)
             {
                 behl::check_integer(S, -1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("argument #3"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("argument #3"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, ArgumentNumbering_PositiveIndices)
@@ -722,13 +723,13 @@ TEST_P(TypecheckTest, ArgumentNumbering_PositiveIndices)
             {
                 behl::check_integer(S, 1);
             }
-            catch (const behl::TypeError& e)
+            catch (const behl::Exception& e)
             {
-                EXPECT_NE(std::string(e.what()).find("argument #2"), std::string::npos);
+                EXPECT_NE(behl_test::exception_text(e).find("argument #2"), std::string::npos);
                 throw;
             }
         },
-        behl::TypeError);
+        behl::Exception);
 }
 
 TEST_P(TypecheckTest, InCFunction_CheckTypes)
@@ -744,14 +745,14 @@ TEST_P(TypecheckTest, InCFunction_CheckTypes)
     behl::set_global(S, "test_func");
 
     constexpr std::string_view code1 = R"(return test_func(42, "hello", true);)";
-    ASSERT_NO_THROW(behl::load_string(S, code1));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "42 hello true");
     behl::pop(S, 1);
 
     constexpr std::string_view code2 = R"(return test_func(42, 123, true);)";
-    ASSERT_NO_THROW(behl::load_string(S, code2));
-    EXPECT_ANY_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code2));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
 TEST_P(TypecheckTest, InCFunction_NumberConversion)
@@ -765,20 +766,20 @@ TEST_P(TypecheckTest, InCFunction_NumberConversion)
     behl::set_global(S, "add_nums");
 
     constexpr std::string_view code1 = R"(return add_nums(10, 20);)";
-    ASSERT_NO_THROW(behl::load_string(S, code1));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 30.0);
     behl::pop(S, 1);
 
     constexpr std::string_view code2 = R"(return add_nums(10.5, 20);)";
-    ASSERT_NO_THROW(behl::load_string(S, code2));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code2));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 30.5);
     behl::pop(S, 1);
 
     constexpr std::string_view code3 = R"(return add_nums(3.14, 2.86);)";
-    ASSERT_NO_THROW(behl::load_string(S, code3));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code3));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 6.0);
 }
 
@@ -793,29 +794,24 @@ TEST_P(TypecheckTest, InCFunction_IntegerConversion)
     behl::set_global(S, "add_ints");
 
     constexpr std::string_view code1 = R"(return add_ints(10, 20);)";
-    ASSERT_NO_THROW(behl::load_string(S, code1));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 30);
     behl::pop(S, 1);
 
     constexpr std::string_view code2 = R"(return add_ints(10, 20.0);)";
-    ASSERT_NO_THROW(behl::load_string(S, code2));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code2));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 30);
     behl::pop(S, 1);
 
     constexpr std::string_view code3 = R"(return add_ints(10, 20.5);)";
-    ASSERT_NO_THROW(behl::load_string(S, code3));
+    ASSERT_TRUE(behl_test::load_ok(S, code3));
 
-    try
-    {
-        behl::call(S, 0, 1);
-        FAIL() << "Expected exception to be thrown";
-    }
-    catch (const behl::TypeError& e)
-    {
-        EXPECT_NE(std::string_view(e.what()).find("expected integer"), std::string_view::npos);
-    }
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 1)) << "Expected the call to fail";
+    const std::string message = behl_test::error_text(S);
+    EXPECT_NE(message.find("TypeError"), std::string::npos) << message;
+    EXPECT_NE(message.find("expected integer"), std::string::npos) << message;
 }
 
 TEST_P(TypecheckTest, TypenameHelpers)

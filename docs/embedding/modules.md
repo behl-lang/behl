@@ -120,11 +120,9 @@ int main() {
         print("6 * 7 = " + tostring(mathops.mul(6, 7)));
     )";
     
-    try {
-        behl::load_string(S, script);
-        behl::call(S, 0, 0);
-    } catch (const behl::BehlException& e) {
-        std::cerr << "Error: " << e.what() << "\n";
+    if (behl::load_string(S, script) != 0 || behl::call(S, 0, 0) < 0) {
+        std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+        behl::pop(S, 1);
     }
     
     behl::close(S);

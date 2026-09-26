@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class LoadTest : public ::testing::TestWithParam<bool>
 {
@@ -26,7 +26,7 @@ protected:
 TEST_P(LoadTest, LoadStringSuccess)
 {
     constexpr std::string_view code = "x = 42";
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
@@ -35,7 +35,8 @@ TEST_P(LoadTest, LoadStringSuccess)
 TEST_P(LoadTest, LoadStringSyntaxError)
 {
     constexpr std::string_view bad_code = "let x = ";
-    EXPECT_THROW({ behl::load_string(S, bad_code); }, behl::SyntaxError);
+    EXPECT_TRUE(behl_test::load_fails(S, bad_code));
+    EXPECT_NE(behl_test::error_text(S).find("SyntaxError"), std::string::npos) << behl_test::error_text(S);
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, LoadTest, ::testing::Bool(),

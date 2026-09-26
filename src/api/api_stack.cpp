@@ -5,6 +5,7 @@
 #include "gc/gco_userdata.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
+#include "vm/vm_error.hpp"
 
 #include <cassert>
 
@@ -197,7 +198,7 @@ namespace behl
         // Allocate the actual data buffer
         if (userdata == nullptr || (userdata->data == nullptr && size > 0))
         {
-            error(S, "Out of memory allocating userdata");
+            raise_runtime_error(S, SourceLocation{}, "Out of memory allocating userdata");
         }
 
         // Set the type UID for type safety
@@ -259,7 +260,7 @@ namespace behl
         ptrdiff_t r_idx = resolve_index(S, idx);
         if (r_idx < 0 || r_idx >= static_cast<ptrdiff_t>(S->stack.size()))
         {
-            error(S, "Invalid stack index");
+            raise_runtime_error(S, SourceLocation{}, "Invalid stack index");
         }
 
         const Value& v = S->stack[static_cast<size_t>(r_idx)];
@@ -267,7 +268,7 @@ namespace behl
 
         if (userdata->uid != uid)
         {
-            error(S, "Type mismatch: userdata uid does not match expected type");
+            raise_runtime_error(S, SourceLocation{}, "Type mismatch: userdata uid does not match expected type");
         }
 
         return userdata->data;

@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class TableTest : public ::testing::TestWithParam<bool>
 {
@@ -27,8 +28,8 @@ TEST_P(TableTest, ExecuteTableLengthZeroIndex)
         let t = {[0]=1, [1]=2, [2]=3}
         return #t
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
@@ -39,8 +40,8 @@ TEST_P(TableTest, ExecuteTableWithHole)
         let t = {[0]=1, [2]=3}
         return #t
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
@@ -55,8 +56,8 @@ TEST_P(TableTest, SparseIntegerKeyUsesHash)
         t[1000] = "thousand"  // Should go to hash (too sparse)
         return t[0], t[1], t[2], t[1000]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::get_top(S), 4);
     ASSERT_EQ(behl::to_string(S, -4), "zero");
     ASSERT_EQ(behl::to_string(S, -3), "one");
@@ -72,8 +73,8 @@ TEST_P(TableTest, VeryLargeSparseIndex)
         t[99999999] = "sparse"  // Should NOT allocate huge array
         return t[0], t[99999999]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
     ASSERT_EQ(behl::to_string(S, -2), "first");
     ASSERT_EQ(behl::to_string(S, -1), "sparse");
@@ -90,8 +91,8 @@ TEST_P(TableTest, MixedArrayAndHashAccess)
         t[100] = "sparse"  // Hash due to sparseness
         return t[0], t[1], t[2], t["key"], t[100]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     ASSERT_EQ(behl::get_top(S), 5);
     ASSERT_EQ(behl::to_string(S, -5), "a0");
     ASSERT_EQ(behl::to_string(S, -4), "a1");
@@ -109,8 +110,8 @@ TEST_P(TableTest, NegativeIndexUsesHash)
         t[-100] = "very negative"
         return t[0], t[-1], t[-100]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_string(S, -3), "zero");
     ASSERT_EQ(behl::to_string(S, -2), "negative");
@@ -126,8 +127,8 @@ TEST_P(TableTest, FloatIndexConvertedToInteger)
         t[2.5] = "hash"  // Not integer, goes to hash
         return t[0], t[1.0], t[2.5]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_string(S, -3), "zero");
     ASSERT_EQ(behl::to_string(S, -2), "one");
@@ -142,8 +143,8 @@ TEST_P(TableTest, SparseFloatIndexUsesHash)
         t[1000.0] = "sparse float"  // Integer-valued but sparse
         return t[0], t[1000.0], t[1000]  // Should all work
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_string(S, -3), "zero");
     ASSERT_EQ(behl::to_string(S, -2), "sparse float");
@@ -158,8 +159,8 @@ TEST_P(TableTest, OverwriteSparseKey)
         t[1000] = "second"  // Overwrite in hash
         return t[1000]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_string(S, -1), "second");
 }
@@ -174,8 +175,8 @@ TEST_P(TableTest, BoundaryAtGrowthLimit)
         t[65] = "over"    // Beyond growth limit, goes to hash
         return t[0], t[63], t[64], t[65]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::get_top(S), 4);
     ASSERT_EQ(behl::to_string(S, -4), "zero");
     ASSERT_EQ(behl::to_string(S, -3), "edge");
@@ -191,8 +192,8 @@ TEST_P(TableTest, AccessNonExistentSparseKey)
         let x = t[99999]  // Should return nil, not crash
         return x == nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
@@ -205,8 +206,8 @@ TEST_P(TableTest, StringAndIntegerKeysDontCollide)
         t["0"] = "string zero"
         return t[0], t["0"]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
     ASSERT_EQ(behl::to_string(S, -2), "integer zero");
     ASSERT_EQ(behl::to_string(S, -1), "string zero");
@@ -226,8 +227,8 @@ TEST_P(TableTest, DenseArrayFollowedBySparseKey)
         }
         return sum, t[10000]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
     ASSERT_EQ(behl::to_integer(S, -2), 90);
     ASSERT_EQ(behl::to_string(S, -1), "sparse");
@@ -240,8 +241,8 @@ TEST_P(TableTest, UnpackBasic)
         let a, b, c = table.unpack({1, 2, 3})
         return a, b, c
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_integer(S, -3), 1);
     ASSERT_EQ(behl::to_integer(S, -2), 2);
@@ -255,8 +256,8 @@ TEST_P(TableTest, UnpackSingleElement)
         let x = table.unpack({42})
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -268,8 +269,8 @@ TEST_P(TableTest, UnpackEmptyTable)
         let result = table.unpack({})
         return result == nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
@@ -282,8 +283,8 @@ TEST_P(TableTest, UnpackWithRange)
         let a, b = table.unpack(t, 1, 2)
         return a, b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
     ASSERT_EQ(behl::to_integer(S, -2), 20);
     ASSERT_EQ(behl::to_integer(S, -1), 30);
@@ -297,8 +298,8 @@ TEST_P(TableTest, UnpackWithStartOnly)
         let a, b, c = table.unpack(t, 1)
         return a, b, c
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_integer(S, -3), 20);
     ASSERT_EQ(behl::to_integer(S, -2), 30);
@@ -312,8 +313,8 @@ TEST_P(TableTest, UnpackMixedTypes)
         let a, b, c, d = table.unpack({1, "hello", true, 3.14})
         return a, b, c, d
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::get_top(S), 4);
     ASSERT_EQ(behl::to_integer(S, -4), 1);
     ASSERT_EQ(behl::to_string(S, -3), "hello");
@@ -329,8 +330,8 @@ TEST_P(TableTest, UnpackInvalidRange)
         let result = table.unpack(t, 5, 2)  // end < start
         return result == nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
@@ -343,8 +344,8 @@ TEST_P(TableTest, UnpackZeroIndex)
         let a, b, c = table.unpack(t, 0, 2)
         return a, b, c
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_string(S, -3), "a");
     ASSERT_EQ(behl::to_string(S, -2), "b");
@@ -372,8 +373,8 @@ TEST_P(TableTest, JitIntKeyTableReadsInBoundsAndMisses)
         let one = 1.0
         return a, miss, miss_reg, t[neg], t[one]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     ASSERT_EQ(behl::to_integer(S, -5), 2 * (90 + 0 + 6));
     ASSERT_TRUE(behl::is_nil(S, -4));
     ASSERT_TRUE(behl::is_nil(S, -3));
@@ -399,8 +400,8 @@ TEST_P(TableTest, JitIntKeyTableReadOfNilOrMissingUsesIndexMetamethod)
         }
         return r
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1 + 102 + 105 + 1 + 102);
 }
 
@@ -426,8 +427,8 @@ TEST_P(TableTest, JitIntKeyTableWritesInBoundsAppendAndRegisterKeys)
         for (let i = 2; i < 20; i++) { sum = sum + t[i] }
         return sum, t[0], t[1].v, #t
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::to_integer(S, -4), 10 * (210 - 1 - 2));
     ASSERT_EQ(behl::to_string(S, -3), "s");
     ASSERT_EQ(behl::to_integer(S, -2), 5);
@@ -450,8 +451,8 @@ TEST_P(TableTest, JitIntKeyTableWriteOfExistingSlotSkipsNewIndex)
         }
         return calls, t[0], t[1], t[5]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::to_integer(S, -4), 20);
     ASSERT_EQ(behl::to_integer(S, -3), 19);
     ASSERT_EQ(behl::to_integer(S, -2), 19);
@@ -473,8 +474,8 @@ TEST_P(TableTest, JitIntKeyTableReadIntoTableRegister)
         u = u[idx]
         return t, u[idx]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 42);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -492,8 +493,8 @@ TEST_P(TableTest, JitIntKeyIndexOfNonTableRaises)
         let ok2 = pcall(getk, true, 0)
         return ok1, ok2
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_FALSE(behl::to_boolean(S, -2));
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
@@ -513,8 +514,8 @@ TEST_P(TableTest, ArrayGrowthOverExistingHashKeysKeepsThem)
         }
         return t[100], t[101], finished, n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_EQ(behl::to_string(S, -4), "h");
     EXPECT_EQ(behl::to_string(S, -3), "x");
     EXPECT_TRUE(behl::to_boolean(S, -2));
@@ -536,8 +537,8 @@ TEST_P(TableTest, RawlenCoversKeysFilledInReverseAndInsertAppendsAfterThem)
         }
         return len_before, t[64], t[101], rawlen(t), n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     EXPECT_EQ(behl::to_integer(S, -5), 101);
     EXPECT_EQ(behl::to_integer(S, -4), 64);
     EXPECT_EQ(behl::to_string(S, -3), "new");
@@ -556,8 +557,8 @@ TEST_P(TableTest, PairsIteratorRejectsMissingIntegerKey)
         let ok_negative = pcall(f, t, -5)
         return ok_missing, ok_negative
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_FALSE(behl::to_boolean(S, -2));
     EXPECT_FALSE(behl::to_boolean(S, -1));
 }
@@ -583,8 +584,8 @@ TEST_P(TableTest, ClearingKeysDuringPairsVisitsEachKeyOnce)
         }
         return visits, left
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 70);
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
@@ -610,8 +611,8 @@ TEST_P(TableTest, UpdatingValuesDuringPairsVisitsEachKeyOnce)
         }
         return visits, sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 70);
     EXPECT_EQ(behl::to_integer(S, -1), 2 * (190 + 1225));
 }
@@ -621,8 +622,8 @@ TEST_P(TableTest, RawlenOfConstructorsWithNils)
     constexpr std::string_view code = R"(
         return rawlen({1, 2, nil}), rawlen({nil}), rawlen({1, 2, 3, nil, nil}), rawlen({1, nil, 3}), rawlen({})
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     EXPECT_EQ(behl::to_integer(S, -5), 2);
     EXPECT_EQ(behl::to_integer(S, -4), 0);
     EXPECT_EQ(behl::to_integer(S, -3), 3);
@@ -649,8 +650,8 @@ TEST_P(TableTest, RawlenOfDenseArraysUpToForty)
         }
         return bad
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), -1);
 }
 
@@ -665,8 +666,8 @@ TEST_P(TableTest, GrowByAssigningAtRawlen)
         }
         return bad, rawlen(g), g[299]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), -1);
     EXPECT_EQ(behl::to_integer(S, -2), 300);
     EXPECT_EQ(behl::to_integer(S, -1), 897);
@@ -690,8 +691,8 @@ TEST_P(TableTest, KeysOfEveryTypeRoundTrip)
         let built = "abcdefghijklmnopqrstuvwxyz0123456789" + "abcdefghijklmnopqrstuvwxyz"
         return t[1.5] + t[2] + t[0] + t[0.0] + t[built] + t[fn] + t[true] + t[false] + t[tk]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "floatintfloatnegzeronegzerolongfunctruefalsetable");
 }
 
@@ -718,8 +719,8 @@ TEST_P(TableTest, PairsVisitsKeysOfEveryType)
         }
         return n, seen["float"] + "," + seen["intfloat"] + "," + seen["negzero"] + "," + seen["long"] + "," + seen["func"] + "," + seen["true"] + "," + seen["table"]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 7);
     EXPECT_EQ(behl::to_string(S, -1), "number,integer,integer,string,function,boolean,table");
 }
@@ -740,8 +741,8 @@ TEST_P(TableTest, PairsVisitsFalseKey)
         }
         return n, sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 3);
     EXPECT_EQ(behl::to_integer(S, -1), 6);
 }
@@ -759,8 +760,8 @@ TEST_P(TableTest, CFunctionAsKey)
         }
         return t[print], t[tostring], n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_string(S, -3), "c");
     EXPECT_TRUE(behl::is_nil(S, -2));
     EXPECT_EQ(behl::to_integer(S, -1), 2);
@@ -780,8 +781,8 @@ TEST_P(TableTest, NineThousandHashEntriesIterateAndMatchLookups)
         }
         return count, consistent
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 9000);
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
@@ -795,8 +796,8 @@ TEST_P(TableTest, PairsWithoutArgumentOrOnNonTableRaises)
         let ok_string = pcall(pairs, "str")
         return ok_none, ok_number, ok_nil, ok_string
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_FALSE(behl::to_boolean(S, -4));
     EXPECT_FALSE(behl::to_boolean(S, -3));
     EXPECT_FALSE(behl::to_boolean(S, -2));
@@ -824,8 +825,8 @@ TEST_P(TableTest, PowerOfTwoAndNegativeIntegerKeys)
         }
         return count, all_found, big[-9223372036854775807 - 1], big[9223372036854775807]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_EQ(behl::to_integer(S, -4), 128);
     EXPECT_TRUE(behl::to_boolean(S, -3));
     EXPECT_EQ(behl::to_string(S, -2), "min");
@@ -840,8 +841,8 @@ TEST_P(TableTest, TableInsertAppends)
         table.insert(t, 30)
         return rawlen(t), t[2]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 3);
     EXPECT_EQ(behl::to_integer(S, -1), 30);
 }
@@ -855,8 +856,8 @@ TEST_P(TableTest, TableInsertBeforeHoleKeepsSparseKey)
         table.insert(t, "x")
         return rawlen(t), t[2], t[3], t[4]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_EQ(behl::to_integer(S, -4), 3);
     EXPECT_EQ(behl::to_string(S, -3), "x");
     EXPECT_TRUE(behl::is_nil(S, -2));
@@ -873,8 +874,8 @@ TEST_P(TableTest, UnpackClampsOutOfRangeBounds)
         let a, b, c = table.unpack({1, 2, 3}, -5, 1)
         return past_end, both, a, b, c
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     EXPECT_EQ(behl::to_integer(S, -5), 3);
     EXPECT_EQ(behl::to_integer(S, -4), 3);
     EXPECT_EQ(behl::to_integer(S, -3), 1);
@@ -891,8 +892,8 @@ TEST_P(TableTest, UnpackStopsAtRawlenBeforeHole)
         t[5] = 5
         return count(table.unpack(t, 0, 5)), count(table.unpack(t))
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 2);
     EXPECT_EQ(behl::to_integer(S, -1), 2);
 }
@@ -905,8 +906,8 @@ TEST_P(TableTest, UnpackAcceptsIntegralFloatBounds)
         let a, b = table.unpack({10, 20, 30}, 1.0, 2.0)
         return a, b, count(table.unpack({10, 20, 30}, 1.0, 2.0))
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), 20);
     EXPECT_EQ(behl::to_integer(S, -2), 30);
     EXPECT_EQ(behl::to_integer(S, -1), 2);

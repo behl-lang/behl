@@ -1,6 +1,6 @@
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 class JitUnwindTest : public ::testing::Test
@@ -33,8 +33,8 @@ protected:
             if (ok) { return -1 }
             return 1
         )";
-        ASSERT_NO_THROW(behl::load_string(S, code)) << "depth " << depth;
-        ASSERT_NO_THROW(behl::call(S, 0, 1)) << "depth " << depth;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << "depth " << depth;
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1)) << "depth " << depth;
         EXPECT_EQ(behl::to_integer(S, -1), 1) << "depth " << depth;
         behl::set_top(S, 0);
     }
@@ -77,8 +77,8 @@ TEST_F(JitUnwindTest, StateStillUsableAfterDeepError)
         if (ok) { return -1 }
         return sum(300)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 45150);
 }
 
@@ -101,8 +101,8 @@ TEST_F(JitUnwindTest, RepeatedDeepErrorsDoNotLeakFrames)
         if (sum(400) != 80200) { return -1 }
         return caught
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 50);
 }
 
@@ -118,8 +118,8 @@ TEST_F(JitUnwindTest, ErrorFromSelfRecursiveTree)
         if (ok) { return -1 }
         return 1
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 
@@ -140,8 +140,8 @@ TEST_F(JitUnwindTest, ErrorAfterFunctionIsCompiled)
         if (ok) { return -1 }
         return 1
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 
@@ -162,8 +162,8 @@ TEST_F(JitUnwindTest, InnerPcallDeepInChainOuterContinues)
         }
         return middle(200)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 7);
 }
 
@@ -176,8 +176,8 @@ TEST_F(JitUnwindTest, UncaughtDeepErrorReachesTheApi)
         }
         return deep(400)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
 TEST_F(JitUnwindTest, UncaughtDeepTypeErrorReachesTheApi)
@@ -189,8 +189,8 @@ TEST_F(JitUnwindTest, UncaughtDeepTypeErrorReachesTheApi)
         }
         return deep(400)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
 TEST_F(JitUnwindTest, ErrorFromMetamethodDeepInChain)
@@ -209,8 +209,8 @@ TEST_F(JitUnwindTest, ErrorFromMetamethodDeepInChain)
         if (ok) { return -1 }
         return 1
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 
@@ -223,8 +223,8 @@ TEST_F(JitUnwindTest, DeepRecursionSucceedsAcrossNestLimit)
         }
         return sum(5000)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 12502500);
 }
 
@@ -241,8 +241,8 @@ TEST_F(JitUnwindTest, DeferRunsWhileUnwindingDeepChain)
         if (ok) { return -1 }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 201);
 }
 
@@ -324,8 +324,8 @@ TEST_F(JitNativeUnwindTest, BehlErrorFromNativeCaughtAtDepth)
     for (int depth : { 10, 140, 200, 1000 })
     {
         const std::string code = deep_calling("native_error()", depth);
-        ASSERT_NO_THROW(behl::load_string(S, code)) << depth;
-        ASSERT_NO_THROW(behl::call(S, 0, 1)) << depth;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << depth;
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1)) << depth;
         EXPECT_EQ(behl::to_integer(S, -1), 1) << "depth " << depth;
         behl::set_top(S, 0);
     }
@@ -336,8 +336,8 @@ TEST_F(JitNativeUnwindTest, BadArgumentTypeFromNativeCaughtAtDepth)
     for (int depth : { 10, 140, 200, 1000 })
     {
         const std::string code = deep_calling("native_check(\"not a number\")", depth);
-        ASSERT_NO_THROW(behl::load_string(S, code)) << depth;
-        ASSERT_NO_THROW(behl::call(S, 0, 1)) << depth;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << depth;
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1)) << depth;
         EXPECT_EQ(behl::to_integer(S, -1), 1) << "depth " << depth;
         behl::set_top(S, 0);
     }
@@ -348,8 +348,8 @@ TEST_F(JitNativeUnwindTest, StdlibNativeTypeErrorCaughtAtDepth)
     for (int depth : { 10, 200 })
     {
         const std::string code = deep_calling("tonumber()", depth);
-        ASSERT_NO_THROW(behl::load_string(S, code)) << depth;
-        ASSERT_NO_THROW(behl::call(S, 0, 1)) << depth;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << depth;
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1)) << depth;
         behl::set_top(S, 0);
     }
 }
@@ -366,8 +366,8 @@ TEST_F(JitNativeUnwindTest, CustomExceptionFromNativeReachesApiAtDepth)
             return deep()")
             + std::to_string(depth) + R"()
         )";
-        ASSERT_NO_THROW(behl::load_string(S, code)) << depth;
-        EXPECT_THROW({ behl::call(S, 0, 1); }, CustomNativeException) << "depth " << depth;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << depth;
+        EXPECT_THROW(static_cast<void>(behl::call(S, 0, 1)), CustomNativeException) << "depth " << depth;
         behl::set_top(S, 0);
     }
 }
@@ -384,8 +384,8 @@ TEST_F(JitNativeUnwindTest, StdExceptionFromNativeReachesApiAtDepth)
             return deep()")
             + std::to_string(depth) + R"()
         )";
-        ASSERT_NO_THROW(behl::load_string(S, code)) << depth;
-        EXPECT_THROW({ behl::call(S, 0, 1); }, std::runtime_error) << "depth " << depth;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << depth;
+        EXPECT_THROW(static_cast<void>(behl::call(S, 0, 1)), std::runtime_error) << "depth " << depth;
         behl::set_top(S, 0);
     }
 }
@@ -393,8 +393,8 @@ TEST_F(JitNativeUnwindTest, StdExceptionFromNativeReachesApiAtDepth)
 TEST_F(JitNativeUnwindTest, StateUsableAfterNativeThrowAtDepth)
 {
     const std::string code = deep_calling("native_error()", 500);
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
     behl::set_top(S, 0);
 
@@ -405,8 +405,8 @@ TEST_F(JitNativeUnwindTest, StateUsableAfterNativeThrowAtDepth)
         }
         return sum(400)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, after));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, after));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 80200);
 }
 
@@ -426,7 +426,7 @@ TEST_F(JitNativeUnwindTest, NativeThrowFromMetamethodAtDepth)
         if (ok) { return -1 }
         return 1
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }

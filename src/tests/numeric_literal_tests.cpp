@@ -7,6 +7,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -34,8 +35,8 @@ TEST_P(NumericLiteralTest, HexadecimalLowercase)
         let a = 0xff;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 255);
 }
 
@@ -45,8 +46,8 @@ TEST_P(NumericLiteralTest, HexadecimalUppercase)
         let a = 0xFF;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 255);
 }
 
@@ -56,8 +57,8 @@ TEST_P(NumericLiteralTest, HexadecimalUppercaseX)
         let a = 0XFF;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 255);
 }
 
@@ -67,8 +68,8 @@ TEST_P(NumericLiteralTest, HexadecimalMixedCase)
         let a = 0xAbCdEf;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 11259375);
 }
 
@@ -78,8 +79,8 @@ TEST_P(NumericLiteralTest, HexadecimalZero)
         let a = 0x0;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -89,8 +90,8 @@ TEST_P(NumericLiteralTest, HexadecimalSingleDigit)
         let a = 0xF;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 15);
 }
 
@@ -100,8 +101,8 @@ TEST_P(NumericLiteralTest, HexadecimalLarge)
         let a = 0xFFFFFF;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 16777215);
 }
 
@@ -111,8 +112,8 @@ TEST_P(NumericLiteralTest, HexadecimalAddition)
         let a = 0x10 + 0x20;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 48);
 }
 
@@ -122,8 +123,8 @@ TEST_P(NumericLiteralTest, HexadecimalBitwiseAND)
         let a = 0xFF & 0xF0;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0xF0);
 }
 
@@ -133,8 +134,8 @@ TEST_P(NumericLiteralTest, HexadecimalBitwiseOR)
         let a = 0x0F | 0xF0;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0xFF);
 }
 
@@ -144,8 +145,8 @@ TEST_P(NumericLiteralTest, HexadecimalBitwiseXOR)
         let a = 0xFF ^ 0xAA;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0x55);
 }
 
@@ -155,8 +156,8 @@ TEST_P(NumericLiteralTest, HexadecimalBitwiseNOT)
         let a = ~0xF;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), ~15);
 }
 
@@ -166,8 +167,8 @@ TEST_P(NumericLiteralTest, HexadecimalLeftShift)
         let a = 0x1 << 4;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0x10);
 }
 
@@ -177,8 +178,8 @@ TEST_P(NumericLiteralTest, HexadecimalRightShift)
         let a = 0x80 >> 4;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0x8);
 }
 
@@ -188,8 +189,8 @@ TEST_P(NumericLiteralTest, DecimalInteger)
         let a = 42;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
@@ -199,8 +200,8 @@ TEST_P(NumericLiteralTest, DecimalFloat)
         let a = 3.14159;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 3.14159);
 }
 
@@ -210,8 +211,8 @@ TEST_P(NumericLiteralTest, DecimalZero)
         let a = 0;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -221,8 +222,8 @@ TEST_P(NumericLiteralTest, DecimalLeadingZero)
         let a = 007;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 7);
 }
 
@@ -232,8 +233,8 @@ TEST_P(NumericLiteralTest, MixedDecimalAndHex)
         let a = 10 + 0x10;
         return a;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 26);
 }
 
@@ -243,8 +244,8 @@ TEST_P(NumericLiteralTest, MixedInTable)
         let t = {10, 0x10, 20, 0x20};
         return t[1];
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0x10);
 }
 
@@ -256,8 +257,8 @@ TEST_P(NumericLiteralTest, HexadecimalInFunction)
         }
         return get_color();
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0xFF00FF);
 }
 
@@ -268,8 +269,8 @@ TEST_P(NumericLiteralTest, HexadecimalAsTableKey)
         t[0xFF] = "color";
         return t[255];
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_string(S, -1), "color");
 }
 
@@ -282,8 +283,8 @@ TEST_P(NumericLiteralTest, HexadecimalComparison)
             return 0;
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 
@@ -292,8 +293,8 @@ TEST_P(NumericLiteralTest, HexadecimalAllOnesWrapsToMinusOne)
     constexpr std::string_view code = R"(
         return 0xFFFFFFFFFFFFFFFF
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::is_integer(S, -1));
     EXPECT_EQ(behl::to_integer(S, -1), -1);
 }
@@ -303,8 +304,8 @@ TEST_P(NumericLiteralTest, HexadecimalHighBitWrapsToMinInteger)
     constexpr std::string_view code = R"(
         return 0x8000000000000000
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::is_integer(S, -1));
     EXPECT_EQ(behl::to_integer(S, -1), std::numeric_limits<int64_t>::min());
 }
@@ -314,8 +315,8 @@ TEST_P(NumericLiteralTest, HexadecimalMaxInteger)
     constexpr std::string_view code = R"(
         return 0x7FFFFFFFFFFFFFFF
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::is_integer(S, -1));
     EXPECT_EQ(behl::to_integer(S, -1), std::numeric_limits<int64_t>::max());
 }

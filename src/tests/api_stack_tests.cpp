@@ -1,7 +1,7 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
+#include "vm/vm_error.hpp"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <limits>
@@ -274,13 +274,13 @@ TEST_F(ApiStackTest, CheckUserdataRejectsMismatchedUid)
     constexpr uint32_t kUid = 0x11111111u;
     behl::userdata_new(S, 8, kUid);
 
-    ASSERT_THROW(behl::check_userdata(S, -1, 0x22222222u), behl::RuntimeError);
+    ASSERT_THROW(behl::check_userdata(S, -1, 0x22222222u), behl::Exception);
 }
 
 TEST_F(ApiStackTest, CheckUserdataRejectsNonUserdata)
 {
     behl::push_integer(S, 7);
-    ASSERT_THROW(behl::check_userdata(S, -1, 1u), behl::TypeError);
+    ASSERT_THROW(behl::check_userdata(S, -1, 1u), behl::Exception);
 }
 
 TEST_F(ApiStackTest, ZeroSizedUserdataIsUsable)

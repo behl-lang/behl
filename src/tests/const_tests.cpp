@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 namespace behl
 {
@@ -28,8 +29,8 @@ namespace behl
             return x == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -40,7 +41,7 @@ namespace behl
             x = 20;
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstReassignmentFails)
@@ -51,7 +52,7 @@ namespace behl
             return value;
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstInFunction)
@@ -64,8 +65,8 @@ namespace behl
             return test() == 100;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -80,7 +81,7 @@ namespace behl
             return test();
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, MultipleConstDeclarations)
@@ -92,8 +93,8 @@ namespace behl
             return a + b + c == 6;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -105,8 +106,8 @@ namespace behl
             return y == 13;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -120,8 +121,8 @@ namespace behl
             return result == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -132,8 +133,8 @@ namespace behl
             return t["x"] == 10 && t["y"] == 20;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -146,8 +147,8 @@ namespace behl
             return t["x"] == 20 && t["y"] == 30;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -158,7 +159,7 @@ namespace behl
             t = {y = 20};
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstInLoop)
@@ -172,8 +173,8 @@ namespace behl
             return sum == 20;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -186,7 +187,7 @@ namespace behl
             }
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstInNestedScopes)
@@ -205,8 +206,8 @@ namespace behl
             return false;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -223,8 +224,8 @@ namespace behl
             return x == 10;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -240,8 +241,8 @@ namespace behl
             return false;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -254,7 +255,7 @@ namespace behl
             }
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstWithString)
@@ -264,8 +265,8 @@ namespace behl
             return message == "hello";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -276,7 +277,7 @@ namespace behl
             message = "world";
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstWithNil)
@@ -286,8 +287,8 @@ namespace behl
             return value == nil;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -298,8 +299,8 @@ namespace behl
             return flag == true;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -313,8 +314,8 @@ namespace behl
             return getCaptured() == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -328,7 +329,7 @@ namespace behl
             modifyCaptured();
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstFunctionParameter)
@@ -340,14 +341,10 @@ namespace behl
             return test(21) == 42;
         )";
 
-        try
+        if (load_string(S, code) == 0)
         {
-            load_string(S, code);
-            ASSERT_NO_THROW(call(S, 0, 1));
+            ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
             EXPECT_TRUE(to_boolean(S, -1));
-        }
-        catch (...)
-        {
         }
     }
 
@@ -364,8 +361,8 @@ namespace behl
             return count == 3;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -376,7 +373,7 @@ namespace behl
             x = x + 5;
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstIncrementFails)
@@ -386,7 +383,7 @@ namespace behl
             counter++;
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstDecrementFails)
@@ -396,7 +393,7 @@ namespace behl
             value--;
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstArray)
@@ -406,8 +403,8 @@ namespace behl
             return arr[0] == 1 && arr[4] == 5;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -420,8 +417,8 @@ namespace behl
             return arr[0] == 10 && arr[3] == 40;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -432,7 +429,7 @@ namespace behl
             arr = {4, 5, 6};
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstNestedTables)
@@ -446,8 +443,8 @@ namespace behl
             return data["inner"]["value"] == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -463,8 +460,8 @@ namespace behl
             return data["inner"]["value"] == 100;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -478,13 +475,9 @@ namespace behl
             return result == 10;
         )";
 
-        try
+        if (load_string(S, code) == 0)
         {
-            load_string(S, code);
-            EXPECT_ANY_THROW(call(S, 0, 1));
-        }
-        catch (...)
-        {
+            EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
         }
     }
 
@@ -500,8 +493,8 @@ namespace behl
             return useGlobal() == 1000;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -512,7 +505,7 @@ namespace behl
             GLOBAL_CONST = 2000;
         )";
 
-        EXPECT_ANY_THROW(load_string(S, code));
+        EXPECT_TRUE(behl_test::load_fails(S, code));
     }
 
     TEST_P(ConstTest, ConstWithComplexExpression)
@@ -524,8 +517,8 @@ namespace behl
             return result == 55;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -542,8 +535,8 @@ namespace behl
             return factorial(5) == 120;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -557,8 +550,8 @@ namespace behl
             return d == 6;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -571,8 +564,8 @@ namespace behl
             return x == 30 && y == 20;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -585,8 +578,8 @@ namespace behl
             return x == 10 && y == 30;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -602,8 +595,8 @@ namespace behl
             return obj["value"] == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -615,8 +608,8 @@ namespace behl
             return result == 100;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -629,8 +622,8 @@ namespace behl
             return global_var == 150 && local_const == 100;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 

@@ -26,7 +26,7 @@ namespace behl
 
         if (module_def.funcs.empty())
         {
-            error(S, "create_module: function array is empty");
+            raise_runtime_error(S, SourceLocation{}, "create_module: function array is empty");
         }
 
         // Create module table
@@ -70,7 +70,7 @@ namespace behl
         Value module_table = S->stack.back();
         if (!module_table.is_table())
         {
-            error(S, "create_module: internal error - expected table on stack");
+            raise_runtime_error(S, SourceLocation{}, "create_module: internal error - expected table on stack");
         }
 
         // Register in module cache so it can be imported

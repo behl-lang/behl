@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 #include <string_view>
 
@@ -35,8 +35,8 @@ TEST_P(ConcatTest, SelfAddLocalString)
         }
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "xxxx");
 }
 
@@ -48,8 +48,8 @@ TEST_P(ConcatTest, SelfAddLocalStringOutsideLoop)
         a = a + b
         return a
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "foobar");
 }
 
@@ -63,8 +63,8 @@ TEST_P(ConcatTest, SelfAddLocalStillAddsIntegers)
         }
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 22);
 }
 
@@ -76,8 +76,9 @@ TEST_P(ConcatTest, SelfAddLocalStringPlusNumberThrows)
         s = s + c
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ConcatTest, SelfAddLocalRespectsAddMetamethod)
@@ -91,8 +92,8 @@ TEST_P(ConcatTest, SelfAddLocalRespectsAddMetamethod)
         t = t + other
         return t
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 99);
 }
 
@@ -102,8 +103,8 @@ TEST_P(ConcatTest, AddStringConstant)
         let a = "foo"
         return a + "bar"
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "foobar");
 }
 
@@ -116,8 +117,8 @@ TEST_P(ConcatTest, AddStringConstantInLoop)
         }
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "ababab");
 }
 
@@ -127,8 +128,9 @@ TEST_P(ConcatTest, AddStringConstantToNumberThrows)
         let a = 5
         return a + "bar"
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 class SplitArithTest : public ::testing::TestWithParam<bool>
@@ -167,8 +169,8 @@ protected:
             + std::string(expr) + R"(
             return calls, r
         )";
-        ASSERT_NO_THROW(behl::load_string(S, code)) << event;
-        ASSERT_NO_THROW(behl::call(S, 0, 2)) << event;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << event;
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 2)) << event;
         EXPECT_EQ(behl::to_integer(S, -2), 1) << event << " metamethod call count";
         EXPECT_EQ(behl::to_integer(S, -1), 7) << event << " result";
         behl::set_top(S, 0);
@@ -197,8 +199,8 @@ TEST_P(SplitArithTest, NumericFastPathSkipsSlowHalf)
         let b = 3
         return a + b, a - b, a * b, a / b, a % b, a ** b, a & b, a | b, a ^ b, a << b, a >> b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 11));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 11));
     EXPECT_EQ(behl::to_integer(S, -11), 10);
     EXPECT_EQ(behl::to_integer(S, -10), 4);
     EXPECT_EQ(behl::to_integer(S, -9), 21);
@@ -219,8 +221,8 @@ TEST_P(SplitArithTest, FloatOperandsTakeFastPath)
         let b = 2.5
         return a + b, a - b, a * b, a / b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -4), 10.0);
     EXPECT_DOUBLE_EQ(behl::to_number(S, -3), 5.0);
     EXPECT_DOUBLE_EQ(behl::to_number(S, -2), 18.75);
@@ -236,8 +238,8 @@ TEST_P(ConcatTest, ConcatPreservesNulBytes)
         let e = d + d;
         return d, string.len(c), string.len(d), string.len(e), string.byte(d, 3);
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     EXPECT_EQ(behl::to_string(S, -5), std::string_view("a\0b\0", 4));
     EXPECT_EQ(behl::to_integer(S, -4), 3);
     EXPECT_EQ(behl::to_integer(S, -3), 4);
@@ -253,8 +255,8 @@ TEST_P(ConcatTest, LengthOfParenthesisedLocalConcatAsCallArgument)
         let b = "zw";
         return id(#(a + b));
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
     EXPECT_EQ(behl::to_integer(S, -1), 4);
 }
@@ -267,8 +269,8 @@ TEST_P(ConcatTest, LengthOfParenthesisedLocalConcatInTableConstructor)
         let t = {#(a + b)};
         return t[0];
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
     EXPECT_EQ(behl::to_integer(S, -1), 4);
 }

@@ -158,6 +158,15 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
     return opts;
 }
 
+static std::string error_text(behl::State* S)
+{
+    if (behl::type(S, -1) == behl::Type::kString)
+    {
+        return std::string(behl::to_string(S, -1));
+    }
+    return behl::format("(error object is a {} value)", behl::value_typename(S, -1));
+}
+
 bool load_file(behl::State* S, std::string_view filename, std::string& error_msg)
 {
     std::ifstream file(filename.data(), std::ios::binary);
@@ -174,7 +183,12 @@ bool load_file(behl::State* S, std::string_view filename, std::string& error_msg
     file.seekg(0, std::ios::beg);
     file.read(&content[0], static_cast<std::streamsize>(content.size()));
 
-    behl::load_buffer(S, content, filename.data(), true);
+    if (behl::load_buffer(S, content, filename.data(), true) < 0)
+    {
+        error_msg = error_text(S);
+        behl::pop(S, 1);
+        return false;
+    }
 
     return true;
 }
@@ -216,13 +230,10 @@ static void print_results(behl::State* S)
     // Move print to bottom (before all results)
     behl::insert(S, 0);
 
-    try
+    if (behl::call(S, num_results, 0) < 0)
     {
-        behl::call(S, num_results, 0);
-    }
-    catch (const std::exception& ex)
-    {
-        print_error("Error printing results: {}", ex.what());
+        print_error("Error printing results: {}", error_text(S));
+        behl::pop(S, 1);
     }
 }
 
@@ -244,26 +255,26 @@ void repl(behl::State* S)
             continue;
         }
 
-        try
+        if (behl::load_string(S, line) < 0 || behl::call(S, 0, behl::kMultRet) < 0)
         {
-            behl::load_string(S, line);
-            behl::call(S, 0, behl::kMultRet);
-
-            print_results(S);
+            print_error("{}", error_text(S));
             behl::set_top(S, 0);
+            continue;
         }
-        catch (const std::exception& ex)
-        {
-            print_error("{}", ex.what());
-        }
+
+        print_results(S);
+        behl::set_top(S, 0);
     }
     println("");
 }
 
 static int run_execute_mode(behl::State* S, const Options& opts)
 {
-    behl::load_string(S, opts.execute_code);
-    behl::call(S, 0, behl::kMultRet);
+    if (behl::load_string(S, opts.execute_code) < 0 || behl::call(S, 0, behl::kMultRet) < 0)
+    {
+        print_error("{}", error_text(S));
+        return 1;
+    }
     print_results(S);
     return 0;
 }
@@ -279,9 +290,10 @@ static int run_dump_mode(behl::State* S, const Options& opts)
             return 1;
         }
     }
-    else
+    else if (behl::load_string(S, opts.execute_code) < 0)
     {
-        behl::load_string(S, opts.execute_code);
+        print_error("{}", error_text(S));
+        return 1;
     }
 
     dump_closure_bytecode(S);
@@ -302,7 +314,11 @@ static int run_script_mode(behl::State* S, const Options& opts)
         behl::push_string(S, script_arg);
     }
 
-    behl::call(S, static_cast<int32_t>(opts.script_args.size()), behl::kMultRet);
+    if (behl::call(S, static_cast<int32_t>(opts.script_args.size()), behl::kMultRet) < 0)
+    {
+        print_error("{}", error_text(S));
+        return 1;
+    }
     print_results(S);
     return 0;
 }

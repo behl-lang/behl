@@ -2,49 +2,24 @@
 
 #include "bytecode.hpp"
 #include "common/format.hpp"
-#include "exceptions.hpp"
 #include "frame.hpp"
 #include "platform/platform.hpp"
 #include "state.hpp"
 #include "types.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 
 namespace behl
 {
 
-    //////////////////////////////////////////////////////////////////////////
-    // Error Throwing Functions
-
-    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_bitwise(const Value& a, const Value& b, const CallFrame& frame)
-    {
-        const auto loc = get_current_location(frame);
-        const auto msg = behl::format(
-            "attempt to perform bitwise operation on a '{}' value and a '{}' value", a.get_type_string(), b.get_type_string());
-
-        throw TypeError(msg, loc);
-    }
-
-    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_bitwise(const Value& a, const CallFrame& frame)
-    {
-        const auto loc = get_current_location(frame);
-        const auto msg = behl::format<"attempt to perform bitwise operation on a {} value">(a.get_type_string());
-
-        throw TypeError(msg, loc);
-    }
-
-    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_no_integer_representation(const CallFrame& frame)
-    {
-        throw TypeError("number has no integer representation", get_current_location(frame));
-    }
-
-    BEHL_INLINE Integer bitwise_fp_operand(FP d, const CallFrame& frame)
+    BEHL_INLINE Integer bitwise_fp_operand(State* S, FP d, const CallFrame& frame)
     {
         Integer out = 0;
         if (!arithmetic::try_from_fp(d, out))
         {
-            throw_no_integer_representation(frame);
+            raise_no_integer_representation(S, frame);
         }
         return out;
     }
@@ -135,7 +110,7 @@ namespace behl
             case kTypePairIntFloat:
             {
                 const Integer ai = a.get_integer();
-                const Integer bf = bitwise_fp_operand(b.get_fp(), frame);
+                const Integer bf = bitwise_fp_operand(S, b.get_fp(), frame);
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(ai, bf));
                 return;
@@ -143,7 +118,7 @@ namespace behl
 
             case kTypePairFloatInt:
             {
-                const Integer af = bitwise_fp_operand(a.get_fp(), frame);
+                const Integer af = bitwise_fp_operand(S, a.get_fp(), frame);
                 const Integer bi = b.get_integer();
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(af, bi));
@@ -152,8 +127,8 @@ namespace behl
 
             case kTypePairFloatFloat:
             {
-                const Integer af = bitwise_fp_operand(a.get_fp(), frame);
-                const Integer bf = bitwise_fp_operand(b.get_fp(), frame);
+                const Integer af = bitwise_fp_operand(S, a.get_fp(), frame);
+                const Integer bf = bitwise_fp_operand(S, b.get_fp(), frame);
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(af, bf));
                 return;
@@ -176,7 +151,7 @@ namespace behl
             return;
         }
 
-        throw_bad_bitwise(a, b, current_frame);
+        raise_bad_bitwise(S, a, b, current_frame);
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -196,19 +171,19 @@ namespace behl
             case kTypePairIntFloat:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(a.get_integer(), bitwise_fp_operand(b.get_fp(), frame)));
+                dst.emplace<Integer>(op(a.get_integer(), bitwise_fp_operand(S, b.get_fp(), frame)));
                 return true;
             }
             case kTypePairFloatInt:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(bitwise_fp_operand(a.get_fp(), frame), b.get_integer()));
+                dst.emplace<Integer>(op(bitwise_fp_operand(S, a.get_fp(), frame), b.get_integer()));
                 return true;
             }
             case kTypePairFloatFloat:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(bitwise_fp_operand(a.get_fp(), frame), bitwise_fp_operand(b.get_fp(), frame)));
+                dst.emplace<Integer>(op(bitwise_fp_operand(S, a.get_fp(), frame), bitwise_fp_operand(S, b.get_fp(), frame)));
                 return true;
             }
             default:
@@ -250,7 +225,7 @@ namespace behl
 
         if (val.is_fp())
         {
-            const Integer i = bitwise_fp_operand(val.get_fp(), frame);
+            const Integer i = bitwise_fp_operand(S, val.get_fp(), frame);
             get_register(S, frame, a).emplace<Integer>(~i);
             return;
         }
@@ -267,7 +242,7 @@ namespace behl
             return;
         }
 
-        throw_bad_bitwise(val, current_frame);
+        raise_bad_bitwise(S, val, current_frame);
     }
 
 } // namespace behl

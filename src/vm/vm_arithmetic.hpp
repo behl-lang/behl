@@ -2,7 +2,6 @@
 
 #include "bytecode.hpp"
 #include "common/format.hpp"
-#include "exceptions.hpp"
 #include "frame.hpp"
 #include "gc/gco_string.hpp"
 #include "gc/gco_table.hpp"
@@ -12,6 +11,7 @@
 #include "value.hpp"
 #include "common/arithmetic.hpp"
 #include "vm_detail.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 #include "vm_upvalues.hpp"
 
@@ -20,36 +20,6 @@
 
 namespace behl
 {
-
-    //////////////////////////////////////////////////////////////////////////
-    // Error Throwing Functions
-
-    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_arith(
-        const Value& a, const Value& b, const CallFrame& frame, const char* op_name = nullptr)
-    {
-        const auto loc = get_current_location(frame);
-        std::string msg;
-
-        if (op_name)
-        {
-            msg = behl::format<"attempt to {} a '{}' with a '{}'">(op_name, a.get_type_string(), b.get_type_string());
-        }
-        else
-        {
-            msg = behl::format<"attempt to perform arithmetic on a '{}' value and a '{}' value">(
-                a.get_type_string(), b.get_type_string());
-        }
-
-        throw TypeError(msg, loc);
-    }
-
-    [[noreturn]] BEHL_NOINLINE BEHL_INLINE void throw_bad_arith(const Value& a, const CallFrame& frame)
-    {
-        const auto loc = get_current_location(frame);
-        const auto msg = behl::format<"attempt to perform arithmetic on a {} value">(a.get_type_string());
-
-        throw TypeError(msg, loc);
-    }
 
     //////////////////////////////////////////////////////////////////////////
     // Metamethod Helpers
@@ -198,6 +168,7 @@ namespace behl
 
     struct NumericModOp
     {
+        State* S;
         CallFrame& frame;
         template<typename T>
         BEHL_FORCEINLINE auto operator()(T a, T b) const
@@ -210,7 +181,7 @@ namespace behl
             {
                 if (b == 0) [[unlikely]]
                 {
-                    throw TypeError("attempt to perform 'n%0'", get_current_location(frame));
+                    raise_type_error(S, get_current_location(frame), "attempt to perform 'n%0'");
                 }
                 return arithmetic::mod(a, b);
             }
@@ -300,7 +271,7 @@ namespace behl
             return;
         }
 
-        throw_bad_arith(a, b, current_frame);
+        raise_bad_arith(S, a, b, current_frame);
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -444,7 +415,7 @@ namespace behl
     {
         const Value& lhs = get_register(S, frame, b);
         const Value& rhs = get_register(S, frame, c);
-        if (try_numeric_fast<false>(S, a, lhs, rhs, frame, NumericModOp{ frame }))
+        if (try_numeric_fast<false>(S, a, lhs, rhs, frame, NumericModOp{ S, frame }))
         {
             frame.pc++;
         }
@@ -496,8 +467,7 @@ namespace behl
 
         if (!lhs.is_string()) [[unlikely]]
         {
-            throw TypeError(behl::format("can only concatenate string with string, not with {}", lhs.get_type_string()),
-                get_current_location(frame));
+            raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}", lhs.get_type_string());
         }
 
         const Value& rhs = get_string_constant(frame.proto, k);
@@ -529,14 +499,12 @@ namespace behl
                     gc_step(S);
                     return;
                 }
-                throw TypeError(behl::format("can only concatenate string with string, not with {}", rhs.get_type_string()),
-                    get_current_location(frame));
+                raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}", rhs.get_type_string());
             }
 
             if (rhs.is_string())
             {
-                throw TypeError(behl::format("can only concatenate string with string, not with {}", lhs.get_type_string()),
-                    get_current_location(frame));
+                raise_type_error(S, get_current_location(frame), "can only concatenate string with string, not with {}", lhs.get_type_string());
             }
         }
 
@@ -570,7 +538,7 @@ namespace behl
         const Value& lhs = get_register(S, frame, b);
         const Value& rhs = get_register(S, frame, c);
 
-        return numeric_binop<MetaMethodType::kMod, false>(S, a, lhs, rhs, frame, NumericModOp{ frame });
+        return numeric_binop<MetaMethodType::kMod, false>(S, a, lhs, rhs, frame, NumericModOp{ S, frame });
     }
 
     BEHL_INLINE
@@ -600,7 +568,7 @@ namespace behl
             return;
         }
 
-        throw_bad_arith(val, frame);
+        raise_bad_arith(S, val, frame);
     }
 
     BEHL_FORCEINLINE
@@ -614,7 +582,7 @@ namespace behl
             return;
         }
 
-        throw_bad_arith(reg, frame);
+        raise_bad_arith(S, reg, frame);
     }
 
     BEHL_INLINE
@@ -638,10 +606,10 @@ namespace behl
                 return;
             }
 
-            throw_bad_arith(global, frame);
+            raise_bad_arith(S, global, frame);
         }
 
-        throw TypeError("attempt to perform arithmetic on a nil value", get_current_location(frame));
+        raise_type_error(S, get_current_location(frame), "attempt to perform arithmetic on a nil value");
     }
 
     BEHL_INLINE
@@ -657,7 +625,7 @@ namespace behl
             return;
         }
 
-        throw_bad_arith(upval, frame);
+        raise_bad_arith(S, upval, frame);
     }
 
     BEHL_FORCEINLINE
@@ -670,7 +638,7 @@ namespace behl
             return;
         }
 
-        throw_bad_arith(reg, frame);
+        raise_bad_arith(S, reg, frame);
     }
 
     BEHL_INLINE
@@ -694,10 +662,10 @@ namespace behl
                 return;
             }
 
-            throw_bad_arith(global, frame);
+            raise_bad_arith(S, global, frame);
         }
 
-        throw TypeError("attempt to perform arithmetic on a nil value", get_current_location(frame));
+        raise_type_error(S, get_current_location(frame), "attempt to perform arithmetic on a nil value");
     }
 
     BEHL_INLINE
@@ -713,7 +681,7 @@ namespace behl
             return;
         }
 
-        throw_bad_arith(upval, frame);
+        raise_bad_arith(S, upval, frame);
     }
 
 } // namespace behl

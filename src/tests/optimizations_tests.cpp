@@ -7,6 +7,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 #include <array>
 #include <limits>
@@ -46,7 +47,7 @@ TEST_P(OptimizationsTest, NumericForLoopOptimized)
         }
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     auto* proto = get_proto_from_stack();
     ASSERT_NE(proto, nullptr);
@@ -81,7 +82,7 @@ TEST_P(OptimizationsTest, ComplexConditionNotOptimized)
         }
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     auto* proto = get_proto_from_stack();
     ASSERT_NE(proto, nullptr);
@@ -113,7 +114,7 @@ TEST_P(OptimizationsTest, DecrementingForLoopOptimized)
         }
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     auto* proto = get_proto_from_stack();
     ASSERT_NE(proto, nullptr);
@@ -145,7 +146,7 @@ TEST_P(OptimizationsTest, ForLoopWithStepOptimized)
         }
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     auto* proto = get_proto_from_stack();
     ASSERT_NE(proto, nullptr);
@@ -177,7 +178,7 @@ TEST_P(OptimizationsTest, ConstLoopVariableNotOptimized)
         }
     )";
 
-    EXPECT_THROW(behl::load_string(S, code), std::exception);
+    EXPECT_TRUE(behl_test::load_fails(S, code));
 }
 
 TEST_P(OptimizationsTest, ForLoopWithoutLetNotOptimized)
@@ -188,7 +189,7 @@ TEST_P(OptimizationsTest, ForLoopWithoutLetNotOptimized)
         }
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     auto* proto = get_proto_from_stack();
     ASSERT_NE(proto, nullptr);
@@ -220,7 +221,7 @@ TEST_P(OptimizationsTest, InclusiveLoopOptimized)
         }
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     auto* proto = get_proto_from_stack();
     ASSERT_NE(proto, nullptr);
@@ -252,7 +253,7 @@ TEST_P(OptimizationsTest, MismatchedDirectionNotOptimized)
         }
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
     auto* proto = get_proto_from_stack();
     ASSERT_NE(proto, nullptr);
@@ -285,8 +286,8 @@ TEST_P(OptimizationsTest, IndexByMultipliedZeroRegisterUsesRuntimeValue)
         let i = 0
         return a[i * 3], a[i * 2]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 20);
     EXPECT_EQ(behl::to_integer(S, -1), 20);
 }
@@ -298,8 +299,8 @@ TEST_P(OptimizationsTest, FoldedExactDivisionIsFloat)
         let v = 10 / 2
         return typeof(v), v == 5
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_string(S, -2), "number");
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
@@ -312,8 +313,8 @@ TEST_P(OptimizationsTest, RuntimeExactDivisionIsFloat)
         let v = a / 2
         return typeof(v), v == 5
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_string(S, -2), "number");
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
@@ -359,8 +360,8 @@ TEST_P(OptimizationsTest, FoldedArithmeticMatchesRuntime)
         }
     }
     code += "return bad\n";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "");
 }
 
@@ -369,8 +370,8 @@ TEST_P(OptimizationsTest, NegativeZeroConstantIsDistinct)
     constexpr std::string_view code = R"(
         return 1 / -0.0, 1 / 0.0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_number(S, -2), -std::numeric_limits<double>::infinity());
     EXPECT_EQ(behl::to_number(S, -1), std::numeric_limits<double>::infinity());
 }
@@ -382,8 +383,8 @@ TEST_P(OptimizationsTest, NegativeZeroLocalIsDistinct)
         let w = 0.0
         return 1 / z, 1 / w
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_number(S, -2), -std::numeric_limits<double>::infinity());
     EXPECT_EQ(behl::to_number(S, -1), std::numeric_limits<double>::infinity());
 }

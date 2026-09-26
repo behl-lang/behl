@@ -85,9 +85,11 @@ print(tostring(t));  // "CustomTable"
 
 ---
 
-## `error(message)`
+## `error(value)`
 
-Raises a runtime error with the given message.
+Raises an error. `value` can be any type.
+
+`value` is raised exactly as given, for every type including strings: no prefix, no location, no stack trace is added. `pcall` returns `false` plus exactly that value.
 
 ```cpp
 function validate(x) {
@@ -96,8 +98,13 @@ function validate(x) {
     }
 }
 
-validate(-5);  // RuntimeError: Value must be non-negative!
+validate(-5);  // Value must be non-negative!
+
+let ok, e = pcall(function() { error({code = 1}); });
+print(e.code);  // 1
 ```
+
+Calling `error()` with no argument raises `nil`.
 
 ---
 
@@ -120,7 +127,9 @@ if (success) {
 
 **Returns:**
 - On success: `true, return_values...`
-- On error: `false, error_message`
+- On error: `false, error_value`, where `error_value` is exactly what was raised (a string for runtime errors and `error("...")`, otherwise the value passed to `error()`)
+
+If a C++ function called inside `pcall` throws a C++ exception that was not raised through the Behl API, `pcall` returns `false` and the exception's `what()` text as a string (`"unknown C++ exception"` if it is not a `std::exception`).
 
 ---
 

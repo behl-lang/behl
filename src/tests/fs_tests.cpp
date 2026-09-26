@@ -5,6 +5,7 @@
 #include <cctype>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 #include <string_view>
 
@@ -79,15 +80,9 @@ protected:
             return fs.exists(dir);
         )";
         bool still_exists = true;
-        try
+        if (behl::load_string(state, code) == 0 && behl::call(state, 0, 1) >= 0)
         {
-            behl::load_string(state, code);
-            behl::call(state, 0, 1);
             still_exists = behl::to_boolean(state, -1);
-        }
-        catch (...)
-        {
-            still_exists = true;
         }
         behl::close(state);
         return still_exists;
@@ -96,8 +91,8 @@ protected:
     void run(std::string_view body, int results)
     {
         const std::string code = prelude() + std::string(body);
-        ASSERT_NO_THROW(behl::load_string(S, code));
-        ASSERT_NO_THROW(behl::call(S, 0, results));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, results));
     }
 
     static bool is_meaningful_error(behl::State* state, int idx)

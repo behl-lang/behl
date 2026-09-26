@@ -116,7 +116,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/string.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/vector.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/config_internal.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/exceptions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_error.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/frontend/export_transform.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/frontend/export_transform.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/frontend/lexer.cpp
@@ -195,6 +195,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_error.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_arithmetic.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_bitwise.hpp
@@ -212,7 +213,6 @@ set(BEHL_PRIVATE_SOURCES
 set(BEHL_PUBLIC_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/config.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/debug.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/exceptions.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/export.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/behl.hpp

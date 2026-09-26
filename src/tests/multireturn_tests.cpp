@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class MultiReturnTest : public ::testing::TestWithParam<bool>
 {
@@ -28,8 +29,8 @@ TEST_P(MultiReturnTest, FunctionReturnsTwoValues_OnlyFirstReturned)
         }
         return f()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
@@ -42,8 +43,8 @@ TEST_P(MultiReturnTest, FunctionReturnsThreeValues_OnlyFirstReturned)
         }
         return multi()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
@@ -56,8 +57,8 @@ TEST_P(MultiReturnTest, FunctionReturnsMixedTypes_OnlyFirstReturned)
         }
         return f()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
@@ -71,8 +72,8 @@ TEST_P(MultiReturnTest, FunctionWithMultipleReturns_RequestZeroResults)
         }
         f()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 }
 
@@ -88,8 +89,8 @@ TEST_P(MultiReturnTest, NestedFunctionWithMultipleReturns_OnlyFirstReturned)
         }
         return outer()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
@@ -102,8 +103,8 @@ TEST_P(MultiReturnTest, MultipleReturnsInExpression_OnlyFirstUsed)
         }
         return pair() + 10
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 13);
 }
@@ -117,8 +118,8 @@ TEST_P(MultiReturnTest, AssignmentFromMultipleReturns_OnlyFirstAssigned)
         let x = triple()
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
@@ -131,8 +132,8 @@ TEST_P(MultiReturnTest, FunctionWithEmptyReturn)
         }
         f()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 }
 
@@ -144,8 +145,8 @@ TEST_P(MultiReturnTest, FunctionReturnsSingleValue)
         }
         return f()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -158,8 +159,8 @@ TEST_P(MultiReturnTest, FunctionReturnsComputedValues_OnlyFirstReturned)
         }
         return compute(10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 11);
@@ -176,8 +177,8 @@ TEST_P(MultiReturnTest, RecursiveFunctionWithMultipleReturns_OnlyFirstReturned)
         }
         return fib(5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 5);
@@ -189,8 +190,8 @@ TEST_P(MultiReturnTest, FunctionImplicitReturn)
         function f() {}
         return f()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
@@ -204,8 +205,8 @@ TEST_P(MultiReturnTest, FunctionReturnsTableAndValue_OnlyFirstReturned)
         }
         return make_pair()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 }
@@ -219,8 +220,8 @@ TEST_P(MultiReturnTest, MultipleReturnsInTableConstructor_OnlyFirstUsed)
         let t = { x = pair() }
         return t.x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
@@ -228,13 +229,13 @@ TEST_P(MultiReturnTest, MultipleReturnsInTableConstructor_OnlyFirstUsed)
 TEST_P(MultiReturnTest, CallingWithMultret_GetsAllValues)
 {
     constexpr std::string_view code = "function triple() { return 10, 20, 30 }";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     behl::get_global(S, "triple");
     ASSERT_EQ(behl::type(S, -1), behl::Type::kClosure);
 
-    ASSERT_NO_THROW(behl::call(S, 0, behl::kMultRet));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, behl::kMultRet));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_integer(S, -3), 10);
     ASSERT_EQ(behl::to_integer(S, -2), 20);
@@ -248,8 +249,8 @@ TEST_P(MultiReturnTest, MultipleAssignmentFromFunctionCall)
         let a, b, c = triple()
         return a, b, c
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_integer(S, -3), 100);
     ASSERT_EQ(behl::to_integer(S, -2), 200);
@@ -263,8 +264,8 @@ TEST_P(MultiReturnTest, MultipleAssignmentPadsWithNil)
         let a, b, c, d = two()
         return a, b, c, d
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::get_top(S), 4);
     ASSERT_EQ(behl::to_integer(S, -4), 1);
     ASSERT_EQ(behl::to_integer(S, -3), 2);
@@ -279,8 +280,8 @@ TEST_P(MultiReturnTest, MultipleAssignmentTruncatesExtraValues)
         let a, b = five()
         return a, b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
     ASSERT_EQ(behl::to_integer(S, -2), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 2);
@@ -293,8 +294,8 @@ TEST_P(MultiReturnTest, FunctionCallAsLastArgumentPassesAllValues)
         function triple() { return 10, 20, 30 }
         return add(triple())
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
@@ -306,8 +307,8 @@ TEST_P(MultiReturnTest, FunctionCallInMiddleReturnsOnlyFirst)
         function triple() { return 10, 20, 30 }
         return add(triple(), 5, 15)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 30);
 }
@@ -319,8 +320,8 @@ TEST_P(MultiReturnTest, ReturnPassesThroughAllValues)
         function outer() { return inner() }
         return outer()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, behl::kMultRet));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, behl::kMultRet));
     ASSERT_EQ(behl::get_top(S), 4);
     ASSERT_EQ(behl::to_integer(S, -4), 1);
     ASSERT_EQ(behl::to_integer(S, -3), 2);
@@ -335,8 +336,8 @@ TEST_P(MultiReturnTest, ReturnWithMixedValuesAndCall)
         function outer() { return 1, 2, inner() }
         return outer()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, behl::kMultRet));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, behl::kMultRet));
     ASSERT_EQ(behl::get_top(S), 5);
     ASSERT_EQ(behl::to_integer(S, -5), 1);
     ASSERT_EQ(behl::to_integer(S, -4), 2);
@@ -353,8 +354,8 @@ TEST_P(MultiReturnTest, ChainedCallsWithMultret)
         function first() { return second() }
         return first()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, behl::kMultRet));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, behl::kMultRet));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_integer(S, -3), 7);
     ASSERT_EQ(behl::to_integer(S, -2), 8);
@@ -367,8 +368,8 @@ TEST_P(MultiReturnTest, CallInExpressionGetsOnlyFirst)
         function multi() { return 10, 20, 30 }
         return multi() + 5
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
@@ -380,8 +381,8 @@ TEST_P(MultiReturnTest, MultipleAssignmentMixedTypes)
         let a, b, c, d = mixed()
         return a, b, c, d
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::get_top(S), 4);
     ASSERT_EQ(behl::to_integer(S, -4), 42);
     ASSERT_EQ(behl::to_string(S, -3), "hello");
@@ -400,8 +401,8 @@ TEST_P(MultiReturnTest, EmptyReturnAfterMultret)
         }
         return foo()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, behl::kMultRet));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, behl::kMultRet));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_integer(S, -3), 1);
     ASSERT_EQ(behl::to_integer(S, -2), 2);
@@ -420,8 +421,8 @@ TEST_P(MultiReturnTest, RecursiveFunctionWithMultret)
         let a, b = fib_pair(5)
         return a, b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
     ASSERT_EQ(behl::to_integer(S, -2), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 2);
@@ -436,8 +437,8 @@ TEST_P(MultiReturnTest, NoExplicitReturnInMultipleAssignment)
         let a, b, c = foo()
         return a, b, c
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::type(S, -3), behl::Type::kNil);
     ASSERT_EQ(behl::type(S, -2), behl::Type::kNil);
@@ -452,8 +453,8 @@ TEST_P(MultiReturnTest, MultipleAssignmentToGlobals)
         x, y, z = triple()
         return x, y, z
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::to_integer(S, -3), 100);
     ASSERT_EQ(behl::to_integer(S, -2), 200);
@@ -467,8 +468,8 @@ TEST_P(MultiReturnTest, MultipleAssignmentGlobalsPadsWithNil)
         a, b, c, d = two()
         return a, b, c, d
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::get_top(S), 4);
     ASSERT_EQ(behl::to_integer(S, -4), 1);
     ASSERT_EQ(behl::to_integer(S, -3), 2);

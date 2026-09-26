@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class VariableTest : public ::testing::TestWithParam<bool>
 {
@@ -26,8 +26,8 @@ TEST_P(VariableTest, ExecuteReturnInteger)
     constexpr std::string_view code = R"(
         return 42
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -38,8 +38,8 @@ TEST_P(VariableTest, ExecuteConstVariable)
         const x = 100
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false)); // Disable optimizations to keep unused const
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false)); // Disable optimizations to keep unused const
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
@@ -51,7 +51,8 @@ TEST_P(VariableTest, ConstIsImmutable)
         x = 200
     )";
 
-    EXPECT_THROW({ behl::load_string(S, code, false); }, behl::SemanticError); // Disable optimizations for error testing
+    EXPECT_TRUE(behl_test::load_fails(S, code, false)); // Disable optimizations for error testing
+    EXPECT_NE(behl_test::error_text(S).find("SemanticError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(VariableTest, GlobalAssignReflectsIn_G)
@@ -60,8 +61,8 @@ TEST_P(VariableTest, GlobalAssignReflectsIn_G)
         x = 42
         return _G.x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -72,8 +73,8 @@ TEST_P(VariableTest, SetVia_GReflectsAsGlobal)
         _G.y = 99
         return y
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 99);
 }
@@ -84,8 +85,8 @@ TEST_P(VariableTest, GlobalTablePointsToItself)
         _G.__sentinel = 1234
         return _G._G.__sentinel
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1234);
 }
@@ -95,8 +96,8 @@ TEST_P(VariableTest, MissingGlobalIsNil)
     constexpr std::string_view code = R"(
         return some_missing_global
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }

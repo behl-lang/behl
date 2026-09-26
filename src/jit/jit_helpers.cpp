@@ -342,7 +342,14 @@ namespace behl
         BEHL_JIT_COUNT(jit_op_endunwind)
         (void)raw;
         (void)pc_next;
-        S->jit_exception = std::make_exception_ptr(RuntimeError("defer unwind chain reached from compiled code"));
+        try
+        {
+            raise_runtime_error(S, SourceLocation{}, "defer unwind chain reached from compiled code");
+        }
+        catch (...)
+        {
+            S->jit_exception = std::current_exception();
+        }
         return kJitError;
     }
 

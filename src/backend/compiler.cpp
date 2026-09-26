@@ -13,7 +13,7 @@
 #include "state.hpp"
 #include "vm/bytecode.hpp"
 
-#include <behl/exceptions.hpp>
+#include "vm/vm_error.hpp"
 #include <bit>
 #include <cmath>
 #include <iostream>
@@ -159,7 +159,7 @@ namespace behl
     {
         if (next_index > kMaxConstants)
         {
-            throw SyntaxError("too many constants in function", get_location(C));
+            raise_syntax_error(C.S, get_location(C), "too many constants in function");
         }
     }
 
@@ -218,7 +218,7 @@ namespace behl
     {
         if (!C.current_proto->is_vararg)
         {
-            throw SyntaxError("cannot use '...' outside a vararg function", get_location(C));
+            raise_syntax_error(C.S, get_location(C), "cannot use '...' outside a vararg function");
         }
     }
 
@@ -226,7 +226,7 @@ namespace behl
     {
         if (C.freereg >= kMaxRegisters)
         {
-            throw RuntimeError("Register overflow", get_location(C));
+            raise_runtime_error(C.S, get_location(C), "Register overflow");
         }
         Reg reg = C.freereg++;
 
@@ -544,7 +544,7 @@ namespace behl
     {
         if (C.upvalues.size() >= kMaxUpvalues)
         {
-            throw SyntaxError("too many upvalues in function", get_location(C));
+            raise_syntax_error(C.S, get_location(C), "too many upvalues in function");
         }
     }
 
@@ -869,7 +869,7 @@ namespace behl
     {
         if (!C.current_proto->is_vararg)
         {
-            throw SyntaxError("cannot use '...' outside a vararg function", get_location(C));
+            raise_syntax_error(C.S, get_location(C), "cannot use '...' outside a vararg function");
         }
 
         const auto reg = get_target_reg();
@@ -1683,7 +1683,7 @@ namespace behl
                 emitted_sequence = true;
                 break;
             default:
-                throw TypeError("Unsupported binary operator", get_location(C));
+                raise_type_error(C.S, get_location(C), "Unsupported binary operator");
         }
         if (!emitted_sequence)
         {
@@ -1788,7 +1788,7 @@ namespace behl
                 instr = make_op_bnot(result_reg, expr_reg);
                 break;
             default:
-                throw TypeError("Unsupported unary operator", get_location(C));
+                raise_type_error(C.S, get_location(C), "Unsupported unary operator");
         }
         emit(C, std::move(instr), C.lastline);
         free_reg(C, expr_reg);
@@ -2202,8 +2202,7 @@ namespace behl
                     // Check if there are any fields after this vararg
                     if (n->next_child)
                     {
-                        throw SyntaxError(
-                            "Table constructor: vararg expansion (...) must be the last element", get_location(C));
+                        raise_syntax_error(C.S, get_location(C), "Table constructor: vararg expansion (...) must be the last element");
                     }
 
                     flush_list();
@@ -2213,7 +2212,7 @@ namespace behl
                     constexpr size_t kMaxVarargExpandStart = 0x1FFFF;
                     if (array_idx > kMaxVarargExpandStart)
                     {
-                        throw SyntaxError("too many items before '...' in table constructor", get_location(C));
+                        raise_syntax_error(C.S, get_location(C), "too many items before '...' in table constructor");
                     }
                     emit(C, make_op_varargexpand(reg, static_cast<uint32_t>(array_idx)), C.lastline);
                     break;
@@ -2691,8 +2690,7 @@ namespace behl
                         {
                             if (is_local_const(C, id_name))
                             {
-                                throw SemanticError(
-                                    behl::format("Cannot assign to const variable '{}'", id_name), get_location(C));
+                                raise_semantic_error(C.S, get_location(C), "Cannot assign to const variable '{}'", id_name);
                             }
                             emit(C, make_op_move(static_cast<uint8_t>(loc), val_reg), C.lastline);
                         }
@@ -2703,8 +2701,7 @@ namespace behl
                             {
                                 if (is_upvalue_const(C, id_name))
                                 {
-                                    throw SemanticError(
-                                        behl::format("Cannot assign to const upvalue '{}'", id_name), get_location(C));
+                                    raise_semantic_error(C.S, get_location(C), "Cannot assign to const upvalue '{}'", id_name);
                                 }
                                 emit(C, make_op_setupval(val_reg, static_cast<uint8_t>(up)), C.lastline);
                             }
@@ -2752,7 +2749,7 @@ namespace behl
                 {
                     if (is_local_const(C, id_name))
                     {
-                        throw SemanticError(behl::format("Cannot assign to const variable '{}'", id_name), get_location(C));
+                        raise_semantic_error(C.S, get_location(C), "Cannot assign to const variable '{}'", id_name);
                     }
                     emit(C, make_op_move(static_cast<uint8_t>(loc), val_reg), C.lastline);
                 }
@@ -2763,7 +2760,7 @@ namespace behl
                     {
                         if (is_upvalue_const(C, id_name))
                         {
-                            throw SemanticError(behl::format("Cannot assign to const upvalue '{}'", id_name), get_location(C));
+                            raise_semantic_error(C.S, get_location(C), "Cannot assign to const upvalue '{}'", id_name);
                         }
                         emit(C, make_op_setupval(val_reg, static_cast<uint8_t>(up)), C.lastline);
                     }
@@ -2780,7 +2777,7 @@ namespace behl
             }
             else
             {
-                throw SyntaxError("Invalid assignment target", get_location(C));
+                raise_syntax_error(C.S, get_location(C), "Invalid assignment target");
             }
         }
         C.freereg = expr_base;
@@ -2794,12 +2791,12 @@ namespace behl
         int32_t loc = resolve_local(C, node.name->view());
         if (loc < 0)
         {
-            throw ReferenceError(behl::format("Local variable '{}' not found", node.name->view()), get_location(C));
+            raise_reference_error(C.S, get_location(C), "Local variable '{}' not found", node.name->view());
         }
 
         if (is_local_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot assign to const variable '{}'", node.name->view()), get_location(C));
+            raise_semantic_error(C.S, get_location(C), "Cannot assign to const variable '{}'", node.name->view());
         }
 
         target_reg = static_cast<uint8_t>(loc);
@@ -2825,12 +2822,12 @@ namespace behl
         uint32_t up = resolve_upvalue(C, node.name->view());
         if (up == kInvalidUpvalue)
         {
-            throw ReferenceError(behl::format("Upvalue '{}' not found", node.name->view()));
+            raise_reference_error(C.S, SourceLocation{}, "Upvalue '{}' not found", node.name->view());
         }
 
         if (is_upvalue_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot assign to const upvalue '{}'", node.name->view()), get_location(C));
+            raise_semantic_error(C.S, get_location(C), "Cannot assign to const upvalue '{}'", node.name->view());
         }
 
         emit(C, make_op_setupval(val_reg, static_cast<uint8_t>(up)), C.lastline);
@@ -2839,7 +2836,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstCompoundAssign&)
     {
-        throw SemanticError("Unresolved AstCompoundAssign - semantic analyzer should have transformed this", get_location(C));
+        raise_semantic_error(C.S, get_location(C), "Unresolved AstCompoundAssign - semantic analyzer should have transformed this");
     }
 
     void VisitorAdapter::visit(const AstCompoundLocal& node)
@@ -2854,12 +2851,12 @@ namespace behl
         int32_t loc = resolve_local(C, node.name->view());
         if (loc < 0)
         {
-            throw ReferenceError(behl::format("Local variable '{}' not found", node.name->view()), get_location(C));
+            raise_reference_error(C.S, get_location(C), "Local variable '{}' not found", node.name->view());
         }
 
         if (is_local_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot assign to const variable '{}'", node.name->view()), get_location(C));
+            raise_semantic_error(C.S, get_location(C), "Cannot assign to const variable '{}'", node.name->view());
         }
 
         if (node.op == TokenType::kPlus)
@@ -2988,12 +2985,12 @@ namespace behl
         uint32_t up = resolve_upvalue(C, node.name->view());
         if (up == kInvalidUpvalue)
         {
-            throw ReferenceError(behl::format("Upvalue '{}' not found", node.name->view()));
+            raise_reference_error(C.S, SourceLocation{}, "Upvalue '{}' not found", node.name->view());
         }
 
         if (is_upvalue_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot modify const upvalue '{}'", node.name->view()));
+            raise_semantic_error(C.S, SourceLocation{}, "Cannot modify const upvalue '{}'", node.name->view());
         }
 
         Reg lhs_reg = alloc_reg(C);
@@ -3036,7 +3033,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstIncrement&)
     {
-        throw SemanticError("Unresolved AstIncrement - semantic analyzer should have transformed this", get_location(C));
+        raise_semantic_error(C.S, get_location(C), "Unresolved AstIncrement - semantic analyzer should have transformed this");
     }
 
     void VisitorAdapter::visit(const AstIncLocal& node)
@@ -3044,12 +3041,12 @@ namespace behl
         int32_t loc = resolve_local(C, node.name->view());
         if (loc < 0)
         {
-            throw ReferenceError(behl::format("Local variable '{}' not found", node.name->view()), get_location(C));
+            raise_reference_error(C.S, get_location(C), "Local variable '{}' not found", node.name->view());
         }
 
         if (is_local_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot modify const variable '{}'", node.name->view()), get_location(C));
+            raise_semantic_error(C.S, get_location(C), "Cannot modify const variable '{}'", node.name->view());
         }
 
         emit(C, make_op_inclocal(static_cast<uint8_t>(loc)), C.lastline);
@@ -3067,12 +3064,12 @@ namespace behl
         uint32_t up = resolve_upvalue(C, node.name->view());
         if (up == kInvalidUpvalue)
         {
-            throw ReferenceError(behl::format("Upvalue '{}' not found", node.name->view()), get_location(C));
+            raise_reference_error(C.S, get_location(C), "Upvalue '{}' not found", node.name->view());
         }
 
         if (is_upvalue_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot modify const upvalue '{}'", node.name->view()), get_location(C));
+            raise_semantic_error(C.S, get_location(C), "Cannot modify const upvalue '{}'", node.name->view());
         }
 
         emit(C, make_op_incupvalue(static_cast<uint8_t>(up)), C.lastline);
@@ -3080,7 +3077,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstDecrement&)
     {
-        throw SemanticError("Unresolved AstDecrement - semantic analyzer should have transformed this", get_location(C));
+        raise_semantic_error(C.S, get_location(C), "Unresolved AstDecrement - semantic analyzer should have transformed this");
     }
 
     void VisitorAdapter::visit(const AstDecLocal& node)
@@ -3088,12 +3085,12 @@ namespace behl
         int32_t loc = resolve_local(C, node.name->view());
         if (loc < 0)
         {
-            throw ReferenceError(behl::format("Local variable '{}' not found", node.name->view()), get_location(C));
+            raise_reference_error(C.S, get_location(C), "Local variable '{}' not found", node.name->view());
         }
 
         if (is_local_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot modify const variable '{}'", node.name->view()), get_location(C));
+            raise_semantic_error(C.S, get_location(C), "Cannot modify const variable '{}'", node.name->view());
         }
 
         emit(C, make_op_declocal(static_cast<uint8_t>(loc)), C.lastline);
@@ -3111,12 +3108,12 @@ namespace behl
         uint32_t up = resolve_upvalue(C, node.name->view());
         if (up == kInvalidUpvalue)
         {
-            throw ReferenceError(behl::format("Upvalue '{}' not found", node.name->view()), get_location(C));
+            raise_reference_error(C.S, get_location(C), "Upvalue '{}' not found", node.name->view());
         }
 
         if (is_upvalue_const(C, node.name->view()))
         {
-            throw SemanticError(behl::format("Cannot modify const upvalue '{}'", node.name->view()), get_location(C));
+            raise_semantic_error(C.S, get_location(C), "Cannot modify const upvalue '{}'", node.name->view());
         }
 
         emit(C, make_op_decupvalue(static_cast<uint8_t>(up)), C.lastline);
@@ -3420,12 +3417,10 @@ namespace behl
                     if (up == kInvalidUpvalue)
                     {
                         // Variable not found
-                        throw ReferenceError(
-                            behl::format(
-                                "For-in loop variable '{}' is not declared. Variables must be declared before use in for-in "
-                                "loops.",
-                                name_str->view()),
-                            get_location(C));
+                        raise_reference_error(C.S, get_location(C),
+                            "For-in loop variable '{}' is not declared. Variables must be declared before use in for-in "
+                            "loops.",
+                            name_str->view());
                     }
                 }
 
@@ -3694,7 +3689,7 @@ namespace behl
         constexpr size_t kMaxForLoopSpan = 65535;
         if (loop_pc - (prep_pc + 1) > kMaxForLoopSpan)
         {
-            throw SyntaxError("loop body too large", get_location(C));
+            raise_syntax_error(C.S, get_location(C), "loop body too large");
         }
         C.current_proto->code[prep_pc] = make_op_forprep(base, static_cast<int32_t>(loop_pc - (prep_pc + 1)));
         C.current_proto->code[loop_pc] = make_op_forloop(base, static_cast<int32_t>((prep_pc + 1) - loop_pc));
@@ -3736,7 +3731,7 @@ namespace behl
         {
             if (!is_simple_name)
             {
-                throw SyntaxError("local function must use a simple name", get_location(C));
+                raise_syntax_error(C.S, get_location(C), "local function must use a simple name");
             }
             auto* first_name = static_cast<const AstString*>(node.first_name_part);
             Local loc;
@@ -3780,7 +3775,7 @@ namespace behl
                 free_reg(C, func_reg);
                 return;
             }
-            throw ReferenceError(behl::format("Local function '{}' not found", first_name->view()), get_location(C));
+            raise_reference_error(C.S, get_location(C), "Local function '{}' not found", first_name->view());
         }
 
         uint8_t dest_reg = alloc_reg(C);
@@ -4132,7 +4127,7 @@ namespace behl
     {
         if (C.loop_stack.size() <= C.loop_floor)
         {
-            throw SemanticError("break statement outside of loop", get_location(C));
+            raise_semantic_error(C.S, get_location(C), "break statement outside of loop");
         }
 
         emit_defer_calls_above_scope(C, C.loop_stack.back().scope_level);
@@ -4147,7 +4142,7 @@ namespace behl
     {
         if (C.loop_stack.size() <= C.loop_floor)
         {
-            throw SemanticError("continue statement outside of loop", get_location(C));
+            raise_semantic_error(C.S, get_location(C), "continue statement outside of loop");
         }
 
         emit_defer_calls_above_scope(C, C.loop_stack.back().scope_level);
@@ -4165,7 +4160,7 @@ namespace behl
 
         if (C.defer_count >= kMaxDeferBlocks)
         {
-            throw SemanticError("too many defer statements in one function", get_location(C));
+            raise_semantic_error(C.S, get_location(C), "too many defer statements in one function");
         }
 
         const auto block = static_cast<Reg>(C.defer_count++);

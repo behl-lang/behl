@@ -27,7 +27,6 @@
 #include "vm_table.hpp"
 #include "vm_upvalues.hpp"
 
-#include <behl/exceptions.hpp>
 #include <cassert>
 
 namespace behl
@@ -604,7 +603,7 @@ namespace behl
         }
         else
         {
-            throw_bad_call(func, S->call_stack.empty() ? CallFrame{} : S->call_stack.back(), S);
+            raise_bad_call(func, S->call_stack.empty() ? CallFrame{} : S->call_stack.back(), S);
         }
 
         return true;
@@ -623,6 +622,7 @@ namespace behl
 
     void unwind_call_frames(State* S, size_t target_depth, std::exception_ptr& pending)
     {
+        GCPauseGuard pause(S);
         while (S->call_stack.size() > target_depth)
         {
             const auto index = static_cast<uint32_t>(S->call_stack.size() - 1);

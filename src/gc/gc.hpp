@@ -1,12 +1,15 @@
 #pragma once
 
+#include "common/format.hpp"
 #include "gc_object.hpp"
 #include "gc_types.hpp"
 
-#include <behl/exceptions.hpp>
 #include <behl/export.hpp>
 #include <memory>
 #include <span>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 
 namespace behl
 {
@@ -35,6 +38,14 @@ namespace behl
     GCString* gc_new_string(State* S, std::string_view str);
 
     GCString* gc_new_string(State* S, std::initializer_list<std::string_view> strings);
+
+    template<typename... Args>
+    GCString* gc_new_string_format(State* S, format_string<std::type_identity_t<Args>...> fmt, Args&&... args)
+    {
+        format_buffer buffer;
+        format_to(buffer, fmt, std::forward<Args>(args)...);
+        return gc_new_string(S, buffer.view());
+    }
 
     UserdataData* gc_new_userdata(State* S, size_t size);
 

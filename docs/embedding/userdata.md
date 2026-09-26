@@ -84,24 +84,20 @@ if (ptr != nullptr) {
 
 ### `check_userdata(State*, int32_t, uint32_t)`
 
-Type-safe retrieval that validates the UID and throws `TypeError` if wrong type.
+Type-safe retrieval that validates the UID. Call it from a C function that Behl called; if the check fails it raises an error and does not return.
 
 ```cpp
-// Throws if not userdata or UID mismatch
+// Raises an error if not userdata or UID mismatch
 FileHandle* handle = static_cast<FileHandle*>(
     behl::check_userdata(S, 0, FileHandle_UID)
 );
 ```
 
-**Error handling:**
-```cpp
-try {
-    void* ptr = behl::check_userdata(S, 0, FileHandle_UID);
-    FileHandle* handle = static_cast<FileHandle*>(ptr);
-} catch (const behl::TypeError& e) {
-    // Handle error: "TypeError: bad argument #1 (expected userdata, got string)"
-}
-```
+**Error messages:**
+- Not userdata: `TypeError: bad argument #1 (expected userdata, got string)`
+- Wrong UID: `RuntimeError: Type mismatch: userdata uid does not match expected type`
+
+The error is reported by the surrounding `behl::call` (as `behl::kErrorRuntime` with the message on the stack) or by a script-level `pcall`. There is nothing to catch in the C function itself. To handle a wrong type without raising, test with `behl::userdata_get_uid` first.
 
 **Use case:** Always use in API functions for type safety.
 

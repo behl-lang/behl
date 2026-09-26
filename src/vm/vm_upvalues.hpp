@@ -10,7 +10,6 @@
 #include "vm_operands.hpp"
 
 #include <algorithm>
-#include <behl/exceptions.hpp>
 #include <cassert>
 
 namespace behl

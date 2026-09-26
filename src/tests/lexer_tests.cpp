@@ -1,8 +1,9 @@
 #include "frontend/lexer.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
+#include "vm/vm_error.hpp"
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 using namespace behl;
 
@@ -180,7 +181,7 @@ TEST_F(LexerTest, LexerRejectsNonBreakingSpaceInIdentifier)
 {
     std::string_view source = "let a\xC2\xA0"
                               "b = 1";
-    ASSERT_THROW(tokenize(S, source), SyntaxError);
+    ASSERT_THROW(tokenize(S, source), behl::Exception);
 }
 
 TEST_F(LexerTest, LexerRejectsZeroWidthCharacters)
@@ -188,19 +189,19 @@ TEST_F(LexerTest, LexerRejectsZeroWidthCharacters)
     ASSERT_THROW(tokenize(S,
                      "let a\xE2\x80\x8B"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
     ASSERT_THROW(tokenize(S,
                      "let a\xE2\x80\x8C"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
     ASSERT_THROW(tokenize(S,
                      "let a\xE2\x80\x8D"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
     ASSERT_THROW(tokenize(S,
                      "let a\xEF\xBB\xBF"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
 }
 
 TEST_F(LexerTest, LexerRejectsBidiControlsInIdentifier)
@@ -208,11 +209,11 @@ TEST_F(LexerTest, LexerRejectsBidiControlsInIdentifier)
     ASSERT_THROW(tokenize(S,
                      "let a\xE2\x80\xAE"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
     ASSERT_THROW(tokenize(S,
                      "let a\xE2\x81\xA6"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
 }
 
 TEST_F(LexerTest, LexerRejectsUnicodeSpaceSeparators)
@@ -220,17 +221,17 @@ TEST_F(LexerTest, LexerRejectsUnicodeSpaceSeparators)
     ASSERT_THROW(tokenize(S,
                      "let a\xE2\x80\x83"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
     ASSERT_THROW(tokenize(S,
                      "let a\xE3\x80\x80"
                      "b = 1"),
-        SyntaxError);
+        behl::Exception);
 }
 
 TEST_F(LexerTest, LexerNonAsciiIsNeverWhitespace)
 {
-    ASSERT_THROW(tokenize(S, "let\xC2\xA0x = 1"), SyntaxError);
-    ASSERT_THROW(tokenize(S, "let\xE3\x80\x80x = 1"), SyntaxError);
+    ASSERT_THROW(tokenize(S, "let\xC2\xA0x = 1"), behl::Exception);
+    ASSERT_THROW(tokenize(S, "let\xE3\x80\x80x = 1"), behl::Exception);
 }
 
 TEST_F(LexerTest, LexerNonAsciiDigitsAreNotNumbers)
@@ -271,9 +272,9 @@ static std::string lex_error(behl::State* S, std::string_view source)
     {
         tokenize(S, source);
     }
-    catch (const BehlException& e)
+    catch (const behl::Exception& e)
     {
-        return e.what();
+        return behl_test::exception_text(e);
     }
     return "<no error>";
 }
@@ -427,8 +428,8 @@ TEST_F(LexerTest, DocumentedEscapeSequencesProduceExpectedBytes)
         return "\a\b\f\n\r\t\v\\\"\'", '\"\'', "ab\
 cd"
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(to_string(S, -3), std::string_view("\a\b\f\n\r\t\v\\\"'"));
     EXPECT_EQ(to_string(S, -2), std::string_view("\"'"));
     EXPECT_EQ(to_string(S, -1), std::string_view("abcd"));
@@ -436,7 +437,7 @@ cd"
 
 TEST_F(LexerTest, UnterminatedStringAtEofRaisesError)
 {
-    EXPECT_THROW(tokenize(S, "let s = \"abc"), BehlException);
-    EXPECT_THROW(tokenize(S, "let s = 'abc"), BehlException);
-    EXPECT_THROW(load_string(S, "let s = \"abc"), BehlException);
+    EXPECT_THROW(tokenize(S, "let s = \"abc"), behl::Exception);
+    EXPECT_THROW(tokenize(S, "let s = 'abc"), behl::Exception);
+    EXPECT_TRUE(behl_test::load_fails(S, "let s = \"abc"));
 }

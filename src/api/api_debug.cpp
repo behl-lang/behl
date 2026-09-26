@@ -62,14 +62,8 @@ namespace behl
     {
         assert(S && "State cannot be null");
 
-        if (file.empty())
-        {
-            throw RuntimeError("debug_set_breakpoint: file must not be empty");
-        }
-        if (line <= 0)
-        {
-            throw RuntimeError("debug_set_breakpoint: line must be positive");
-        }
+        assert(!file.empty() && "debug_set_breakpoint: file must not be empty");
+        assert(line > 0 && "debug_set_breakpoint: line must be positive");
 
         Breakpoint bp;
         bp.file = gc_new_string(S, file);
@@ -82,14 +76,8 @@ namespace behl
     {
         assert(S && "State cannot be null");
 
-        if (file.empty())
-        {
-            throw RuntimeError("debug_remove_breakpoint: file must not be empty");
-        }
-        if (line <= 0)
-        {
-            throw RuntimeError("debug_remove_breakpoint: line must be positive");
-        }
+        assert(!file.empty() && "debug_remove_breakpoint: file must not be empty");
+        assert(line > 0 && "debug_remove_breakpoint: line must be positive");
 
         Breakpoint bp;
         bp.file = gc_new_string(S, file);

@@ -157,24 +157,22 @@ const char* script = R"(
     return { x = 10, y = 20, name = "Point" };
 )";
 
-try {
-    behl::load_string(S, script);
-    behl::call(S, 0, 1);  // Returns 1 table
+if (behl::load_string(S, script) != 0 || behl::call(S, 0, 1) < 0) {  // Returns 1 table
+    std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);  // Pop error value
+} else {
     // Stack: [table]
-    
     behl::table_rawgetfield(S, -1, "x");
-    int x = behl::to_integer(S, -1);
+    behl::Integer x = behl::to_integer(S, -1);
     behl::pop(S, 1);
     
     behl::table_rawgetfield(S, -1, "y");
-    int y = behl::to_integer(S, -1);
+    behl::Integer y = behl::to_integer(S, -1);
     behl::pop(S, 1);
     
     std::cout << "Point: (" << x << ", " << y << ")\n";
     
     behl::pop(S, 1);  // Pop table
-} catch (const behl::BehlException& e) {
-    std::cerr << "Error: " << e.what() << "\n";
 }
 ```
 

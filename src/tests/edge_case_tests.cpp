@@ -2,8 +2,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 namespace
@@ -59,8 +59,8 @@ TEST_P(EdgeCaseTest, EmptyFunctionCall)
         }
         return noArgs()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
@@ -76,8 +76,8 @@ TEST_P(EdgeCaseTest, FunctionReturningFunction)
         let f = outer()
         return f()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 99);
 }
 
@@ -87,8 +87,8 @@ TEST_P(EdgeCaseTest, ImmediatelyInvokedFunction)
         let result = (function(x) { return x * 2 })(21)
         return result
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
@@ -98,8 +98,8 @@ TEST_P(EdgeCaseTest, ChainedPropertyAccess)
         let t1 = {inner = {value = 123}}
         return t1.inner.value
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
 
@@ -112,8 +112,8 @@ TEST_P(EdgeCaseTest, FunctionCallInTableConstructor)
         let t = {x = getValue(), y = 10}
         return t.x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
@@ -123,8 +123,8 @@ TEST_P(EdgeCaseTest, NestedTableAccess)
         let matrix = {{1, 2}, {3, 4}, {5, 6}}
         return matrix[1][1]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 4);
 }
 
@@ -142,8 +142,8 @@ TEST_P(EdgeCaseTest, MultipleAssignmentsInLoop)
         }
         return b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 7);
 }
 
@@ -156,8 +156,8 @@ TEST_P(EdgeCaseTest, FunctionAsTableValue)
         let funcs = {op = add}
         return funcs.op(10, 20)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 30);
 }
 
@@ -176,8 +176,8 @@ TEST_P(EdgeCaseTest, ConditionalFunctionSelection)
         let f = choose(true)
         return f(7)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 14);
 }
 
@@ -193,8 +193,8 @@ TEST_P(EdgeCaseTest, LoopWithComplexUpdate)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
 
@@ -214,8 +214,8 @@ TEST_P(EdgeCaseTest, ComplexBooleanExpression)
         }
         return check(6, 8, 1)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -228,8 +228,8 @@ TEST_P(EdgeCaseTest, MethodCallSyntax)
         }
         return obj:getValue()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
@@ -245,8 +245,8 @@ TEST_P(EdgeCaseTest, FloatConstantIndexBeyondNarrowField)
     }
     code += "    return acc\n}\nreturn f()\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }
 
@@ -262,8 +262,8 @@ TEST_P(EdgeCaseTest, IntegerConstantIndexBeyondNarrowField)
     }
     code += "    return acc\n}\nreturn f()\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), expected);
 }
 
@@ -284,8 +284,8 @@ TEST_P(EdgeCaseTest, StringConstantIndexBeyondNarrowField)
     code += "    let tail = acc + \"final\"\n    return tail\n}\nreturn f()\n";
     expected += "final";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), expected);
 }
 
@@ -297,8 +297,8 @@ TEST_P(EdgeCaseTest, FloatCompareConstantIndexBeyondNarrowField)
     code += "    if (acc < 8388609.25) { return 1 }\n    return 0\n}\nreturn f()\n";
 
     ASSERT_LT(expected, 8388609.25);
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 
@@ -311,8 +311,8 @@ TEST_P(EdgeCaseTest, IntegerCompareConstantIndexBeyondNarrowField)
 
     ASSERT_LT(expected, 100000000);
     ASSERT_GT(expected, 100000);
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -324,8 +324,8 @@ TEST_P(EdgeCaseTest, CompareInValueContextConstantIndexBeyondNarrowField)
     code += "    return id(acc < 8388609.25)\n}\nreturn f()\n";
 
     ASSERT_LT(expected, 8388609.25);
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -337,8 +337,8 @@ TEST_P(EdgeCaseTest, CompoundAssignConstantIndexBeyondNarrowField)
     code += "    acc += 8388609.25\n    return acc\n}\nreturn f()\n";
     expected += 8388609.25;
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }
 
@@ -353,8 +353,8 @@ TEST_P(EdgeCaseTest, MetamethodSurvivesConstantIndexFallback)
     code += "    let obj = setmetatable({}, mt)\n";
     code += "    return obj + 8388609.25\n}\nreturn f()\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 4242);
 }
 
@@ -369,7 +369,8 @@ TEST_P(EdgeCaseTest, ConstantLimitExceededThrows)
     }
     code += "    return acc\n}\nreturn f()\n";
 
-    ASSERT_THROW(behl::load_string(S, code), behl::SyntaxError);
+    ASSERT_TRUE(behl_test::load_fails(S, code));
+    EXPECT_NE(behl_test::error_text(S).find("SyntaxError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(EdgeCaseTest, ConstantLimitBoundaryCompiles)
@@ -385,8 +386,8 @@ TEST_P(EdgeCaseTest, ConstantLimitBoundaryCompiles)
     }
     code += "    return acc\n}\nreturn f()\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), expected);
 }
 
@@ -397,8 +398,8 @@ TEST_P(EdgeCaseTest, StringRepNormalCases)
         const string = import("string")
         return string.rep("ab", 3) + "|" + string.rep("x", 1) + "|" + string.rep("y", 0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_string(S, -1), "ababab|x|");
 }
 
@@ -409,8 +410,8 @@ TEST_P(EdgeCaseTest, StringRepNegativeCountIsEmpty)
         const string = import("string")
         return string.rep("ab", -5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_string(S, -1), "");
 }
 
@@ -421,8 +422,8 @@ TEST_P(EdgeCaseTest, StringRepEmptySourceIgnoresCount)
         const string = import("string")
         return string.rep("", 9223372036854775807)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_string(S, -1), "");
 }
 
@@ -433,8 +434,9 @@ TEST_P(EdgeCaseTest, StringRepOverflowingCountIsRejected)
         const string = import("string")
         return string.rep("ab", 9223372036854775807)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_THROW(behl::call(S, 0, 1), behl::RuntimeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(EdgeCaseTest, StringRepBeyondSizeLimitIsRejected)
@@ -444,8 +446,9 @@ TEST_P(EdgeCaseTest, StringRepBeyondSizeLimitIsRejected)
         const string = import("string")
         return string.rep("a", 3000000000)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_THROW(behl::call(S, 0, 1), behl::RuntimeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(EdgeCaseTest, StringRepLongSourceBeyondSizeLimitIsRejected)
@@ -456,8 +459,9 @@ TEST_P(EdgeCaseTest, StringRepLongSourceBeyondSizeLimitIsRejected)
         let s = string.rep("abcdefgh", 128)
         return string.rep(s, 3000000)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_THROW(behl::call(S, 0, 1), behl::RuntimeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(EdgeCaseTest, StringCaseConversionHandlesAscii)
@@ -467,8 +471,8 @@ TEST_P(EdgeCaseTest, StringCaseConversionHandlesAscii)
         const string = import("string")
         return string.upper("abcXYZ123!") + "|" + string.lower("ABCxyz123!")
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_string(S, -1), "ABCXYZ123!|abcxyz123!");
 }
 
@@ -487,8 +491,8 @@ TEST_P(EdgeCaseTest, StringCaseConversionLeavesHighBytesAlone)
         return -1
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), -1) << "byte was altered by case conversion";
 }
 
@@ -496,8 +500,8 @@ TEST_P(EdgeCaseTest, StringLiteralLargerThanAstPool)
 {
     std::string code = "let s = " + std::string(1, '"') + std::string(70000, 'A') + std::string(1, '"') + "\nreturn #s\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 70000);
 }
 
@@ -505,8 +509,8 @@ TEST_P(EdgeCaseTest, StringLiteralManyTimesTheAstPool)
 {
     std::string code = "let s = " + std::string(1, '"') + std::string(1024 * 1024, 'B') + std::string(1, '"') + "\nreturn #s\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1024 * 1024);
 }
 
@@ -519,8 +523,8 @@ TEST_P(EdgeCaseTest, MultipleOversizedStringLiteralsCoexist)
     code += "let c = " + std::string(1, '"') + "small" + std::string(1, '"') + "\n";
     code += "return #a + #b + #c\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 70000 + 90000 + 5);
 }
 

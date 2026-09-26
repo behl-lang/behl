@@ -23,6 +23,8 @@ How to load and execute Behl scripts from your C++ application.
 
 Behl provides a straightforward API for embedding scripts in C++ applications. You can load scripts from strings or files, execute them, and retrieve results.
 
+Loading and calling report errors through return values, not exceptions. See [Error Handling](embedding/error-handling) for the full error model.
+
 ## Basic Setup
 
 ```cpp
@@ -56,18 +58,14 @@ const char* code = R"(
     return x + y;
 )";
 
-try {
-    behl::load_string(S, code);
-    // Compiled function is now on the stack
-} catch (const behl::SyntaxError& e) {
-    std::cerr << "Compilation error: " << e.what() << "\n";
+if (behl::load_string(S, code) != 0) {
+    std::cerr << "Compilation error: " << behl::to_string(S, -1) << "\n";
     return 1;
 }
+// Compiled function is now on the stack
 ```
 
-**Throws:** `SyntaxError` or `ParserError` on compilation failure.
-
-**On success:** Pushes compiled function onto the stack.
+**Returns:** `0` on success and pushes the compiled function onto the stack. On failure returns `behl::kErrorSyntax` (or `behl::kErrorMemory`) and pushes the error message instead. It does not throw.
 
 ### From File
 
@@ -88,52 +86,50 @@ std::ostringstream buffer;
 buffer << file.rdbuf();
 const std::string source = buffer.str();
 
-try {
-    behl::load_buffer(S, source, "script.behl");
-    // Function is on stack
-} catch (const behl::BehlException& e) {
-    std::cerr << "Failed to load file: " << e.what() << "\n";
+if (behl::load_buffer(S, source, "script.behl") != 0) {
+    std::cerr << "Failed to load file: " << behl::to_string(S, -1) << "\n";
     return 1;
 }
+// Function is on stack
 ```
 
-**Throws:** `SyntaxError` or `ParserError` on compilation error. Opening the file is your responsibility.
+**Returns:** the same status codes as `load_string()`. Opening the file is your responsibility.
 
 ## Executing Code
 
 After loading, use `call()` to execute:
 
 ```cpp
-try {
-    // Load the script
-    behl::load_string(S, "return 2 + 3");
-    
-    // Call with 0 arguments, expecting 1 return value
-    behl::call(S, 0, 1);
-    
-    // Result is now on top of stack
-    int result = behl::to_integer(S, -1);
-    std::cout << "Result: " << result << "\n";  // 5
-    
-    // Clean up stack
-    behl::pop(S, 1);
-} catch (const behl::BehlException& e) {
-    std::cerr << "Error: " << e.what() << "\n";
+// Load the script
+if (behl::load_string(S, "return 2 + 3") != 0) {
+    std::cerr << "Compilation error: " << behl::to_string(S, -1) << "\n";
     return 1;
 }
+
+// Call with 0 arguments, expecting 1 return value
+if (behl::call(S, 0, 1) < 0) {
+    std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    return 1;
+}
+
+// Result is now on top of stack
+behl::Integer result = behl::to_integer(S, -1);
+std::cout << "Result: " << result << "\n";  // 5
+
+// Clean up stack
+behl::pop(S, 1);
 ```
 
 ### Call Parameters
 
 ```cpp
-void call(State* S, int32_t nargs, int32_t nresults);
+[[nodiscard]] int32_t call(State* S, int32_t nargs, int32_t nresults);
 ```
 
-- **`nargs`** - Number of arguments (already pushed onto stack before the function)
-- **`nresults`** - Number of expected return values
+- **`nargs`** - Number of arguments (pushed onto the stack after the function)
+- **`nresults`** - Number of expected return values, or `behl::kMultRet` for all of them
 
-**Returns:** nothing. A runtime error is thrown as a `BehlException` subclass; before it
-propagates the function and its arguments are removed from the stack.
+**Returns:** the number of results pushed (`>= 0`) on success. On error returns `behl::kErrorRuntime` or `behl::kErrorMemory`; the function and its arguments are removed from the stack and the error value is pushed in their place. Script errors are not thrown. The error value is whatever was raised, so it is not always a string.
 
 ## Complete Example
 
@@ -156,17 +152,14 @@ int main() {
         return name + " v" + tostring(version);
     )";
     
-    try {
-        behl::load_string(S, script);
-        behl::call(S, 0, 1);
-        
+    if (behl::load_string(S, script) != 0 || behl::call(S, 0, 1) < 0) {
+        std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    } else {
         // Get return value
         auto result = behl::to_string(S, -1);
         std::cout << "Returned: " << result << "\n";
-        behl::pop(S, 1);
-    } catch (const behl::BehlException& e) {
-        std::cerr << "Error: " << e.what() << "\n";
     }
+    behl::pop(S, 1);
     
     behl::close(S);
     return 0;
@@ -194,15 +187,22 @@ const char* script = R"(
 )";
 
 // Load script (returns the add function)
-behl::load_string(S, script);
-behl::call(S, 0, 1);  // Get the function
+if (behl::load_string(S, script) != 0 || behl::call(S, 0, 1) < 0) {
+    std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+    return 1;
+}
 
 // Now call the function with arguments
 behl::push_integer(S, 10);
 behl::push_integer(S, 20);
-behl::call(S, 2, 1);  // 2 args, 1 result
+if (behl::call(S, 2, 1) < 0) {  // 2 args, 1 result
+    std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+    return 1;
+}
 
-int result = behl::to_integer(S, -1);
+behl::Integer result = behl::to_integer(S, -1);
 std::cout << "10 + 20 = " << result << "\n";  // 30
 behl::pop(S, 1);
 ```
@@ -212,11 +212,10 @@ behl::pop(S, 1);
 ### Single Return Value
 
 ```cpp
-behl::load_string(S, "return 42");
-behl::call(S, 0, 1);
-
-int value = behl::to_integer(S, -1);
-behl::pop(S, 1);
+if (behl::load_string(S, "return 42") == 0 && behl::call(S, 0, 1) >= 0) {
+    behl::Integer value = behl::to_integer(S, -1);
+}
+behl::pop(S, 1);  // The result or the error value
 ```
 
 ### Multiple Return Values
@@ -229,23 +228,42 @@ const char* script = R"(
     return divmod(17, 5);
 )";
 
-behl::load_string(S, script);
-behl::call(S, 0, 2);  // Expecting 2 results
+if (behl::load_string(S, script) != 0 || behl::call(S, 0, 2) < 0) {  // Expecting 2 results
+    std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+    return 1;
+}
 
-int quotient = behl::to_integer(S, -2);   // First result
-int remainder = behl::to_integer(S, -1);  // Second result
+behl::FP quotient = behl::to_number(S, -2);        // First result, `/` is float division
+behl::Integer remainder = behl::to_integer(S, -1); // Second result
 
-std::cout << "Quotient: " << quotient << "\n";   // 3
+std::cout << "Quotient: " << quotient << "\n";   // 3.4
 std::cout << "Remainder: " << remainder << "\n"; // 2
 
 behl::pop(S, 2);
 ```
 
+With `nresults` set to `behl::kMultRet`, the return value of `call` tells you how many results were pushed:
+
+```cpp
+if (behl::load_string(S, "return 1, 2, 3") == 0) {
+    const int32_t n = behl::call(S, 0, behl::kMultRet);
+    if (n >= 0) {
+        std::cout << n << " results\n";  // 3 results
+        behl::pop(S, n);
+    } else {
+        behl::pop(S, 1);
+    }
+}
+```
+
 ### No Return Value
 
 ```cpp
-behl::load_string(S, "print('Hello, World!')");
-behl::call(S, 0, 0);  // No return values expected
+if (behl::load_string(S, "print('Hello, World!')") != 0 || behl::call(S, 0, 0) < 0) {
+    std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+}
 ```
 
 ## Error Handling
@@ -255,10 +273,10 @@ behl::call(S, 0, 0);  // No return values expected
 ```cpp
 const char* bad_code = "let x = ;";  // Syntax error
 
-try {
-    behl::load_string(S, bad_code);
-} catch (const behl::SyntaxError& e) {
-    std::cerr << "Compilation error: " << e.what() << "\n";
+if (behl::load_string(S, bad_code) == behl::kErrorSyntax) {
+    // "<string>(line,col): SyntaxError: ..."
+    std::cerr << "Compilation error: " << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
 }
 ```
 
@@ -267,28 +285,35 @@ try {
 ```cpp
 const char* code = "error('Something went wrong')";
 
-try {
-    behl::load_string(S, code);
-    behl::call(S, 0, 0);
-} catch (const behl::RuntimeError& e) {
-    std::cerr << "Runtime error: " << e.what() << "\n";
+if (behl::load_string(S, code) != 0) {
+    behl::pop(S, 1);
+} else if (behl::call(S, 0, 0) == behl::kErrorRuntime) {
+    // "Something went wrong", exactly as raised by the script's error() call
+    std::cerr << "Runtime error: " << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
 }
 ```
 
-### Exception-Based Error Handling
+### Non-String Error Values
+
+Scripts can raise any value, for example `error({code = 1})`. The error value on the stack is then a table, and `behl::to_string` returns an empty string for it. Check the type before reading it:
 
 ```cpp
-try {
-    behl::load_string(S, "return 1 / 0");
-    behl::call(S, 0, 1);
-    
-    // Success - use result
-    int result = behl::to_integer(S, -1);
+if (behl::load_string(S, "error({code = 1})") != 0) {
     behl::pop(S, 1);
-} catch (const behl::BehlException& e) {
-    std::cerr << "Error: " << e.what() << "\n";
+} else if (behl::call(S, 0, 0) < 0) {
+    if (behl::is_table(S, -1)) {
+        behl::table_getfield(S, -1, "code");
+        std::cerr << "Error code: " << behl::to_integer(S, -1) << "\n";
+        behl::pop(S, 1);
+    }
+    behl::pop(S, 1);
 }
 ```
+
+### C++ Exceptions from C Functions
+
+`call` does not catch C++ exceptions thrown by your own C functions (anything not raised through `behl::error`, `behl::error_value` or a `check_*` function). They pass through `call` to your code. `std::bad_alloc` is handled differently: it is reported as `behl::kErrorMemory`.
 
 ## Working with Global Variables
 
@@ -300,20 +325,24 @@ behl::push_integer(S, 42);
 behl::set_global(S, "magic_number");
 
 // Use in script
-behl::load_string(S, "print('Magic: ' + tostring(magic_number))");
-behl::call(S, 0, 0);
+if (behl::load_string(S, "print('Magic: ' + tostring(magic_number))") != 0 || behl::call(S, 0, 0) < 0) {
+    std::cerr << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+}
 ```
 
 ### Reading Globals from C++
 
 ```cpp
 // Execute script that sets globals
-behl::load_string(S, "global_value = 100");
-behl::call(S, 0, 0);
+if (behl::load_string(S, "global_value = 100") != 0 || behl::call(S, 0, 0) < 0) {
+    std::cerr << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+}
 
 // Read the global
 behl::get_global(S, "global_value");
-int value = behl::to_integer(S, -1);
+behl::Integer value = behl::to_integer(S, -1);
 std::cout << "Global value: " << value << "\n";  // 100
 behl::pop(S, 1);
 ```
@@ -321,23 +350,30 @@ behl::pop(S, 1);
 ## Executing Multiple Scripts
 
 ```cpp
+bool run(behl::State* S, std::string_view code) {
+    if (behl::load_string(S, code) != 0 || behl::call(S, 0, 0) < 0) {
+        std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+        behl::pop(S, 1);
+        return false;
+    }
+    return true;
+}
+
 behl::State* S = behl::new_state();
 behl::load_stdlib(S);
 
 // First script sets up data
-behl::load_string(S, R"(
+run(S, R"(
     let config = {
         ["width"] = 800,
         ["height"] = 600
     };
 )");
-behl::call(S, 0, 0);
 
 // Second script uses the data
-behl::load_string(S, R"(
+run(S, R"(
     print("Resolution: " + tostring(config.width) + "x" + tostring(config.height));
 )");
-behl::call(S, 0, 0);
 
 behl::close(S);
 ```
@@ -355,8 +391,10 @@ const char* script = R"(
     print("pi = " + tostring(math.pi));
 )";
 
-behl::load_string(S, script);
-behl::call(S, 0, 0);
+if (behl::load_string(S, script) != 0 || behl::call(S, 0, 0) < 0) {
+    std::cerr << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+}
 ```
 
 ## Performance Tips
@@ -367,13 +405,16 @@ Store the compiled function and call it multiple times:
 
 ```cpp
 // Compile once
-behl::load_string(S, R"(
+if (behl::load_string(S, R"(
     function process(data) {
         return data * 2;
     }
     return process;
-)");
-behl::call(S, 0, 1);  // Get the function
+)") != 0 || behl::call(S, 0, 1) < 0) {  // Get the function
+    std::cerr << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+    return;
+}
 
 // Pin it for safe storage
 behl::PinHandle func = behl::pin(S);
@@ -382,8 +423,12 @@ behl::PinHandle func = behl::pin(S);
 for (int i = 0; i < 1000; i++) {
     behl::pinned_push(S, func);
     behl::push_integer(S, i);
-    behl::call(S, 1, 1);
-    int result = behl::to_integer(S, -1);
+    if (behl::call(S, 1, 1) < 0) {
+        std::cerr << behl::to_string(S, -1) << "\n";
+        behl::pop(S, 1);
+        break;
+    }
+    behl::Integer result = behl::to_integer(S, -1);
     behl::pop(S, 1);
 }
 
@@ -400,8 +445,9 @@ behl::State* S = behl::new_state();
 behl::load_stdlib(S);
 
 for (const auto& script : scripts) {
-    behl::load_string(S, script.c_str());
-    behl::call(S, 0, 0);
+    if (behl::load_string(S, script) != 0 || behl::call(S, 0, 0) < 0) {
+        std::cerr << behl::to_string(S, -1) << "\n";
+    }
     behl::set_top(S, 0);  // Clear stack between scripts
 }
 
@@ -417,41 +463,38 @@ bool load_config(const char* path, Config& config) {
     behl::State* S = behl::new_state();
     behl::load_stdlib(S);
     
-    try {
-        std::ifstream file(path);
-        if (!file) {
-            behl::close(S);
-            return false;
-        }
-        
-        std::ostringstream buffer;
-        buffer << file.rdbuf();
-        
-        behl::load_buffer(S, buffer.str(), path);
-        behl::call(S, 0, 1);
-        
-        // Expect a table
-        if (!behl::is_table(S, -1)) {
-            behl::close(S);
-            return false;
-        }
-        
-        // Read configuration
-        behl::table_getfield(S, -1, "width");
-        config.width = behl::to_integer(S, -1);
-        behl::pop(S, 1);
-        
-        behl::table_getfield(S, -1, "height");
-        config.height = behl::to_integer(S, -1);
-        behl::pop(S, 1);
-        
-        behl::close(S);
-        return true;
-    } catch (const behl::BehlException& e) {
-        std::cerr << "Error: " << e.what() << "\n";
+    std::ifstream file(path);
+    if (!file) {
         behl::close(S);
         return false;
     }
+    
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+    
+    if (behl::load_buffer(S, buffer.str(), path) != 0 || behl::call(S, 0, 1) < 0) {
+        std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+        behl::close(S);
+        return false;
+    }
+    
+    // Expect a table
+    if (!behl::is_table(S, -1)) {
+        behl::close(S);
+        return false;
+    }
+    
+    // Read configuration
+    behl::table_getfield(S, -1, "width");
+    config.width = behl::to_integer(S, -1);
+    behl::pop(S, 1);
+    
+    behl::table_getfield(S, -1, "height");
+    config.height = behl::to_integer(S, -1);
+    behl::pop(S, 1);
+    
+    behl::close(S);
+    return true;
 }
 ```
 
@@ -460,14 +503,9 @@ bool load_config(const char* path, Config& config) {
 ```cpp
 bool validate_script(const char* code) {
     behl::State* S = behl::new_state();
-    try {
-        behl::load_string(S, code);
-        behl::close(S);
-        return true;
-    } catch (const behl::BehlException&) {
-        behl::close(S);
-        return false;
-    }
+    const bool ok = behl::load_string(S, code) == 0;
+    behl::close(S);
+    return ok;
 }
 ```
 
@@ -478,14 +516,16 @@ behl::State* S = behl::new_state();
 // Don't load stdlib or limit what's loaded
 behl::load_lib_math(S);  // Only math functions
 
-behl::load_string(S, user_code);
-behl::call(S, 0, 0);
+if (behl::load_string(S, user_code) != 0 || behl::call(S, 0, 0) < 0) {
+    std::cerr << "Script failed: " << behl::to_string(S, -1) << "\n";
+}
 behl::close(S);
 ```
 
 ## See Also
 
 - [API Reference](embedding/api-reference) - Complete API documentation
+- [Error Handling](embedding/error-handling) - Status codes, error values and messages
 - [Exposing C++ Functions](embedding/getting-started#complete-example) - Making C++ functions callable from scripts
 - [Callbacks and Pinning](callbacks) - Storing script functions in C++
 - [Examples](examples) - More code examples

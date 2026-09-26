@@ -13,12 +13,12 @@
 #include "vm_arithmetic.hpp"
 #include "vm_controlflow.hpp"
 #include "vm_detail.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
 #include "vm_table.hpp"
 #include "vm_upvalues.hpp"
 
-#include <behl/exceptions.hpp>
 #include <cassert>
 #include <functional>
 
@@ -221,7 +221,7 @@ namespace behl
         }
         else
         {
-            throw TypeError("attempt to get length of a non-table/non-string value", get_current_location(frame));
+            raise_type_error(S, get_current_location(frame), "attempt to get length of a non-table/non-string value");
         }
     }
 
@@ -293,8 +293,8 @@ namespace behl
                 break;
         }
 
-        throw TypeError(behl::format("attempt to compare {} with {}", idx.get_type_string(), limit.get_type_string()),
-            get_current_location(S->call_stack.back()));
+        raise_type_error(S, get_current_location(S->call_stack.back()), "attempt to compare {} with {}", idx.get_type_string(),
+            limit.get_type_string());
     }
 
     BEHL_INLINE

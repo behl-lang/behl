@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string_view>
 
 class OsTest : public ::testing::TestWithParam<bool>
@@ -36,8 +37,8 @@ TEST_P(OsTest, ClockIsMonotonicNonDecreasing)
         }
         return ok;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -54,8 +55,8 @@ TEST_P(OsTest, HrtimeIsMonotonicNonDecreasing)
         }
         return ok;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -65,8 +66,8 @@ TEST_P(OsTest, DummyReturnsFloatOne)
         const os = import("os");
         return os.dummy();
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::type(S, -1), behl::Type::kNumber);
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 1.0);
 }

@@ -11,10 +11,10 @@
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
 
-#include <behl/exceptions.hpp>
 #include <cassert>
 #include <cmath>
 #include <optional>
@@ -115,7 +115,8 @@ namespace behl
             t = metamethod.get_table();
         }
 
-        throw RuntimeError("'__index' chain too long; possible loop");
+        raise_runtime_error(state, state->call_stack.empty() ? SourceLocation{} : get_current_location(state->call_stack.back()),
+            "'__index' chain too long; possible loop");
     }
 
     inline void table_migrate_hash_to_array(State* S, GCTable* t, size_t from)
@@ -238,7 +239,8 @@ namespace behl
             t = metamethod.get_table();
         }
 
-        throw RuntimeError("'__newindex' chain too long; possible loop");
+        raise_runtime_error(S, S->call_stack.empty() ? SourceLocation{} : get_current_location(S->call_stack.back()),
+            "'__newindex' chain too long; possible loop");
     }
 
     BEHL_INLINE
@@ -309,7 +311,7 @@ namespace behl
         }
         else
         {
-            throw TypeError("attempt to index a non-table value", get_current_location(frame));
+            raise_type_error(S, get_current_location(frame), "attempt to index a non-table value");
         }
     }
 
@@ -371,11 +373,11 @@ namespace behl
                 }
             }
             // No metatable or no __newindex: throw error (userdata has no fields)
-            throw TypeError("attempt to index a userdata value without __newindex", get_current_location(frame));
+            raise_type_error(S, get_current_location(frame), "attempt to index a userdata value without __newindex");
         }
         else
         {
-            throw TypeError("attempt to index a non-table value", get_current_location(frame));
+            raise_type_error(S, get_current_location(frame), "attempt to index a non-table value");
         }
     }
 
@@ -425,7 +427,7 @@ namespace behl
 
         if (!table.is_table())
         {
-            throw TypeError("attempt to index a non-table value", get_current_location(frame));
+            raise_type_error(S, get_current_location(frame), "attempt to index a non-table value");
         }
 
         auto* table_data = table.get_table();

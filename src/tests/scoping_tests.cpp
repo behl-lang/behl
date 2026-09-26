@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class ScopingTest : public ::testing::TestWithParam<bool>
 {
@@ -38,8 +39,8 @@ TEST_P(ScopingTest, LocalShadowingInConditionals)
         }
         return i == 10
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -58,8 +59,8 @@ TEST_P(ScopingTest, LocalShadowingInBranches)
         }
         return i == 10
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -81,8 +82,8 @@ TEST_P(ScopingTest, LocalInNestedBlocks)
         }
         return f(2)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -101,8 +102,8 @@ TEST_P(ScopingTest, SiblingBlockClosuresKeepOwnUpvaluesAtTopLevel)
         }
         return tostring(f1()) + "," + tostring(f2())
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "10,20");
 }
 
@@ -124,8 +125,8 @@ TEST_P(ScopingTest, SiblingBlockClosuresKeepOwnUpvaluesInFunction)
         }
         return make()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "10,20");
 }
 
@@ -137,12 +138,7 @@ TEST_P(ScopingTest, TooManyTopLevelLocalsRaisesErrorOrWorks)
         code += "let v" + std::to_string(i) + " = " + std::to_string(i) + "\n";
     }
     code += "return v0 + v299\n";
-    try
-    {
-        behl::load_string(S, code);
-        behl::call(S, 0, 1);
-    }
-    catch (const std::exception&)
+    if (behl::load_string(S, code) < 0 || behl::call(S, 0, 1) < 0)
     {
         SUCCEED();
         return;

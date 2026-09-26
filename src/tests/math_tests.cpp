@@ -1,9 +1,9 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <cmath>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <limits>
 #include <string>
 
@@ -28,8 +28,8 @@ protected:
     void run(const std::string& expr, int results = 1)
     {
         const std::string code = "const math = import(\"math\")\nreturn " + expr + "\n";
-        ASSERT_NO_THROW(behl::load_string(S, code));
-        ASSERT_NO_THROW(behl::call(S, 0, results));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, results));
     }
 
     double number(const std::string& expr)
@@ -182,8 +182,9 @@ TEST_P(MathTest, MinMaxFallBackToFloatWhenAnyArgumentIsFloat)
 TEST_P(MathTest, MinMaxRequireAtLeastOneArgument)
 {
     const std::string code = "const math = import(\"math\")\nreturn math.min()\n";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_THROW(behl::call(S, 0, 1), behl::RuntimeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(MathTest, Clamp)
@@ -298,8 +299,8 @@ TEST_P(MathTest, LdexpWithNonRepresentableExponentReachesFloatToIntConversion)
 
         const std::string code = std::string("const math = import(\"math\")\nreturn math.ldexp(1.0, ") + exponent + ")\n";
 
-        EXPECT_NO_THROW(behl::load_string(fresh, code)) << exponent;
-        EXPECT_NO_THROW(behl::call(fresh, 0, 1)) << exponent;
+        EXPECT_TRUE(behl_test::load_ok(fresh, code)) << exponent;
+        EXPECT_TRUE(behl_test::call_ok(fresh, 0, 1)) << exponent;
         EXPECT_EQ(behl::type(fresh, -1), behl::Type::kNumber) << exponent;
 
         behl::close(fresh);

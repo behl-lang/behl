@@ -214,7 +214,7 @@ You can dump the compiled bytecode to understand how your code is executed:
 
 ### Error Messages
 
-Behl provides detailed error messages with stack traces:
+`error()` raises its argument exactly as given, so an uncaught error reaching the host is just that value:
 
 ```cpp
 function divide(a, b) {
@@ -224,7 +224,7 @@ function divide(a, b) {
     return a / b;
 }
 
-divide(10, 0); // RuntimeError: Division by zero!
+divide(10, 0); // Division by zero!
 ```
 
 ### Protected Calls

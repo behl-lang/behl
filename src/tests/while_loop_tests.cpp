@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class WhileLoopTest : public ::testing::TestWithParam<bool>
 {
@@ -29,8 +30,8 @@ TEST_P(WhileLoopTest, BasicWhileLoop)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
@@ -49,8 +50,8 @@ TEST_P(WhileLoopTest, WhileLoopWithFunctionCall)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
@@ -69,8 +70,8 @@ TEST_P(WhileLoopTest, WhileLoopWithAssignmentFromCall)
         }
         return result
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 16);
 }
@@ -90,8 +91,8 @@ TEST_P(WhileLoopTest, NestedWhileLoops)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
@@ -113,8 +114,8 @@ TEST_P(WhileLoopTest, WhileWithComplexCondition)
         }
         return sum, iterations
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
 
     ASSERT_EQ(behl::to_integer(S, -2), 10);
@@ -133,8 +134,8 @@ TEST_P(WhileLoopTest, WhileLoopZeroIterations)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
@@ -151,8 +152,8 @@ TEST_P(WhileLoopTest, WhileLoopWithTableAccess)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
@@ -173,8 +174,8 @@ TEST_P(WhileLoopTest, WhileWithContinue)
         }
         return sum, iterations
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
 
     ASSERT_EQ(behl::to_integer(S, -2), 25);
@@ -201,8 +202,8 @@ TEST_P(WhileLoopTest, WhileWithBreakAndContinue)
         }
         return sum, iterations
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
 
     ASSERT_EQ(behl::to_integer(S, -2), 25);

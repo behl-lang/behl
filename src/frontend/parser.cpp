@@ -6,7 +6,7 @@
 #include "frontend/lexer.hpp"
 #include "gc/gc.hpp"
 
-#include <behl/exceptions.hpp>
+#include "vm/vm_error.hpp"
 #include <bit>
 #include <cstdint>
 #include <stdexcept>
@@ -181,14 +181,14 @@ namespace behl
         }
         Token tok = current(P);
         SourceLocation loc(P.chunkname, tok.line, tok.column);
-        throw SyntaxError(err_msg, loc);
+        raise_syntax_error(P.holder.state(), loc, "{}", err_msg);
     }
 
     [[noreturn]] static void error(const ParserState& P, std::string_view msg)
     {
         Token tok = current(P);
         SourceLocation loc(P.chunkname, tok.line, tok.column);
-        throw SyntaxError(msg, loc);
+        raise_syntax_error(P.holder.state(), loc, "{}", msg);
     }
 
     // Helper to append a statement to a block (using linked list)
@@ -490,7 +490,7 @@ namespace behl
         }
         Token tok = current(P);
         SourceLocation loc(P.chunkname, tok.line, tok.column);
-        throw SyntaxError("Unexpected token in expression", loc);
+        raise_syntax_error(P.holder.state(), loc, "Unexpected token in expression");
     }
 
     static AstNode* parse_postfix(ParserState& P)
@@ -1410,7 +1410,7 @@ namespace behl
             {
                 Token tok = previous(P);
                 SourceLocation loc(P.chunkname, tok.line, tok.column);
-                throw SyntaxError("Compound assignment operators do not support multiple variables", loc);
+                raise_syntax_error(P.holder.state(), loc, "Compound assignment operators do not support multiple variables");
             }
             const auto& var = first_left;
             if (var->type != AstNodeType::kIdent && var->type != AstNodeType::kIndex && var->type != AstNodeType::kMember)
@@ -1450,7 +1450,7 @@ namespace behl
             {
                 Token tok = previous(P);
                 SourceLocation loc(P.chunkname, tok.line, tok.column);
-                throw SyntaxError("Increment/decrement operators do not support multiple variables", loc);
+                raise_syntax_error(P.holder.state(), loc, "Increment/decrement operators do not support multiple variables");
             }
             const auto& var = first_left;
             if (var->type != AstNodeType::kIdent && var->type != AstNodeType::kIndex && var->type != AstNodeType::kMember)
@@ -1491,7 +1491,7 @@ namespace behl
             {
                 Token tok = current(P);
                 SourceLocation loc(P.chunkname, tok.line, tok.column);
-                throw SyntaxError("Expected '=' after variable list", loc);
+                raise_syntax_error(P.holder.state(), loc, "Expected '=' after variable list");
             }
             auto expr_st = make_node<AstExprStat>(P.holder, first_left->line, first_left->column, first_left);
             if (expr_st->expr->type != AstNodeType::kFuncCall)

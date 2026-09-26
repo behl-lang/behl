@@ -729,11 +729,9 @@ namespace behl
         }
 
         // Dynamic array-based format impl (determines size at runtime)
-        template<typename Tuple, size_t... Is>
-        BEHL_CONSTEXPR_STRING std::string format_impl_dynamic(std::string_view fmt, const Tuple& args, std::index_sequence<Is...>)
+        template<typename Out, typename Tuple, size_t... Is>
+        constexpr void format_to_dynamic(Out& result, std::string_view fmt, const Tuple& args, std::index_sequence<Is...>)
         {
-            std::string result;
-            result.reserve(fmt.size());
             size_t i = 0;
             size_t arg_index = 0;
 
@@ -905,7 +903,14 @@ namespace behl
                     result += fmt[i++];
                 }
             }
+        }
 
+        template<typename Tuple, size_t... Is>
+        BEHL_CONSTEXPR_STRING std::string format_impl_dynamic(std::string_view fmt, const Tuple& args, std::index_sequence<Is...> seq)
+        {
+            std::string result;
+            result.reserve(fmt.size());
+            format_to_dynamic(result, fmt, args, seq);
             return result;
         }
 
@@ -984,6 +989,114 @@ namespace behl
         auto args_tuple = std::forward_as_tuple(args...);
         return detail::format_impl_dynamic(fmt.view(), args_tuple, std::index_sequence_for<Args...>{});
     }
+
+    template<typename Out, typename... Args>
+    constexpr void format_to(Out& out, format_string<std::type_identity_t<Args>...> fmt, Args&&... args)
+    {
+        auto args_tuple = std::forward_as_tuple(args...);
+        detail::format_to_dynamic(out, fmt.view(), args_tuple, std::index_sequence_for<Args...>{});
+    }
+
+    class format_buffer
+    {
+    public:
+        static constexpr size_t kInlineCapacity = 256;
+
+        format_buffer() = default;
+        format_buffer(const format_buffer&) = delete;
+        format_buffer& operator=(const format_buffer&) = delete;
+
+        void append(std::string_view text)
+        {
+            append(text.data(), text.size());
+        }
+
+        void append(const char* text, size_t length)
+        {
+            char* dest = grow(length);
+            for (size_t i = 0; i < length; ++i)
+            {
+                dest[i] = text[i];
+            }
+        }
+
+        void append(size_t count, char ch)
+        {
+            char* dest = grow(count);
+            for (size_t i = 0; i < count; ++i)
+            {
+                dest[i] = ch;
+            }
+        }
+
+        format_buffer& operator+=(char ch)
+        {
+            *grow(1) = ch;
+            return *this;
+        }
+
+        void insert(size_t pos, size_t count, char ch)
+        {
+            const size_t old_size = size_;
+            grow(count);
+            char* base = data();
+            for (size_t i = old_size; i > pos; --i)
+            {
+                base[i - 1 + count] = base[i - 1];
+            }
+            for (size_t i = 0; i < count; ++i)
+            {
+                base[pos + i] = ch;
+            }
+        }
+
+        size_t size() const
+        {
+            return size_;
+        }
+
+        char& operator[](size_t index)
+        {
+            return data()[index];
+        }
+
+        std::string_view view() const
+        {
+            return std::string_view(spilled_ ? spill_.data() : inline_.data(), size_);
+        }
+
+    private:
+        char* data()
+        {
+            return spilled_ ? spill_.data() : inline_.data();
+        }
+
+        char* grow(size_t count)
+        {
+            const size_t new_size = size_ + count;
+            if (!spilled_ && new_size > kInlineCapacity)
+            {
+                spill_.resize(new_size * 2);
+                for (size_t i = 0; i < size_; ++i)
+                {
+                    spill_[i] = inline_[i];
+                }
+                spilled_ = true;
+            }
+            else if (spilled_ && new_size > spill_.size())
+            {
+                spill_.resize(new_size * 2);
+            }
+            char* dest = data() + size_;
+            size_ = new_size;
+            return dest;
+        }
+
+        std::array<char, kInlineCapacity> inline_{};
+        std::vector<char> spill_{};
+        size_t size_ = 0;
+        bool spilled_ = false;
+    };
 
     std::string vformat(std::string_view fmt, const std::vector<format_arg>& args);
 

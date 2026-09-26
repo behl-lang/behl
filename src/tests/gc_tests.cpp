@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 namespace behl
@@ -45,8 +45,8 @@ namespace behl
             return after <= before + 2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -66,8 +66,8 @@ namespace behl
             return keeper["data"] == "important";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -93,8 +93,8 @@ namespace behl
             return fn() == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -126,8 +126,8 @@ namespace behl
             return v1 == 101 && v2 == 102 && v3 == 101;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -153,8 +153,8 @@ namespace behl
             return after_count <= before_count + 3;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -175,8 +175,8 @@ namespace behl
             return s1 == s2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -207,8 +207,8 @@ namespace behl
             return fn() == 30;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -230,8 +230,8 @@ namespace behl
             return fn() == 15;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -259,8 +259,8 @@ namespace behl
             return after <= before + 2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -283,8 +283,8 @@ namespace behl
             return true;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -306,8 +306,8 @@ namespace behl
             return result[0] == 1 && result[11] == 12;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -337,8 +337,8 @@ namespace behl
             return v0 == 1 && v1 == 11 && v2 == 21;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -365,8 +365,8 @@ namespace behl
             return true;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -395,8 +395,8 @@ namespace behl
             return even(10) && !odd(10);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -415,8 +415,8 @@ namespace behl
             return t["a"] == 1 && t["b"] == 2 && t["c"] == 3;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -439,8 +439,8 @@ namespace behl
             return f1() == 42 && f2() == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -462,8 +462,8 @@ namespace behl
             return new_val == 50;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -483,8 +483,8 @@ namespace behl
             return after <= before + 2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -508,8 +508,8 @@ namespace behl
             return result == 210;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -529,8 +529,8 @@ namespace behl
             return keeper["value"] == 100;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -545,8 +545,8 @@ namespace behl
             return count_all == (count_in_use + count_free);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -564,8 +564,8 @@ namespace behl
             return free_count >= 0;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -582,8 +582,8 @@ namespace behl
             return phase == "idle" || phase == "mark" || phase == "sweep";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -610,8 +610,8 @@ namespace behl
             return root["level1"]["level2"]["level3"]["value"] == "deep";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -630,8 +630,8 @@ namespace behl
             return result == 30;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -657,8 +657,8 @@ namespace behl
             return t[0] == 0 && t[499] == 499;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -685,8 +685,8 @@ namespace behl
             return v1 == 5 && v2 == 15 && v3 == 18;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -711,8 +711,8 @@ namespace behl
                    important_data["z"] == 3;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -734,8 +734,8 @@ namespace behl
             return result == 31;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -757,8 +757,8 @@ namespace behl
             return typeof(s) == "string";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -816,8 +816,8 @@ namespace behl
             return saw_mark, moved, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
 
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "no objects were reparented during marking";
@@ -881,8 +881,8 @@ namespace behl
             return saw_mark, moved, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
 
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "no objects were reparented during marking";
@@ -940,8 +940,8 @@ namespace behl
             return saw_mark, moved, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "nothing was rawset during marking";
         EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while referenced through rawset";
@@ -999,8 +999,8 @@ namespace behl
             return saw_mark, moved, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "no upvalues were closed during marking";
         EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while held by a closed upvalue";
@@ -1058,8 +1058,8 @@ namespace behl
             return saw_mark, moved, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "no metatables were assigned during marking";
         EXPECT_EQ(to_integer(S, -1), 0) << "metatable swept while still attached";
@@ -1118,8 +1118,8 @@ namespace behl
             return grabbed, sweeps, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never entered a fresh mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "no sweep ran after the objects were moved";
         EXPECT_EQ(to_integer(S, -1), 0) << "objects held only in locals were swept";
@@ -1184,8 +1184,8 @@ namespace behl
             return grabbed, sweeps, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never entered a fresh mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "no sweep ran after the objects were moved";
         EXPECT_EQ(to_integer(S, -1), 0) << "objects held only in closed upvalues were swept";
@@ -1248,8 +1248,8 @@ namespace behl
             return grabbed, sweeps, corrupt
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
         ASSERT_TRUE(to_boolean(S, -3)) << "workload never entered a fresh mark phase";
         ASSERT_GT(to_integer(S, -2), 0) << "no sweep ran after the objects were captured";
         EXPECT_EQ(to_integer(S, -1), 0) << "objects held only by freshly created closures were swept";
@@ -1266,18 +1266,15 @@ namespace behl
         for (int i = 0; i < 300; ++i)
         {
             const std::string good = "let t = {v = " + std::to_string(i) + "}\nfunction f(a) { return a + t.v }\nreturn f(1)";
-            ASSERT_NO_THROW(load_string(S, good));
-            ASSERT_NO_THROW(call(S, 0, 1));
+            ASSERT_TRUE(behl_test::load_ok(S, good));
+            ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
             pop(S, 1);
 
             const std::string bad = "let s" + std::to_string(i) + " = \"x\"\nfunction g(a) { return a + }\n";
-            try
-            {
-                load_string(S, bad);
-            }
-            catch (const BehlException&)
+            if (load_string(S, bad) < 0)
             {
                 ++failures;
+                pop(S, 1);
             }
         }
 

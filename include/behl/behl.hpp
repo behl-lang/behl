@@ -22,6 +22,8 @@ namespace behl
     // Causes a runtime error in the given state with the provided message, does not return.
     [[noreturn]] BEHL_API void error(State* S, std::string_view msg);
 
+    [[noreturn]] BEHL_API void error_value(State* S);
+
     // Assigns the value at the top of the stack to the global table _G with the given name, pops the value.
     // All entries in the global table will become global variables.
     BEHL_API void set_global(State* S, std::string_view name);
@@ -243,12 +245,12 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
 
     // Loads a chunk from the given buffer and pushes the resulting function onto the stack, throws on error.
-    BEHL_API void load_buffer(State* S, std::string_view str, std::string_view chunkname, bool optimize = true);
+    [[nodiscard]] BEHL_API int32_t load_buffer(State* S, std::string_view str, std::string_view chunkname, bool optimize = true);
 
     // Nearly identical to load_buffer but uses "<string>" as the chunk name.
-    BEHL_API void load_string(State* S, std::string_view str, bool optimize = true);
+    [[nodiscard]] BEHL_API int32_t load_string(State* S, std::string_view str, bool optimize = true);
 
-    BEHL_API void call(State* S, int32_t nargs, int32_t nresults);
+    [[nodiscard]] BEHL_API int32_t call(State* S, int32_t nargs, int32_t nresults);
 
     // Garbage collection control
     //////////////////////////////////////////////////////////////////////////

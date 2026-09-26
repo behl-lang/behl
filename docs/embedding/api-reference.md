@@ -23,8 +23,7 @@ Complete C++ API function reference.
 
 To use the Behl API:
 ```cpp
-#include <behl/behl.hpp>        // Core API
-#include <behl/exceptions.hpp>  // Exception types
+#include <behl/behl.hpp>  // Core API, includes <behl/types.hpp>
 ```
 
 ---
@@ -183,43 +182,43 @@ Returns pointer to userdata, or `nullptr` if not userdata.
 
 ## Type Checking
 
-All `check_*` functions throw `TypeError` if validation fails.
+The `check_*` functions are meant to be called from C functions that Behl called. If validation fails they raise an error with a message such as `TypeError: bad argument #1 (expected integer, got string)`, which the surrounding `call` or script `pcall` reports. They do not return in that case.
 
 ### `check_type(State*, int32_t, Type)`
 ```cpp
 void check_type(State* S, int32_t idx, Type expected)
 ```
-Throws if value at `idx` is not of expected type.
+Raises an error if value at `idx` is not of expected type.
 
 ### `check_integer(State*, int32_t)`
 ```cpp
 Integer check_integer(State* S, int32_t idx)
 ```
-Returns integer value. Also accepts a float whose value is integral (for example `3.0`). Throws otherwise.
+Returns integer value. Also accepts a float whose value is integral (for example `3.0`). Raises an error otherwise.
 
 ### `check_number(State*, int32_t)`
 ```cpp
 FP check_number(State* S, int32_t idx)
 ```
-Returns number value. Throws if not a number.
+Returns number value. Raises an error if not a number.
 
 ### `check_string(State*, int32_t)`
 ```cpp
 std::string_view check_string(State* S, int32_t idx)
 ```
-Returns string value. Throws if not a string.
+Returns string value. Raises an error if not a string.
 
 ### `check_boolean(State*, int32_t)`
 ```cpp
 bool check_boolean(State* S, int32_t idx)
 ```
-Returns boolean value. Throws if not a boolean.
+Returns boolean value. Raises an error if not a boolean.
 
 ### `check_userdata(State*, int32_t, uint32_t)`
 ```cpp
 void* check_userdata(State* S, int32_t idx, uint32_t uid)
 ```
-Returns userdata pointer. Throws if not userdata or UID mismatch.
+Returns userdata pointer. Raises an error if not userdata or UID mismatch.
 
 ---
 
@@ -249,22 +248,29 @@ Registers a C function as a global function.
 
 ### `load_string(State*, std::string_view, bool)`
 ```cpp
-void load_string(State* S, std::string_view code, bool optimize = true)
+[[nodiscard]] int32_t load_string(State* S, std::string_view code, bool optimize = true)
 ```
-Compiles a string and pushes resulting function. Throws `SyntaxError` or `ParserError` on compilation failure.
+Compiles a string. Returns `0` and pushes the resulting function on success. On failure returns `kErrorSyntax` (or `kErrorMemory`) and pushes the error message string (`<string>(line,col): SyntaxError: ...`). Does not throw.
 
 ### `load_buffer(State*, std::string_view, std::string_view, bool)`
 ```cpp
-void load_buffer(State* S, std::string_view code, 
-                std::string_view chunkname, bool optimize = true)
+[[nodiscard]] int32_t load_buffer(State* S, std::string_view code,
+                                  std::string_view chunkname, bool optimize = true)
 ```
-Like `load_string` but with custom chunk name for error messages. Throws on error.
+Like `load_string` but with custom chunk name for error messages. Same return values.
 
 ### `call(State*, int32_t, int32_t)`
 ```cpp
-void call(State* S, int32_t nargs, int32_t nresults)
+[[nodiscard]] int32_t call(State* S, int32_t nargs, int32_t nresults)
 ```
-Calls function with `nargs` arguments, expecting `nresults` return values. Throws `RuntimeError`, `TypeError`, or other `BehlException` on error.
+Calls function with `nargs` arguments, expecting `nresults` return values (or `kMultRet`). Returns the number of results pushed (`>= 0`) on success. On error returns `kErrorRuntime` or `kErrorMemory`, removes the function and arguments, and pushes the error value, which can be any type. Script errors are not thrown. C++ exceptions thrown by C functions (other than `std::bad_alloc`) are not caught and propagate to the caller.
+
+```cpp
+if (behl::load_string(S, code) != 0 || behl::call(S, 0, 0) < 0) {
+    std::cerr << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+}
+```
 
 ---
 
@@ -381,40 +387,29 @@ struct ModuleConst {
 ```cpp
 [[noreturn]] void error(State* S, std::string_view msg)
 ```
-Throws a `RuntimeError` exception. Does not return.
+Raises a runtime error. The error value is the string `RuntimeError: <msg>` followed by a newline and the stack trace. Does not return.
 
-### Exception Types
+### `error_value(State*)`
+```cpp
+[[noreturn]] void error_value(State* S)
+```
+Raises the value on top of the stack as the error, whatever its type. Does not return.
 
-All Behl exceptions inherit from `behl::BehlException`:
+Both functions must only be called from within a C function that Behl called (while a call is active). Calling them outside a call is API misuse and asserts.
+
+### Status Codes
+
+Defined in `<behl/types.hpp>`:
 
 ```cpp
 namespace behl {
-    class BehlException : public std::exception { };
-    class SyntaxError : public BehlException { };      // Syntax errors
-    class ParserError : public BehlException { };      // Parser errors
-    class SemanticError : public BehlException { };    // Semantic errors
-    class RuntimeError : public BehlException { };     // Runtime errors
-    class TypeError : public BehlException { };        // Type errors
-    class ReferenceError : public BehlException { };   // Undefined variables
-    class ArithmeticError : public BehlException { };  // Math errors
+    constexpr int32_t kErrorRuntime = -1;  // call: runtime error
+    constexpr int32_t kErrorMemory = -2;   // call, load_*: allocation failure
+    constexpr int32_t kErrorSyntax = -3;   // load_*: compile error
 }
 ```
 
-**Usage:**
-```cpp
-try {
-    behl::load_string(S, code);
-    behl::call(S, 0, 0);
-} catch (const behl::SyntaxError& e) {
-    // Handle compile error
-} catch (const behl::TypeError& e) {
-    // Handle type error
-} catch (const behl::RuntimeError& e) {
-    // Handle runtime error
-} catch (const behl::BehlException& e) {
-    // Catch all behl errors
-}
-```
+There are no public C++ exception types. See [Error Handling](error-handling) for the complete error model.
 
 ---
 

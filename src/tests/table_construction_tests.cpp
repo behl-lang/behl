@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class TableConstructionTest : public ::testing::TestWithParam<bool>
 {
@@ -30,8 +31,8 @@ TEST_P(TableConstructionTest, ArrayAccess)
         t[1] = 99
         return t[1] == 99
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -44,8 +45,8 @@ TEST_P(TableConstructionTest, HashAccess)
         t["z"] = 300
         return t["z"] == 300
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -60,8 +61,8 @@ TEST_P(TableConstructionTest, MixedArrayHash)
         if (t["y"] != 20) { return false }
         return true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -72,8 +73,8 @@ TEST_P(TableConstructionTest, EmptyTableCreation)
         t[0] = 42
         return t[0]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
@@ -90,8 +91,8 @@ TEST_P(TableConstructionTest, ManyFixedItemsBeforeVarargKeepAllEntries)
             "let bad = 0\n"
             "for (let i = 0; i < 300; i++) { if (t[i] != i) { bad++ } }\n"
             "return bad, t[300], t[301], rawlen(t)\n";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_EQ(behl::to_integer(S, -4), 0);
     EXPECT_EQ(behl::to_integer(S, -3), 1000);
     EXPECT_EQ(behl::to_integer(S, -2), 1001);

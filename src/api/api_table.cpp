@@ -7,6 +7,7 @@
 #include "state.hpp"
 #include "vm/value.hpp"
 #include "vm/vm_detail.hpp"
+#include "vm/vm_error.hpp"
 #include "vm/vm_metatable.hpp"
 
 #include <behl/behl.hpp>
@@ -229,7 +230,7 @@ namespace behl
             }
             else if (!in_array_phase || start_i > t->array.size())
             {
-                error(S, "invalid key to 'next'");
+                raise_runtime_error(S, SourceLocation{}, "invalid key to 'next'");
             }
 
             // integer key not in hash means we just finished array part, start hash iteration

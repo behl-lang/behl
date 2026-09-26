@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 #include <array>
 #include <string>
@@ -28,8 +29,8 @@ TEST_P(OperatorTest, ExecuteArithmetic)
     constexpr std::string_view code = R"(
         return 10 + 5
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
@@ -39,8 +40,8 @@ TEST_P(OperatorTest, NumberAdditionStillWorks)
     constexpr std::string_view code = R"(
         return 1 + 2 + 3
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
@@ -52,8 +53,8 @@ TEST_P(OperatorTest, CompoundAssignmentPlusEquals)
         x += 5
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
@@ -65,8 +66,8 @@ TEST_P(OperatorTest, CompoundAssignmentMinusEquals)
         x -= 8
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
@@ -78,8 +79,8 @@ TEST_P(OperatorTest, CompoundAssignmentStarEquals)
         x *= 7
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -91,8 +92,8 @@ TEST_P(OperatorTest, CompoundAssignmentSlashEquals)
         x /= 5
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
@@ -104,8 +105,8 @@ TEST_P(OperatorTest, CompoundAssignmentPercentEquals)
         x %= 5
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 2);
 }
@@ -117,8 +118,8 @@ TEST_P(OperatorTest, IncrementOperator)
         x++
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
@@ -130,8 +131,8 @@ TEST_P(OperatorTest, DecrementOperator)
         x--
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
@@ -145,8 +146,8 @@ TEST_P(OperatorTest, IncrementInLoop)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
@@ -160,8 +161,8 @@ TEST_P(OperatorTest, CompoundAssignmentChained)
         x -= 6
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 24);
 }
@@ -173,8 +174,8 @@ TEST_P(OperatorTest, IncrementGlobal)
         g++
         return g
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
@@ -186,8 +187,8 @@ TEST_P(OperatorTest, DecrementGlobal)
         g--
         return g
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
@@ -199,8 +200,8 @@ TEST_P(OperatorTest, LogicalNotOperator)
         a = !a
         return a
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
@@ -210,8 +211,8 @@ TEST_P(OperatorTest, LogicalNotOnFalse)
     constexpr std::string_view code = R"(
         return !false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
@@ -221,8 +222,8 @@ TEST_P(OperatorTest, LogicalNotOnNil)
     constexpr std::string_view code = R"(
         return !nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
@@ -232,8 +233,8 @@ TEST_P(OperatorTest, LogicalNotOnNumber)
     constexpr std::string_view code = R"(
         return !0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
@@ -246,8 +247,8 @@ TEST_P(OperatorTest, MultipleAssignmentIndexUsesValueBeforeAssignment)
         i, a[i] = 1, 99
         return i, a[0], a[1]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), 1);
     EXPECT_EQ(behl::to_integer(S, -2), 99);
     EXPECT_TRUE(behl::is_nil(S, -1));
@@ -261,8 +262,8 @@ TEST_P(OperatorTest, MultipleAssignmentTableUsesValueBeforeAssignment)
         a, a[0] = 5, 99
         return a, c[0]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 5);
     EXPECT_EQ(behl::to_integer(S, -1), 99);
 }
@@ -273,8 +274,8 @@ TEST_P(OperatorTest, BitwiseNotOnIntegralFloatMatchesBinaryBitwise)
         let v = 3.0
         return 3.0 & -1, ~3.0, ~v
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_integer(S, -3), 3);
     EXPECT_EQ(behl::to_integer(S, -2), -4);
     EXPECT_EQ(behl::to_integer(S, -1), -4);
@@ -300,8 +301,8 @@ TEST_P(OperatorTest, BitwisePrecedenceWithoutParentheses)
         r = r + ";" + tostring(a | b & c) + "," + tostring(a | b ^ c & d) + "," + tostring(a << b + a) + "," + tostring(b * c >> a)
         return r
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "3,5,0,8,6,true,5,5,3;3,3,8,3");
 }
 
@@ -347,8 +348,8 @@ TEST_P(OperatorTest, LogicalOperatorsAllCombinations)
         }
     }
     code += "return bad\n";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "");
 }
 

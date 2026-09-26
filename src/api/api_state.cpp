@@ -53,6 +53,8 @@ namespace behl
         auto* key_obj = gc_new_string(state, "_G");
         tbl->hash.insert_or_assign(state, Value(key_obj), state->globals_table);
 
+        state->memory_error_message = gc_new_string(state, "not enough memory");
+
         state->call_stack.reserve(state, 128);
 
         // Initialize module search paths

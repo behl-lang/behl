@@ -222,13 +222,17 @@ private:
         // "debug" is a module, not a global, so import it first
         behl::get_global(S, "import");
         behl::push_string(S, "debug");
-        behl::call(S, 1, 1);
+        if (behl::call(S, 1, 1) < 0) {
+            behl::pop(S, 1);  // Error value
+            return;
+        }
         
         // Call debug.stacktrace()
         behl::table_rawgetfield(S, -1, "stacktrace");
-        behl::call(S, 0, 1);
-        std::cout << behl::to_string(S, -1) << "\n";
-        behl::pop(S, 2);
+        if (behl::call(S, 0, 1) >= 0) {
+            std::cout << behl::to_string(S, -1) << "\n";
+        }
+        behl::pop(S, 2);  // Result or error value, and the module table
     }
     
     void show_help() {
@@ -253,8 +257,10 @@ public:
     }
     
     void run(std::string_view code) {
-        behl::load_string(state, code);
-        behl::call(state, 0, 0);
+        if (behl::load_string(state, code) != 0 || behl::call(state, 0, 0) < 0) {
+            std::cerr << "Error: " << behl::to_string(state, -1) << "\n";
+            behl::pop(state, 1);
+        }
     }
 };
 ```

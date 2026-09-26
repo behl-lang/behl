@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <set>
 #include <string>
 using namespace behl;
@@ -259,7 +259,7 @@ TEST_P(APITest, CallNativeFunctionDirect)
     push_cfunction(S, &c_add2);
     push_integer(S, 3);
     push_integer(S, 4);
-    ASSERT_NO_THROW(call(S, 2, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 2, 1));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, -1), 7);
 }
@@ -268,8 +268,8 @@ TEST_P(APITest, RegisterNativeFunctionAndCallFromScript)
 {
     register_function(S, "add2", &c_add2);
     constexpr std::string_view code = "return add2(10, 32);";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, -1), 42);
 }
@@ -282,15 +282,9 @@ static int c_fail(State* S)
 TEST_P(APITest, NativeFunctionErrorPropagates)
 {
     push_cfunction(S, &c_fail);
-    try
-    {
-        call(S, 0, 1);
-        FAIL() << "Expected exception to be thrown";
-    }
-    catch (const behl::RuntimeError& e)
-    {
-        EXPECT_NE(std::string_view(e.what()).find("TypeError: native broke"), std::string_view::npos);
-    }
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
+    EXPECT_NE(behl_test::error_text(S).find("TypeError: native broke"), std::string::npos) << behl_test::error_text(S);
 }
 
 static int c_add_checked(State* S)
@@ -306,14 +300,15 @@ TEST_P(APITest, NativeCheckHelpers)
     push_cfunction(S, &c_add_checked);
     push_integer(S, 5);
     push_integer(S, 37);
-    ASSERT_NO_THROW(call(S, 2, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 2, 1));
     ASSERT_EQ(to_integer(S, -1), 42);
     pop(S, 1);
 
     push_cfunction(S, &c_add_checked);
     push_integer(S, 5);
     push_string(S, "oops");
-    EXPECT_THROW({ call(S, 2, 1); }, behl::TypeError);
+    EXPECT_TRUE(behl_test::call_fails(S, 2, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 static int c_return_multiple(State* S)
@@ -339,7 +334,7 @@ static int c_return_one(State* S)
 TEST_P(APITest, CallWithMultretReturnsAllResults)
 {
     push_cfunction(S, &c_return_multiple);
-    ASSERT_NO_THROW(call(S, 0, kMultRet));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, kMultRet));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_integer(S, -3), 1);
     ASSERT_EQ(to_integer(S, -2), 2);
@@ -349,14 +344,14 @@ TEST_P(APITest, CallWithMultretReturnsAllResults)
 TEST_P(APITest, CallWithMultretHandlesZeroResults)
 {
     push_cfunction(S, &c_return_none);
-    ASSERT_NO_THROW(call(S, 0, kMultRet));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, kMultRet));
     ASSERT_EQ(get_top(S), 0);
 }
 
 TEST_P(APITest, CallWithMultretHandlesOneResult)
 {
     push_cfunction(S, &c_return_one);
-    ASSERT_NO_THROW(call(S, 0, kMultRet));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, kMultRet));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, -1), 42);
 }
@@ -364,7 +359,7 @@ TEST_P(APITest, CallWithMultretHandlesOneResult)
 TEST_P(APITest, CallWithFixedResultCountTruncates)
 {
     push_cfunction(S, &c_return_multiple);
-    ASSERT_NO_THROW(call(S, 0, 2));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(to_integer(S, -2), 1);
     ASSERT_EQ(to_integer(S, -1), 2);
@@ -373,7 +368,7 @@ TEST_P(APITest, CallWithFixedResultCountTruncates)
 TEST_P(APITest, CallWithFixedResultCountPadsWithNil)
 {
     push_cfunction(S, &c_return_multiple);
-    ASSERT_NO_THROW(call(S, 0, 5));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     ASSERT_EQ(get_top(S), 5);
     ASSERT_EQ(to_integer(S, -5), 1);
     ASSERT_EQ(to_integer(S, -4), 2);
@@ -385,7 +380,7 @@ TEST_P(APITest, CallWithFixedResultCountPadsWithNil)
 TEST_P(APITest, CallWithZeroResultsDiscards)
 {
     push_cfunction(S, &c_return_multiple);
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
     ASSERT_EQ(get_top(S), 0);
 }
 
@@ -397,8 +392,8 @@ TEST_P(APITest, ApiSetGlobalOfNewKeyUsesNewIndexMetamethod)
         existing = 1
         setmetatable(_G, { __newindex = function(t, k, v) { seen[k] = v } })
     )";
-    ASSERT_NO_THROW(behl::load_string(S, setup));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, setup));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     behl::push_integer(S, 42);
     ASSERT_NO_THROW(behl::set_global(S, "brand_new"));
@@ -409,8 +404,8 @@ TEST_P(APITest, ApiSetGlobalOfNewKeyUsesNewIndexMetamethod)
         setmetatable(_G, nil)
         return brand_new, seen["brand_new"], existing, seen["existing"]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, check));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, check));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_TRUE(behl::is_nil(S, -4));
     ASSERT_EQ(behl::to_integer(S, -3), 42);
     ASSERT_EQ(behl::to_integer(S, -2), 2);
@@ -424,8 +419,8 @@ TEST_P(APITest, ApiGetGlobalOfMissingKeyUsesIndexMetamethod)
         existing = 1
         setmetatable(_G, { __index = function(t, k) { return 7 } })
     )";
-    ASSERT_NO_THROW(behl::load_string(S, setup));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, setup));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_NO_THROW(behl::get_global(S, "missing"));
     ASSERT_EQ(behl::to_integer(S, -1), 7);
@@ -461,7 +456,7 @@ TEST_P(APITest, NegativeIndexBelowCFunctionFrameDoesNotReachCallerSlots)
         return 0;
     });
     push_integer(S, 99);
-    ASSERT_NO_THROW(call(S, 1, 0));
+    ASSERT_TRUE(behl_test::call_ok(S, 1, 0));
 
     ASSERT_EQ(seen_top, 1);
     ASSERT_EQ(seen_arg, 99);
@@ -484,8 +479,8 @@ TEST_P(APITest, CallWithMoreThan255ResultsReturnsAll)
         for (let i = 0; i < 300; i = i + 1) { t[i] = i }
         return table.unpack(t)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 300));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 300));
     ASSERT_EQ(get_top(S), 300);
     for (int32_t i = 0; i < 300; ++i)
     {
@@ -502,8 +497,8 @@ TEST_P(APITest, CallWithExactly255ResultsIsNotTreatedAsMultret)
         for (let i = 0; i < 300; i = i + 1) { t[i] = i }
         return table.unpack(t)
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 255));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 255));
     ASSERT_EQ(get_top(S), 255);
     EXPECT_EQ(to_integer(S, 0), 0);
     EXPECT_EQ(to_integer(S, -1), 254);
@@ -532,23 +527,16 @@ TEST_P(APITest, LoadStringSyntaxErrorLeavesStackUnchanged)
     push_integer(S, 11);
     push_string(S, "keep");
 
-    bool threw = false;
-    try
-    {
-        load_string(S, "let x = = 1");
-    }
-    catch (const BehlException&)
-    {
-        threw = true;
-    }
-
-    ASSERT_TRUE(threw);
+    ASSERT_TRUE(behl_test::load_fails(S, "let x = = 1"));
+    ASSERT_EQ(get_top(S), 3);
+    EXPECT_EQ(type(S, -1), Type::kString);
+    pop(S, 1);
     ASSERT_EQ(get_top(S), 2);
     EXPECT_EQ(to_integer(S, 0), 11);
     EXPECT_EQ(to_string(S, 1), "keep");
 
-    ASSERT_NO_THROW(load_string(S, "return 5"));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, "return 5"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(get_top(S), 3);
     EXPECT_EQ(to_integer(S, -1), 5);
 }

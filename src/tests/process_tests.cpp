@@ -3,6 +3,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string_view>
 
 #ifdef _WIN32
@@ -45,8 +46,8 @@ TEST_P(ProcessTest, BasicSpawnAndWait)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -60,8 +61,8 @@ TEST_P(ProcessTest, CustomExitCode)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
@@ -76,8 +77,8 @@ TEST_P(ProcessTest, CaptureStdout)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("test_output") != std::string_view::npos);
@@ -92,8 +93,8 @@ TEST_P(ProcessTest, ExecCapturesOutput)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("hello") != std::string_view::npos);
@@ -108,8 +109,8 @@ TEST_P(ProcessTest, ExecReturnsExitCode)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 7);
 }
 
@@ -124,8 +125,8 @@ TEST_P(ProcessTest, GetPid)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_GT(behl::to_integer(S, -1), 0);
 }
 
@@ -155,8 +156,8 @@ TEST_P(ProcessTest, IsRunning)
         TEST_SLEEP_CMD);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -182,8 +183,8 @@ TEST_P(ProcessTest, ForceKillExitCode)
         TEST_SLEEP_CMD);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     // Exit code should be 137 (128 + SIGKILL(9))
     EXPECT_EQ(behl::to_integer(S, -1), 137);
 }
@@ -210,8 +211,8 @@ TEST_P(ProcessTest, SignalTermExitCode)
         TEST_SLEEP_CMD);
 #endif
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 143);
 }
 
@@ -223,8 +224,8 @@ TEST_P(ProcessTest, PlatformConstant)
         return platform;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code.data()));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code.data()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto platform = to_string(S, -1);
 #ifdef _WIN32
@@ -243,8 +244,8 @@ TEST_P(ProcessTest, SignalConstants)
         return process.SIGTERM;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code.data()));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code.data()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 15);
 }
 
@@ -272,8 +273,8 @@ TEST_P(ProcessTest, StdinPipe)
         TEST_SLEEP_CMD);
 #endif
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 10);
 }
 
@@ -288,8 +289,8 @@ TEST_P(ProcessTest, WriteToExitedChildDoesNotTerminateHost)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
 }
 
@@ -307,8 +308,8 @@ TEST_P(ProcessTest, RepeatedWritesToExitedChildStaySafe)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
 }
 
@@ -322,8 +323,8 @@ TEST_P(ProcessTest, NullStdio)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     auto exitcode = to_integer(S, -1);
     EXPECT_GE(exitcode, 0);
 }
@@ -339,8 +340,8 @@ TEST_P(ProcessTest, CloseHandle)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -352,8 +353,8 @@ TEST_P(ProcessTest, InvalidCommand)
         return typeof(result) == "boolean" && result == false;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code.data()));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code.data()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -379,8 +380,8 @@ TEST_P(ProcessTest, CustomEnvironmentVariable)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("test_value") != std::string_view::npos);
@@ -408,8 +409,8 @@ TEST_P(ProcessTest, CustomEnvironmentMultipleVariables)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("hello") != std::string_view::npos);
@@ -438,8 +439,8 @@ TEST_P(ProcessTest, InheritedEnvironment)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_FALSE(output.empty());
@@ -464,8 +465,8 @@ TEST_P(ProcessTest, ExecWithCustomEnvironment)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("exec_value") != std::string_view::npos);
@@ -493,8 +494,8 @@ TEST_P(ProcessTest, CustomEnvironmentIsolatesFromParent)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("isolated") != std::string_view::npos);

@@ -43,6 +43,7 @@ namespace behl
         Vector<uint32_t> closed_upvalue_freelist;
 
         Value globals_table{};
+        GCString* memory_error_message{};
         uint32_t cfunction_stack_base = 0;
 
         // Module system

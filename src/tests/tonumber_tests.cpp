@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <limits>
 #include <string>
 
@@ -35,8 +36,8 @@ TEST_P(ToNumberTest, ToNumber_Integer)
         let result = tonumber(42);
         return result;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
@@ -45,8 +46,8 @@ TEST_P(ToNumberTest, ToNumber_NegativeInteger)
     constexpr std::string_view code = R"(
         return tonumber(-123);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), -123);
 }
 
@@ -55,8 +56,8 @@ TEST_P(ToNumberTest, ToNumber_ZeroInteger)
     constexpr std::string_view code = R"(
         return tonumber(0);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 0);
 }
 
@@ -65,8 +66,8 @@ TEST_P(ToNumberTest, ToNumber_LargeInteger)
     constexpr std::string_view code = R"(
         return tonumber(9223372036854775807);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 9223372036854775807LL);
 }
 
@@ -75,8 +76,8 @@ TEST_P(ToNumberTest, ToNumber_Float)
     constexpr std::string_view code = R"(
         return tonumber(3.14);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_NEAR(to_number(S, -1), 3.14, 0.01);
 }
 
@@ -85,8 +86,8 @@ TEST_P(ToNumberTest, ToNumber_NegativeFloat)
     constexpr std::string_view code = R"(
         return tonumber(-2.718);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_NEAR(to_number(S, -1), -2.718, 0.001);
 }
 
@@ -95,8 +96,8 @@ TEST_P(ToNumberTest, ToNumber_ZeroFloat)
     constexpr std::string_view code = R"(
         return tonumber(0.0);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_DOUBLE_EQ(to_number(S, -1), 0.0);
 }
 
@@ -105,8 +106,8 @@ TEST_P(ToNumberTest, ToNumber_StringInteger)
     constexpr std::string_view code = R"(
         return tonumber("42");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
@@ -115,8 +116,8 @@ TEST_P(ToNumberTest, ToNumber_StringNegativeInteger)
     constexpr std::string_view code = R"(
         return tonumber("-123");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), -123);
 }
 
@@ -125,8 +126,8 @@ TEST_P(ToNumberTest, ToNumber_StringFloat)
     constexpr std::string_view code = R"(
         return tonumber("3.14159");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_NEAR(to_number(S, -1), 3.14159, 0.00001);
 }
 
@@ -135,8 +136,8 @@ TEST_P(ToNumberTest, ToNumber_StringNegativeFloat)
     constexpr std::string_view code = R"(
         return tonumber("-2.5");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_NEAR(to_number(S, -1), -2.5, 0.01);
 }
 
@@ -145,8 +146,8 @@ TEST_P(ToNumberTest, ToNumber_StringZero)
     constexpr std::string_view code = R"(
         return tonumber("0");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 0);
 }
 
@@ -155,8 +156,8 @@ TEST_P(ToNumberTest, ToNumber_StringWithSpaces)
     constexpr std::string_view code = R"(
         return tonumber("  42  ");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -165,8 +166,8 @@ TEST_P(ToNumberTest, ToNumber_StringWithLeadingZeros)
     constexpr std::string_view code = R"(
         return tonumber("0042");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
@@ -175,8 +176,8 @@ TEST_P(ToNumberTest, ToNumber_InvalidString)
     constexpr std::string_view code = R"(
         return tonumber("hello");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -185,8 +186,8 @@ TEST_P(ToNumberTest, ToNumber_EmptyString)
     constexpr std::string_view code = R"(
         return tonumber("");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -195,8 +196,8 @@ TEST_P(ToNumberTest, ToNumber_StringWithText)
     constexpr std::string_view code = R"(
         return tonumber("42abc");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -205,8 +206,8 @@ TEST_P(ToNumberTest, ToNumber_StringWithTrailingText)
     constexpr std::string_view code = R"(
         return tonumber("3.14pi");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -215,8 +216,8 @@ TEST_P(ToNumberTest, ToNumber_StringMultipleDots)
     constexpr std::string_view code = R"(
         return tonumber("1.2.3");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -225,8 +226,8 @@ TEST_P(ToNumberTest, ToNumber_Nil)
     constexpr std::string_view code = R"(
         return tonumber(nil);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -235,8 +236,8 @@ TEST_P(ToNumberTest, ToNumber_Boolean)
     constexpr std::string_view code = R"(
         return tonumber(true);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -245,8 +246,8 @@ TEST_P(ToNumberTest, ToNumber_BooleanFalse)
     constexpr std::string_view code = R"(
         return tonumber(false);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -256,8 +257,8 @@ TEST_P(ToNumberTest, ToNumber_Table)
         let t = {1, 2, 3};
         return tonumber(t);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -267,8 +268,8 @@ TEST_P(ToNumberTest, ToNumber_Function)
         function foo() {}
         return tonumber(foo);
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -277,8 +278,8 @@ TEST_P(ToNumberTest, ToNumber_ScientificNotation)
     constexpr std::string_view code = R"(
         return tonumber("1e10");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_NEAR(to_number(S, -1), 1e10, 1e5);
 }
 
@@ -287,8 +288,8 @@ TEST_P(ToNumberTest, ToNumber_ScientificNotationNegative)
     constexpr std::string_view code = R"(
         return tonumber("1e-5");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_NEAR(to_number(S, -1), 1e-5, 1e-10);
 }
 
@@ -297,8 +298,8 @@ TEST_P(ToNumberTest, ToNumber_HexString)
     constexpr std::string_view code = R"(
         return tonumber("0x10");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(is_nil(S, -1));
 }
 
@@ -310,8 +311,8 @@ TEST_P(ToNumberTest, ToNumber_MultipleConversions)
         let c = tonumber("30");
         return a + b + c;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 60);
 }
 
@@ -321,8 +322,8 @@ TEST_P(ToNumberTest, ToNumber_InExpression)
         let result = tonumber("5") * tonumber("3");
         return result;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 15);
 }
 
@@ -335,8 +336,8 @@ TEST_P(ToNumberTest, ToNumber_InLoop)
         }
         return sum;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 3);
 }
 
@@ -349,8 +350,8 @@ TEST_P(ToNumberTest, ToNumber_WithConditional)
         }
         return x;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 999);
 }
 
@@ -364,8 +365,8 @@ TEST_P(ToNumberTest, ToNumber_ValidStringConditional)
             return -1;
         }
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 42);
 }
 
@@ -374,8 +375,8 @@ TEST_P(ToNumberTest, ToNumber_PreservesIntegerType)
     constexpr std::string_view code = R"(
         return typeof(tonumber("123"));
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "integer");
 }
 
@@ -384,8 +385,8 @@ TEST_P(ToNumberTest, ToNumber_PreservesFloatType)
     constexpr std::string_view code = R"(
         return typeof(tonumber("3.14"));
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "number");
 }
 
@@ -394,8 +395,8 @@ TEST_P(ToNumberTest, ToNumber_IntegerPassthrough)
     constexpr std::string_view code = R"(
         return typeof(tonumber(42));
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "integer");
 }
 
@@ -404,8 +405,8 @@ TEST_P(ToNumberTest, ToNumber_FloatPassthrough)
     constexpr std::string_view code = R"(
         return typeof(tonumber(3.14));
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "number");
 }
 
@@ -414,8 +415,8 @@ TEST_P(ToNumberTest, ToNumber_StringIntegerExtremes)
     constexpr std::string_view code = R"(
         return tonumber("9223372036854775807"), tonumber("-9223372036854775808");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(type(S, -2), behl::Type::kInteger);
     EXPECT_EQ(to_integer(S, -2), std::numeric_limits<int64_t>::max());
     EXPECT_EQ(type(S, -1), behl::Type::kInteger);
@@ -434,8 +435,8 @@ TEST_P(ToNumberTest, ToNumber_MalformedStringsReturnNil)
         }
         return bad;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "");
 }
 
@@ -444,8 +445,8 @@ TEST_P(ToNumberTest, ToNumber_FloatStringsWithoutLeadingOrTrailingDigits)
     constexpr std::string_view code = R"(
         return tonumber("1."), tonumber(".5");
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(type(S, -2), behl::Type::kNumber);
     EXPECT_DOUBLE_EQ(to_number(S, -2), 1.0);
     EXPECT_EQ(type(S, -1), behl::Type::kNumber);

@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 class RegressionTest : public ::testing::TestWithParam<bool>
@@ -34,8 +34,8 @@ TEST_P(RegressionTest, RecursiveFibonacciDirectExpression)
         }
         return fib(10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
@@ -51,8 +51,8 @@ TEST_P(RegressionTest, MultipleRecursiveCallsInExpression)
         }
         return test(3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 27);
@@ -73,8 +73,8 @@ TEST_P(RegressionTest, JitReturnFastDeepRecursionValues)
         }
         return acc, depth(40), depth(0), depth(1)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::to_integer(S, -4), 300 * 47);
     ASSERT_EQ(behl::to_integer(S, -3), 47);
     ASSERT_EQ(behl::to_integer(S, -2), 7);
@@ -95,8 +95,8 @@ TEST_P(RegressionTest, JitReturnFastDistinctValuesPerFrame)
         }
         return acc, outer(0), outer(1), mid(5), leaf(9)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     ASSERT_EQ(behl::to_integer(S, -5), 3 * (399 + 400 + 401 + 402));
     ASSERT_EQ(behl::to_integer(S, -4), 3 * (0 + 1 + 2 + 3));
     ASSERT_EQ(behl::to_integer(S, -3), 3 * (1 + 2 + 3 + 4));
@@ -123,8 +123,8 @@ TEST_P(RegressionTest, JitReturnFastWithUpvaluesStillCorrect)
         }
         return acc, f(0), f(5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::to_integer(S, -3), 110);
     ASSERT_EQ(behl::to_integer(S, -2), 100);
     ASSERT_EQ(behl::to_integer(S, -1), 105);
@@ -148,8 +148,8 @@ TEST_P(RegressionTest, JitReturnFastMixedResultCounts)
         let a, b = two(10)
         return acc, one(5), a, b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::to_integer(S, -4), 400 + (400 + 401));
     ASSERT_EQ(behl::to_integer(S, -3), 6);
     ASSERT_EQ(behl::to_integer(S, -2), 11);
@@ -174,8 +174,8 @@ TEST_P(RegressionTest, MultretTableConstructorFromHotCalls)
         let t2 = {one(7), one(8)}
         return len, last, #t2, t2[0], t2[1]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     ASSERT_EQ(behl::to_integer(S, -5), 2);
     ASSERT_EQ(behl::to_integer(S, -4), 401);
     ASSERT_EQ(behl::to_integer(S, -3), 2);
@@ -203,8 +203,8 @@ TEST_P(RegressionTest, JitTailCallMultArgsSelfRecursion)
         }
         return warm, ack(0, 0), ack(1, 1), ack(2, 2), ack(3, 3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     ASSERT_EQ(behl::to_integer(S, -5), 9);
     ASSERT_EQ(behl::to_integer(S, -4), 1);
     ASSERT_EQ(behl::to_integer(S, -3), 3);
@@ -238,8 +238,8 @@ TEST_P(RegressionTest, JitNonSelfTailCallFromNestedSelfRecursion)
         }
         return acc, accm, feed(1), feedm(1), feed(0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 5));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
     ASSERT_EQ(behl::to_integer(S, -5), 133);
     ASSERT_EQ(behl::to_integer(S, -4), 133);
     ASSERT_EQ(behl::to_integer(S, -3), 103);
@@ -265,8 +265,8 @@ TEST_P(RegressionTest, JitReturnFastThroughPcall)
         let bad, err = pcall(mid, 13)
         return acc, ok, val, bad
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::to_integer(S, -4), 3);
     ASSERT_TRUE(behl::to_boolean(S, -3));
     ASSERT_EQ(behl::to_integer(S, -2), 7);
@@ -282,8 +282,8 @@ TEST_P(RegressionTest, LocalVariableNotCorruptedByFunctionDefinition)
         }
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 10) << "x should remain 10, not be corrupted by function";
 }
@@ -299,8 +299,8 @@ TEST_P(RegressionTest, MultipleLocalsNotCorruptedByFunctionDefinition)
         }
         return x + y + z
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 60) << "All locals should remain uncorrupted";
 }
@@ -312,8 +312,8 @@ TEST_P(RegressionTest, LocalVariableNotCorruptedByExpressionStatement)
         let temp = 1 + 1  // Another statement that allocates registers
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
@@ -328,8 +328,8 @@ TEST_P(RegressionTest, LocalVariableNotCorruptedByFunctionCall)
         helper()  // Call should not corrupt x
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 50);
 }
@@ -345,8 +345,8 @@ TEST_P(RegressionTest, LocalInOuterScopeNotCorruptedByNestedFunction)
         }
         return outer
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
@@ -361,8 +361,8 @@ TEST_P(RegressionTest, LocalCapturedByClosureNotCorrupted)
         let dummy = 111  // Another local to test register allocation
         return getCaptured()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 999);
 }
@@ -378,8 +378,8 @@ TEST_P(RegressionTest, ComplexInterleavingOfLocalsAndFunctions)
         function f3() { return 300 }
         return a + b + c
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6) << "All locals should preserve their values";
 }
@@ -391,8 +391,8 @@ TEST_P(RegressionTest, LocalNotCorruptedByTableCreation)
         let t = {a = 1, b = 2}
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -406,8 +406,8 @@ TEST_P(RegressionTest, LocalInConditionalNotCorrupted)
         }
         return x
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
@@ -421,8 +421,8 @@ TEST_P(RegressionTest, OriginalBugReportCase)
         }
         return test(5, 3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 18) << "Should compute 5 + 3 + 10 = 18";
 }
@@ -434,8 +434,8 @@ TEST_P(RegressionTest, FunctionWithSixParameters)
         }
         return sum6(1, 2, 3, 4, 5, 6)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 21);
 }
@@ -448,8 +448,8 @@ TEST_P(RegressionTest, FunctionWithTenParameters)
         }
         return sum10(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
@@ -462,8 +462,8 @@ TEST_P(RegressionTest, FunctionWithFifteenParameters)
         }
         return sum15(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 120);
 }
@@ -479,8 +479,8 @@ TEST_P(RegressionTest, RecursiveFunctionWithSixParameters)
         }
         return rec_sum(10, 20, 30, 40, 50, 5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 155);
 }
@@ -496,8 +496,8 @@ TEST_P(RegressionTest, RecursiveFunctionWithTenParameters)
         }
         return rec_product(2, 3, 4, 5, 6, 7, 8, 9, 10, 3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 150);
@@ -514,8 +514,8 @@ TEST_P(RegressionTest, TailCallWithSixParameters)
         }
         return countdown(1, 2, 3, 4, 5, 10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 65);
@@ -532,8 +532,8 @@ TEST_P(RegressionTest, TailCallWithTenParameters)
         }
         return accumulate(1, 2, 3, 4, 5, 6, 7, 8, 9, 100)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 945);
@@ -550,8 +550,8 @@ TEST_P(RegressionTest, DeepTailRecursionWithEightParameters)
         }
         return deep_tail(1, 2, 3, 4, 5, 6, 7, 10000)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 28);
 }
@@ -568,8 +568,8 @@ TEST_P(RegressionTest, NestedCallsWithSevenParameters)
         }
         return outer(2, 3, 4, 5, 6, 7, 100)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 334);
@@ -587,8 +587,8 @@ TEST_P(RegressionTest, ManyParametersWithUpvalues)
         let add_fn = make_adder(10, 20, 30, 40, 50)
         return add_fn(1, 2, 3, 4, 5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 165);
@@ -616,8 +616,8 @@ TEST_P(RegressionTest, RecursionPreservesAllTwelveParameters)
         }
         return check_params(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1)) << "All parameters should be preserved through recursion";
 }
@@ -640,8 +640,8 @@ TEST_P(RegressionTest, MixedCallsWithEightParameters)
         }
         return mixed_recurse(1, 2, 3, 4, 5, 6, 7, 10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_integer(S, -1) > 0) << "Should compute without corruption";
 }
@@ -657,8 +657,8 @@ TEST_P(RegressionTest, FunctionCallInIfCondition)
         }
         return 0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42) << "Should execute then-block";
 }
@@ -674,8 +674,8 @@ TEST_P(RegressionTest, FunctionCallInIfConditionReturnsFalse)
         }
         return 99
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 99) << "Should skip then-block";
 }
@@ -699,8 +699,8 @@ TEST_P(RegressionTest, MultipleFunctionCallsInIfConditions)
         }
         return result
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 101) << "Should execute test1 and test3 blocks only";
 }
@@ -716,8 +716,8 @@ TEST_P(RegressionTest, FunctionCallWithParametersInIfCondition)
         }
         return 456
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 123);
 }
@@ -734,8 +734,8 @@ TEST_P(RegressionTest, FunctionCallInWhileCondition)
         }
         return counter
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5) << "Should loop until counter reaches 5";
 }
@@ -747,8 +747,9 @@ TEST_P(RegressionTest, ErrorColumnNumberForCallToNilValue)
         undefined_func(123, 456);
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code)) << "Code should compile successfully";
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError) << "Call should fail because undefined_func is nil";
+    ASSERT_TRUE(behl_test::load_ok(S, code)) << "Code should compile successfully";
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0)) << "Call should fail because undefined_func is nil";
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
@@ -760,8 +761,8 @@ TEST_P(RegressionTest, ManySequentialStatementsDoNotOverflowRegisters)
     }
     code += "    return acc;\n}\nreturn generated(1, 2);\n";
 
-    ASSERT_NO_THROW(behl::load_string(S, code)) << "Repeating one statement shape must not exhaust the register file";
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code)) << "Repeating one statement shape must not exhaust the register file";
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 2561);
 }
@@ -775,8 +776,8 @@ TEST_P(RegressionTest, SelfTailCallPreservesArgumentCount)
         }
         return countdown(150, 0);
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 11325);
 }
 
@@ -797,8 +798,8 @@ TEST_P(RegressionTest, SelfTailCallArityOneTwoThree)
         }
         return one(60) + two(60, 0) + three(60, 0, 3);
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 7 + 120 + 180);
 }
 
@@ -829,8 +830,8 @@ TEST_P(RegressionTest, TwoDistinctCallsInOneLoopBody)
         }
         return ping(150, 0) + selfdown(150, 0);
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 11325 + 11325);
 }
 
@@ -847,8 +848,8 @@ TEST_P(RegressionTest, NonTailSelfCallPreservesArgumentCount)
         }
         return sum_to(100) + weighted(100, 2);
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 5050 + 10100);
 }
 
@@ -872,8 +873,8 @@ TEST_P(RegressionTest, TopLevelLoopMatchesFunctionLoop)
 
         return (from_function == from_chunk) && (from_chunk == 1249975000);
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
@@ -899,8 +900,8 @@ TEST_P(RegressionTest, SelfCallLeavesUnpassedParamsNil)
         }
         return probe(20, 7) == 1;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1)) << "unpassed parameters must read nil after a self call";
 }
 
@@ -920,8 +921,8 @@ TEST_P(RegressionTest, JitSelfCallWithoutInliningKeepsLocals)
         }
         return total, walk(1, 0), walk(0, 9)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::to_integer(S, -3), 200 * 3 * 50 * 51 / 2);
     ASSERT_EQ(behl::to_integer(S, -2), 3);
     ASSERT_EQ(behl::to_integer(S, -1), 9);
@@ -943,8 +944,8 @@ TEST_P(RegressionTest, JitSelfCallDeepRecursionGrowsStack)
         }
         return walk(3000, 0), sum(3000)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 3 * 3000 * 3001 / 2);
     ASSERT_EQ(behl::to_integer(S, -1), 3000 * 3001 / 2);
 }
@@ -964,8 +965,8 @@ TEST_P(RegressionTest, JitSelfCallDiscardedResultsBeyondInlineDepth)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 20 * 1023);
 }
 
@@ -984,8 +985,8 @@ TEST_P(RegressionTest, JitSelfCallMultipleResultsBeyondInlineDepth)
         }
         return x, y
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 21);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -1007,8 +1008,8 @@ TEST_P(RegressionTest, JitSelfCallInlinedBodyLocalsAcrossCalls)
         }
         return total, f(10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 50 * 2584);
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
@@ -1029,9 +1030,67 @@ TEST_P(RegressionTest, JitSelfCallSlowPushUnderGcPressureDeep)
         }
         return total
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 20 * (1000 * 1001 / 2));
+}
+
+TEST_P(RegressionTest, IncrementInsideFunctionExpressionInAssignment)
+{
+    constexpr std::string_view code = R"(
+        let result = 0
+        result = (function() {
+            let n = 0
+            for (let i = 0; i < 4; i++) { n++ }
+            return n
+        })()
+        let ok, value = pcall(function() {
+            let total = 0
+            for (let i = 0; i < 3; i++) { total += i }
+            return total
+        })
+        return result, ok, value
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 4);
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_P(RegressionTest, IncrementInsideDeferBody)
+{
+    constexpr std::string_view code = R"(
+        let counter = 0
+        function f() {
+            defer {
+                for (let i = 0; i < 3; i++) { counter++ }
+            }
+            return 1
+        }
+        f()
+        return counter
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_P(RegressionTest, IncrementInsideFunctionExpressionInConditions)
+{
+    constexpr std::string_view code = R"(
+        let hits = 0
+        let count = function(n) { let c = 0; for (let i = 0; i < n; i++) { c++ } return c }
+        if ((function() { let c = 0; for (let i = 0; i < 2; i++) { c++ } return c })() == 2) { hits++ }
+        let k = 0
+        while ((function() { let c = 0; for (let i = 0; i < 1; i++) { c++ } return c })() > k) { k++ }
+        foreach (let v in { count(2), count(3) }) { hits += v }
+        return hits, k
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 6);
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, RegressionTest, ::testing::Bool(),

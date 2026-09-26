@@ -3,6 +3,7 @@
 #include <behl/behl.hpp>
 #include <behl/debug.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <queue>
 #include <vector>
 
@@ -135,9 +136,9 @@ TEST_P(DebugTest, BasicBreakpoint)
         let result = x + y;
         let z = 4;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 1);
     EXPECT_EQ(harness.breakpoint_hits[0], 2);
@@ -160,9 +161,9 @@ TEST_P(DebugTest, MultipleBreakpoints)
         let a = 4;
         let b = 5;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_EQ(harness.breakpoint_hits.size(), 3);
     EXPECT_EQ(harness.breakpoint_hits[0], 3);
@@ -185,9 +186,9 @@ TEST_P(DebugTest, StepInto)
         let z = 3;
         let a = 4;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_GE(harness.breakpoint_hits.size(), 3);
     EXPECT_EQ(harness.breakpoint_hits[0], 3);
@@ -208,9 +209,9 @@ TEST_P(DebugTest, StepOver)
         let x = foo();
         let y = 10;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_GE(harness.breakpoint_hits.size(), 1);
     EXPECT_EQ(harness.breakpoint_hits[0], 6);
@@ -233,9 +234,9 @@ TEST_P(DebugTest, BreakpointInLoop)
             let x = i;
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_GE(harness.breakpoint_hits.size(), 3);
     for (int hit : harness.breakpoint_hits)
@@ -256,9 +257,9 @@ TEST_P(DebugTest, RemoveBreakpoint)
         let y = 2;
         let z = 3;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 0);
 }
@@ -273,9 +274,9 @@ TEST_P(DebugTest, PauseExecution)
         let x = 1;
         let y = 2;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_GE(harness.breakpoint_hits.size(), 1);
 }
@@ -292,9 +293,9 @@ TEST_P(DebugTest, ClearAllBreakpoints)
         let y = 2;
         let z = 3;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 0);
 }
@@ -328,9 +329,9 @@ TEST(DebugStandaloneTest, GetLocation)
         let x = 1;
         let y = 2;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     debug_enable(S, false);
     close(S);
@@ -364,9 +365,9 @@ TEST_P(DebugTest, BreakpointMatchesLongSourceName)
         let x = 1;
         let y = 2;
     )";
-    ASSERT_NO_THROW(behl::load_buffer(S, code, chunkname, false));
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, chunkname, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 1) << "breakpoint on a source name longer than 31 bytes never fired";
 }
@@ -384,9 +385,9 @@ TEST_P(DebugTest, BreakpointMatchesShortSourceName)
         let x = 1;
         let y = 2;
     )";
-    ASSERT_NO_THROW(behl::load_buffer(S, code, chunkname, false));
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, chunkname, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 1);
 }

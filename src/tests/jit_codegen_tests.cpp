@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 class JitCodegenTest : public ::testing::TestWithParam<bool>
@@ -41,8 +41,8 @@ TEST_P(JitCodegenTest, JitFusedCompareJumpColdPathWithFloats)
         }
         return total, fib(12.0), fib(7.5), classify(3), classify(3.0), classify(10.0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 6));
     ASSERT_EQ(behl::to_integer(S, -6), 30 * 144 + (20 * 1 + 9 * 2 + 1 * 3) + (20 * 1 + 10 * 2));
     ASSERT_DOUBLE_EQ(behl::to_number(S, -5), 144.0);
     ASSERT_DOUBLE_EQ(behl::to_number(S, -4), 23.5);
@@ -69,8 +69,8 @@ TEST_P(JitCodegenTest, JitNonSelfCallLeavesUnpassedParamsNil)
         }
         return caller(200)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 200);
 }
 
@@ -95,8 +95,8 @@ TEST_P(JitCodegenTest, JitNonSelfCallMutualRecursionDeep)
         }
         return total, even(3000), odd(3001)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::to_integer(S, -3), 50);
     ASSERT_EQ(behl::to_integer(S, -2), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
@@ -119,8 +119,8 @@ TEST_P(JitCodegenTest, JitNonSelfCallMixedCalleeKinds)
         }
         return total
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     const int64_t n = 300;
     const int64_t sum_i = n * (n - 1) / 2;
     ASSERT_EQ(behl::to_integer(S, -1), (sum_i + n) + (sum_i + 5 * n) + (sum_i + 5 * n) + sum_i);
@@ -144,8 +144,8 @@ TEST_P(JitCodegenTest, JitNonSelfCallResultCounts)
         }
         return caller(100), log
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 100 * 16 + 2 * (99 * 100 / 2));
     ASSERT_EQ(behl::to_integer(S, -1), 99 * 100 / 2);
 }

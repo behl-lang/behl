@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 class StringKeyTest : public ::testing::TestWithParam<bool>
@@ -25,16 +26,16 @@ protected:
 
     void run_expect_integer(const std::string& code, int64_t expected)
     {
-        ASSERT_NO_THROW(behl::load_string(S, code));
-        ASSERT_NO_THROW(behl::call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(behl::to_integer(S, -1), expected) << code;
         behl::set_top(S, 0);
     }
 
     void run_expect_string(const std::string& code, const std::string& expected)
     {
-        ASSERT_NO_THROW(behl::load_string(S, code));
-        ASSERT_NO_THROW(behl::call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(behl::to_string(S, -1), expected) << code;
         behl::set_top(S, 0);
     }
@@ -210,8 +211,8 @@ TEST_P(StringKeyTest, ApiStringViewLookupFindsScriptKey)
         t["beta_" + tostring(2)] = 2
         return t
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::is_table(S, -1));
 
     behl::table_rawgetfield(S, -1, "alpha");
@@ -242,8 +243,8 @@ TEST_P(StringKeyTest, GlobalByNameMatchesScriptDefinition)
         globalvalue = 123
         return 0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     behl::set_top(S, 0);
 
     behl::get_global(S, "globalvalue");

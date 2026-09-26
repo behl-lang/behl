@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class IntegerWrappingTest : public ::testing::TestWithParam<bool>
 {
@@ -29,8 +30,8 @@ TEST_P(IntegerWrappingTest, AdditionOverflow)
         return result
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
 
     ASSERT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
@@ -44,8 +45,8 @@ TEST_P(IntegerWrappingTest, SubtractionUnderflow)
         return result
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
 
     ASSERT_EQ(behl::to_integer(S, -1), 9223372036854775807LL);
@@ -59,8 +60,8 @@ TEST_P(IntegerWrappingTest, MultiplicationOverflow)
         return result
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
 
     ASSERT_EQ(behl::to_integer(S, -1), -2);
@@ -84,8 +85,8 @@ TEST_P(IntegerWrappingTest, ConstantFoldedOverflowMatchesRuntime)
         return folded_add, runtime_add, folded_sub, runtime_sub, folded_mul, runtime_mul
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 6));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 6));
     ASSERT_EQ(behl::get_top(S), 6);
 
     ASSERT_EQ(behl::type(S, -6), behl::Type::kInteger);
@@ -113,8 +114,8 @@ TEST_P(IntegerWrappingTest, ModuloOfMinByMinusOne)
         return folded, runtime, hot
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
     ASSERT_EQ(behl::type(S, -3), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -3), 0);
@@ -131,8 +132,8 @@ TEST_P(IntegerWrappingTest, PowerOverflow)
         return a, b, c
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::type(S, -3), behl::Type::kInteger);
 
     ASSERT_EQ(behl::to_integer(S, -3), 0);
@@ -148,8 +149,8 @@ TEST_P(IntegerWrappingTest, NegationOfMin)
         return result
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
 
     ASSERT_EQ(behl::to_integer(S, -1), static_cast<int64_t>(0x8000000000000000ULL));
@@ -166,8 +167,8 @@ TEST_P(IntegerWrappingTest, ConstantFoldedNegationOfMinMatchesRuntime)
         return folded, runtime
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::get_top(S), 2);
 
     ASSERT_EQ(behl::type(S, -2), behl::Type::kInteger);
@@ -184,8 +185,8 @@ TEST_P(IntegerWrappingTest, ComplexWrapping)
         return result
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
 
     int64_t expected = static_cast<int64_t>(0x8000000000000000ULL) + 4;
@@ -202,8 +203,8 @@ TEST_P(IntegerWrappingTest, IncrementDecrement)
         return max, min
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::type(S, -2), behl::Type::kInteger);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
 
@@ -222,8 +223,8 @@ TEST_P(IntegerWrappingTest, ShiftCountsAtAndBeyondWidthFolded)
         r = r + "," + tostring(8 >> (-9223372036854775807 - 1)) + "," + tostring(1 >> -1)
         return r
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "-9223372036854775808,0,0,8,0,0,-1,-1,0,0,-1,0,2");
 }
 
@@ -247,8 +248,8 @@ TEST_P(IntegerWrappingTest, ShiftCountsAtAndBeyondWidthRuntime)
         r = r + "," + tostring(eight >> minint) + "," + tostring(one >> cm1)
         return r
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "-9223372036854775808,0,0,8,0,0,-1,-1,0,0,-1,0,2");
 }
 

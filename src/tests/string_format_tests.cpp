@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 namespace behl
 {
@@ -30,8 +30,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Value: 42, Name: test");
     }
 
@@ -43,8 +43,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Pi: 3.14");
     }
 
@@ -56,8 +56,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Hex: 0xFF");
     }
 
@@ -69,8 +69,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Padded:    42");
     }
 
@@ -82,8 +82,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Braces: { and }");
     }
 
@@ -98,8 +98,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Alice is 30 years old with score 95.5");
     }
 
@@ -119,8 +119,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Location: Point(10, 20)");
     }
 
@@ -132,8 +132,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "a b c");
     }
 
@@ -145,8 +145,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "third first second");
     }
 
@@ -158,8 +158,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "echo echo echo");
     }
 
@@ -171,8 +171,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "3.14 and FF");
     }
 
@@ -184,8 +184,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "Decimal: 42, Hex: 2A, Padded:    42");
     }
 
@@ -197,8 +197,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "second comes after first");
     }
 
@@ -210,8 +210,8 @@ namespace behl
             return result;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "test             test    test   ");
     }
 
@@ -222,8 +222,9 @@ namespace behl
             return string.format("{:99999999999}", 1);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     TEST_P(StringFormatTest, RejectsOversizedPrecision)
@@ -233,8 +234,9 @@ namespace behl
             return string.format("{:.99999999999}", 1.5);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     TEST_P(StringFormatTest, RejectsOversizedWidthArgumentIndex)
@@ -244,8 +246,9 @@ namespace behl
             return string.format("{:{99999999999}}", 1, 2);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     TEST_P(StringFormatTest, RejectsOversizedPrecisionArgumentIndex)
@@ -255,8 +258,9 @@ namespace behl
             return string.format("{:.{99999999999}}", 1.5, 2);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     TEST_P(StringFormatTest, RejectsWidthJustPastTheLimit)
@@ -266,8 +270,9 @@ namespace behl
             return string.format("{:65537}", 1);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     TEST_P(StringFormatTest, AcceptsWidthAtTheLimit)
@@ -277,8 +282,8 @@ namespace behl
             return #string.format("{:65536}", 1);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_integer(S, -1), 65536);
     }
 
@@ -289,8 +294,8 @@ namespace behl
             return string.format("[{:>5}]", 42) + string.format("[{:.2f}]", 1.239);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "[   42][1.24]");
     }
 
@@ -301,8 +306,8 @@ namespace behl
             return string.format("{:.5f}", 1000000000000000000.0);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "1000000000000000000.00000");
     }
 
@@ -313,8 +318,8 @@ namespace behl
             return string.format("{:.20f}", 1.5);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "1.50000000000000000000");
     }
 
@@ -331,8 +336,8 @@ namespace behl
             return ok && #s == 402 && string.byte(s, 0) == 49 && string.byte(s, 2) == 53;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
@@ -343,8 +348,8 @@ namespace behl
             return string.format("{:.2f}", 100000000000000000000.0);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "1e+20");
     }
 
@@ -355,8 +360,8 @@ namespace behl
             return string.format("{:.3f}", 1.0 / 0.0) + "|" + string.format("{:.3f}", 0.0 - 1.0 / 0.0);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "inf|-inf");
     }
 
@@ -367,8 +372,8 @@ namespace behl
             return string.format("{:.2f}", 0.0 - 1000000000000000000.0);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "-1000000000000000000.00");
     }
 
@@ -381,8 +386,8 @@ namespace behl
             return string.format("{:d}|{:d}|{}|{}", maxi, mini, maxi, mini);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "9223372036854775807|-9223372036854775808|9223372036854775807|-9223372036854775808");
     }
 
@@ -393,8 +398,8 @@ namespace behl
             return string.format("{:x}|{:X}|{:x}", 9223372036854775807, 9223372036854775807, 0);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "7fffffffffffffff|7FFFFFFFFFFFFFFF|0");
     }
 
@@ -405,8 +410,8 @@ namespace behl
             return string.format("[{:5}][{:>5}][{:^6}][{:<4}][{:3}]", "ab", "ab", "ab", "ab", "abcdef");
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "[ab   ][   ab][  ab  ][ab  ][abcdef]");
     }
 
@@ -417,8 +422,8 @@ namespace behl
             return string.format("[{:8.3}][{:<8.1}][{:5}][{:>6}][{:.3}]", 3.14159, -2.26, -42, 7, 0.1);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "[   3.142][-2.3    ][  -42][     7][0.100]");
     }
 
@@ -429,8 +434,8 @@ namespace behl
             return string.format("{} {} {}|{:>6}|{:>6}", nil, true, false, nil, true);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "nil true false|   nil|  true");
     }
 
@@ -441,8 +446,8 @@ namespace behl
             return string.format(""), string.format("", 1, 2), string.format("abc");
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 3));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
         EXPECT_EQ(to_string(S, -3), "");
         EXPECT_EQ(to_string(S, -2), "");
         EXPECT_EQ(to_string(S, -1), "abc");
@@ -455,8 +460,8 @@ namespace behl
             return string.format("{}|{}|{}|{}|{}", 1.0, -1203.0, 0.1, 1.0 / 0.0, 0.0 - 1.0 / 0.0);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(to_string(S, -1), "1.0|-1203.0|0.1|inf|-inf");
     }
 
@@ -467,8 +472,9 @@ namespace behl
             return string.format("{} {}", 1);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        EXPECT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     TEST_P(StringFormatTest, UnmatchedOpeningBraceIsAnError)
@@ -478,8 +484,9 @@ namespace behl
             return string.format("value {", 1);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        EXPECT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     TEST_P(StringFormatTest, UnmatchedClosingBraceIsAnError)
@@ -489,8 +496,9 @@ namespace behl
             return string.format("value }", 1);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        EXPECT_THROW(call(S, 0, 1), RuntimeError);
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+        EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
     INSTANTIATE_TEST_SUITE_P(Mode, StringFormatTest, ::testing::Bool(),

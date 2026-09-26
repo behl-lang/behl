@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 #include <vector>
 
@@ -26,10 +27,14 @@ protected:
         close(S);
     }
 
-    void run_script(std::string_view code)
+    ::testing::AssertionResult run_script(std::string_view code)
     {
-        load_string(S, code);
-        call(S, 0, kMultRet);
+        const int32_t status = load_string(S, code);
+        if (status < 0)
+        {
+            return behl_test::status_ok(S, status, "load_string");
+        }
+        return behl_test::status_ok(S, call(S, 0, kMultRet), "call");
     }
 
     std::string get_error()
@@ -55,7 +60,7 @@ TEST_P(DeferTest, SimpleDeferStatement)
         return result[0], result[1], result[2];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_string(S, 0), "start");
     ASSERT_EQ(to_string(S, 1), "deferred");
@@ -82,7 +87,7 @@ TEST_P(DeferTest, DeferWithPrint)
         return output[0], output[1], output[2];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_string(S, 0), "start");
     ASSERT_EQ(to_string(S, 1), "end");
@@ -110,7 +115,7 @@ TEST_P(DeferTest, MultipleDeferLIFO)
         return output[0], output[1], output[2], output[3];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 4);
     ASSERT_EQ(to_string(S, 0), "body");
     ASSERT_EQ(to_string(S, 1), "first");
@@ -135,7 +140,7 @@ TEST_P(DeferTest, DeferWithBlock)
         return output[0], output[1];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(to_integer(S, 0), 100); // Should see updated value
     ASSERT_EQ(to_string(S, 1), "block");
@@ -154,7 +159,7 @@ TEST_P(DeferTest, DeferSeesVariableMutations)
         return captured;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 2); // Defer captures by reference
 }
@@ -185,7 +190,7 @@ TEST_P(DeferTest, NestedScopes)
         return output[0], output[1], output[2], output[3], output[4];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 5);
     ASSERT_EQ(to_string(S, 0), "outer-body");
     ASSERT_EQ(to_string(S, 1), "inner-body");
@@ -220,7 +225,7 @@ TEST_P(DeferTest, DeferWithEarlyReturn)
         return output[0], output[1];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(to_string(S, 0), "early-return");
     ASSERT_EQ(to_string(S, 1), "cleanup"); // Defer runs before return
@@ -240,7 +245,7 @@ TEST_P(DeferTest, DeferWithReturnValue)
         return result, executed;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(to_integer(S, 0), 42);
     ASSERT_TRUE(to_boolean(S, 1));
@@ -273,7 +278,7 @@ TEST_P(DeferTest, MultipleDeferWithEarlyReturn)
         return output[0], output[1], output[2];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_string(S, 0), "defer3");
     ASSERT_EQ(to_string(S, 1), "defer2");
@@ -306,7 +311,7 @@ TEST_P(DeferTest, DeferInIfScope)
         return output[0], output[1], output[2], output[3];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 4);
     ASSERT_EQ(to_string(S, 0), "start");
     ASSERT_EQ(to_string(S, 1), "if-body");
@@ -328,7 +333,7 @@ TEST_P(DeferTest, DeferAccessingLocalVariables)
         return result;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 30);
 }
@@ -351,7 +356,7 @@ TEST_P(DeferTest, DeferWithFunctionCall)
         return result, closed;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(to_string(S, 0), "done");
     ASSERT_TRUE(to_boolean(S, 1));
@@ -371,7 +376,7 @@ TEST_P(DeferTest, DeferPropagatesException)
         return executed;
     )";
 
-    ASSERT_ANY_THROW(run_script(code));
+    ASSERT_FALSE(run_script(code));
 }
 
 TEST_P(DeferTest, DeferExecutesOnException)
@@ -388,7 +393,7 @@ TEST_P(DeferTest, DeferExecutesOnException)
         return ok, executed;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_FALSE(to_boolean(S, 0));
     ASSERT_TRUE(to_boolean(S, 1));
@@ -410,7 +415,7 @@ TEST_P(DeferTest, BlockDeferExecutesOnException)
         return output[0];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "block");
 }
@@ -439,7 +444,7 @@ TEST_P(DeferTest, DeferRunsForEveryFrameWhileUnwinding)
         return count;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 3);
 }
@@ -456,7 +461,7 @@ TEST_P(DeferTest, DeferErrorReplacesOriginalError)
         return ok, msg;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_FALSE(to_boolean(S, 0));
     ASSERT_NE(to_string(S, 1).find("from defer"), std::string_view::npos);
@@ -481,7 +486,7 @@ TEST_P(DeferTest, DeferDoesNotDisturbMultipleReturnValues)
         return test();
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_integer(S, 0), 1);
     ASSERT_EQ(to_integer(S, 1), 2);
@@ -503,7 +508,7 @@ TEST_P(DeferTest, DeferDoesNotDisturbFixedReturnValues)
         return test();
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_integer(S, 0), 1);
     ASSERT_EQ(to_integer(S, 1), 2);
@@ -537,7 +542,7 @@ TEST_P(DeferTest, DeferInsideDefer)
         return output[0], output[1], output[2], output[3], output[4];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 5);
     ASSERT_EQ(to_string(S, 0), "body");
     ASSERT_EQ(to_string(S, 1), "outer-start");
@@ -565,7 +570,7 @@ TEST_P(DeferTest, NestedBlockDefersRunInnermostFirstWhileUnwinding)
         return log;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "CBF");
 }
@@ -587,7 +592,7 @@ TEST_P(DeferTest, BlockDeferThatAlreadyRanDoesNotRunAgainOnError)
         return log;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "bBF");
 }
@@ -608,7 +613,7 @@ TEST_P(DeferTest, DeferStatementNeverReachedDoesNotRunOnError)
         return log;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "F");
 }
@@ -632,7 +637,7 @@ TEST_P(DeferTest, LoopBlockDeferRunsOncePerEnteredIteration)
         return log;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "LLL");
 }
@@ -653,7 +658,7 @@ TEST_P(DeferTest, BlockLocalIsReadableByItsDeferWhileUnwinding)
         return log;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "kept");
 }
@@ -672,7 +677,7 @@ TEST_P(DeferTest, ThrowingDeferDoesNotSkipRemainingDefers)
         return log, ok, msg;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_string(S, 0), "A");
     ASSERT_FALSE(to_boolean(S, 1));
@@ -695,7 +700,7 @@ TEST_P(DeferTest, ThrowingBlockDeferStillRunsOuterDefersWhileUnwinding)
         return log, ok, msg;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_string(S, 0), "F");
     ASSERT_FALSE(to_boolean(S, 1));
@@ -724,7 +729,7 @@ TEST_P(DeferTest, ThrowingDeferWhileADeeperFrameUnwinds)
         return log, ok, msg;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_string(S, 0), "io");
     ASSERT_FALSE(to_boolean(S, 1));
@@ -750,7 +755,7 @@ TEST_P(DeferTest, DeferRunsWhenBreakLeavesTheScope)
         return test();
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "dd");
 }
@@ -775,7 +780,7 @@ TEST_P(DeferTest, DeferRunsWhenContinueLeavesTheScope)
         return test();
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), ".cc.c");
 }
@@ -797,7 +802,7 @@ TEST_P(DeferTest, DeferInNestedBlockRunsAtBlockExit)
         return test();
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "ainnerb");
 }
@@ -816,7 +821,7 @@ TEST_P(DeferTest, DeferInForBodyRunsEveryIteration)
         return test();
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_string(S, 0), "012");
 }
@@ -835,7 +840,7 @@ TEST_P(DeferTest, BreakInsideDeferBodyIsRejected)
         return test();
     )";
 
-    ASSERT_ANY_THROW(run_script(code));
+    ASSERT_FALSE(run_script(code));
 }
 
 TEST_P(DeferTest, DeferInLoopRunsEveryIteration)
@@ -855,7 +860,7 @@ TEST_P(DeferTest, DeferInLoopRunsEveryIteration)
         return count;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 5);
 }
@@ -888,7 +893,7 @@ TEST_P(DeferTest, MultipleNestedScopes)
         return output[0], output[1], output[2], output[3];
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 4);
     ASSERT_EQ(to_string(S, 0), "L3");
     ASSERT_EQ(to_string(S, 1), "L2");
@@ -919,7 +924,7 @@ TEST_P(DeferTest, DeferWithTableAccess)
         return result, state.closed;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(to_string(S, 0), "test.txt");
     ASSERT_TRUE(to_boolean(S, 1));
@@ -943,7 +948,7 @@ TEST_P(DeferTest, DeferInMultipleFunctions)
         return count;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 11); // 1 from func1, 10 from func2
 }
@@ -967,7 +972,7 @@ TEST_P(DeferTest, DeferBlockWithMultipleStatements)
         return a, b, c;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 3);
     ASSERT_EQ(to_integer(S, 0), 1);
     ASSERT_EQ(to_integer(S, 1), 2);
@@ -989,7 +994,7 @@ TEST_P(DeferTest, DeferWithComplexExpression)
         return result;
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 19); // 3 * 3 + 10 = 19
 }
@@ -1004,7 +1009,7 @@ TEST_P(DeferTest, EmptyDeferBlock)
         return test();
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(to_integer(S, 0), 42);
 }
@@ -1038,7 +1043,7 @@ TEST_P(DeferTest, DeferRunsWhenRuntimeTypeErrorsUnwind)
         return r1, r2, r3, count
     )";
 
-    ASSERT_NO_THROW(run_script(code));
+    ASSERT_TRUE(run_script(code));
     ASSERT_EQ(get_top(S), 4);
     EXPECT_FALSE(to_boolean(S, 0));
     EXPECT_FALSE(to_boolean(S, 1));
@@ -1062,7 +1067,7 @@ TEST_P(DeferTest, DeferRunsWhenErrorEscapesToTheHost)
         outer()
     )";
 
-    EXPECT_ANY_THROW(run_script(code));
+    EXPECT_FALSE(run_script(code));
     set_top(S, 0);
     get_global(S, "ran");
     EXPECT_EQ(to_integer(S, -1), 11);

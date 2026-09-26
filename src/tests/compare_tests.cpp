@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class CompareTest : public ::testing::TestWithParam<bool>
 {
@@ -20,33 +21,30 @@ protected:
 
     bool test_comparison(std::string_view code, bool should_error = false)
     {
-        behl::load_string(S, code);
+        const auto loaded = behl_test::load_ok(S, code);
+        if (!loaded)
+        {
+            ADD_FAILURE() << loaded.message();
+            return false;
+        }
 
         if (should_error)
         {
-            try
+            if (behl::call(S, 0, 1) >= 0)
             {
-                behl::call(S, 0, 1);
                 behl::pop(S, 1); // Pop result if no exception
                 return false;    // Should have thrown
             }
-            catch (...)
-            {
-                return true; // Expected exception
-            }
+            return true; // Expected exception
         }
         else
         {
-            try
-            {
-                behl::call(S, 0, 1);
-                behl::pop(S, 1); // Pop result
-                return true;
-            }
-            catch (...)
+            if (behl::call(S, 0, 1) < 0)
             {
                 return false; // Unexpected exception
             }
+            behl::pop(S, 1); // Pop result
+            return true;
         }
     }
 };
@@ -62,8 +60,8 @@ TEST_P(CompareTest, ComparisonsReturnBooleans_TrueCases)
                                       "a[5] = (3 >= 3)\n"
                                       "return a";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
@@ -87,8 +85,8 @@ TEST_P(CompareTest, ComparisonsReturnBooleans_FalseCases)
                                       "a[5] = (2 >= 3)\n"
                                       "return a";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
@@ -250,8 +248,8 @@ TEST_P(CompareTest, EqualityWithMetamethod_Eq)
 TEST_P(CompareTest, TernaryBasic_TrueCondition)
 {
     constexpr std::string_view code = "return true ? 42 : 0";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
     behl::pop(S, 1);
@@ -260,8 +258,8 @@ TEST_P(CompareTest, TernaryBasic_TrueCondition)
 TEST_P(CompareTest, TernaryBasic_FalseCondition)
 {
     constexpr std::string_view code = "return false ? 42 : 0";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -1), 0);
     behl::pop(S, 1);
@@ -270,8 +268,8 @@ TEST_P(CompareTest, TernaryBasic_FalseCondition)
 TEST_P(CompareTest, TernaryWithComparison)
 {
     constexpr std::string_view code = "let x = 10; return x > 5 ? 'big' : 'small'";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kString);
     ASSERT_EQ(behl::to_string(S, -1), "big");
     behl::pop(S, 1);
@@ -280,8 +278,8 @@ TEST_P(CompareTest, TernaryWithComparison)
 TEST_P(CompareTest, TernaryWithDifferentTypes)
 {
     constexpr std::string_view code = "return 1 == 1 ? 'string' : 42";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kString);
     ASSERT_EQ(behl::to_string(S, -1), "string");
     behl::pop(S, 1);
@@ -290,8 +288,8 @@ TEST_P(CompareTest, TernaryWithDifferentTypes)
 TEST_P(CompareTest, TernaryNested)
 {
     constexpr std::string_view code = "let x = 5; return x > 10 ? 'big' : x > 0 ? 'medium' : 'small'";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kString);
     ASSERT_EQ(behl::to_string(S, -1), "medium");
     behl::pop(S, 1);
@@ -300,8 +298,8 @@ TEST_P(CompareTest, TernaryNested)
 TEST_P(CompareTest, TernaryNestedParens)
 {
     constexpr std::string_view code = "let x = 5; return x > 10 ? 'big' : (x > 0 ? 'medium' : 'small')";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kString);
     ASSERT_EQ(behl::to_string(S, -1), "medium");
     behl::pop(S, 1);
@@ -310,8 +308,8 @@ TEST_P(CompareTest, TernaryNestedParens)
 TEST_P(CompareTest, TernaryWithNil)
 {
     constexpr std::string_view code = "return nil ? 1 : 2";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -1), 2);
     behl::pop(S, 1);
@@ -320,8 +318,8 @@ TEST_P(CompareTest, TernaryWithNil)
 TEST_P(CompareTest, TernaryWithZero)
 {
     constexpr std::string_view code = "return 0 ? 'yes' : 'no'";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kString);
     ASSERT_EQ(behl::to_string(S, -1), "yes");
     behl::pop(S, 1);
@@ -330,8 +328,8 @@ TEST_P(CompareTest, TernaryWithZero)
 TEST_P(CompareTest, TernaryWithFunctionCalls)
 {
     constexpr std::string_view code = "function b() { return 1 } function c() { return 2 } let a = true; return a ? b() : c()";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
     behl::pop(S, 1);
@@ -340,8 +338,8 @@ TEST_P(CompareTest, TernaryWithFunctionCalls)
 TEST_P(CompareTest, TernaryInAssignment)
 {
     constexpr std::string_view code = "let x = 10 > 5 ? 100 : 200; return x";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -1), 100);
     behl::pop(S, 1);
@@ -353,8 +351,8 @@ TEST_P(CompareTest, TernaryWithTableAccess)
         let t = {a = 10, b = 20}
         return t['a'] > 5 ? t['a'] : t['b']
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
     ASSERT_EQ(behl::to_integer(S, -1), 10);
     behl::pop(S, 1);
@@ -381,8 +379,8 @@ TEST_P(CompareTest, StringOrderingWithNulBytesAndPrefixes)
         r = r + (("a" + string.char(255) > "a" + string.char(1)) ? "T" : "F");
         return r;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "TFFTTTTTTFTTT");
 }
 
@@ -403,8 +401,8 @@ TEST_P(CompareTest, NanComparisonsInValueContextAreFalse)
         r = r + ((nan != nan) ? "T" : "F");
         return r, nan < 1, nan >= 1.0;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     EXPECT_EQ(behl::to_string(S, -3), "FFFFFFFT");
     EXPECT_FALSE(behl::to_boolean(S, -2));
     EXPECT_FALSE(behl::to_boolean(S, -1));
@@ -431,8 +429,8 @@ TEST_P(CompareTest, NanComparisonsInBranchContextAreFalse)
         if (nan < 1.0) { r = r + "l"; }
         return r;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "");
 }
 
@@ -446,8 +444,8 @@ TEST_P(CompareTest, NanInequalityInBranchContextIsTrue)
         if (!(nan >= 1)) { r = r + "c"; }
         return r;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "abc");
 }
 
@@ -462,8 +460,8 @@ TEST_P(CompareTest, NanLoopConditionDoesNotEnterBody)
         }
         return count;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 

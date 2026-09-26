@@ -2,6 +2,7 @@
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 
 class LoopTest : public ::testing::TestWithParam<bool>
 {
@@ -32,8 +33,8 @@ TEST_P(LoopTest, WhileLoopBasic)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
@@ -46,8 +47,8 @@ TEST_P(LoopTest, ForLoopBasic)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
@@ -63,8 +64,8 @@ TEST_P(LoopTest, ForLoopTwoCallsInBody_Discarded)
         }
         return n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
@@ -82,8 +83,8 @@ TEST_P(LoopTest, ForLoopTwoCallsInBody_Assigned)
         }
         return x, y, n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::to_integer(S, -3), 3);
     ASSERT_EQ(behl::to_integer(S, -2), 13);
     ASSERT_EQ(behl::to_integer(S, -1), 3);
@@ -102,8 +103,8 @@ TEST_P(LoopTest, ForLoopManyCallsInBody_IndexSurvives)
         }
         return seen
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
@@ -121,8 +122,8 @@ TEST_P(LoopTest, NestedForLoopsWithCallsInBody)
         }
         return total
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 9);
 }
 
@@ -139,8 +140,8 @@ TEST_P(LoopTest, ForEachLoopTwoCallsInBody)
         }
         return total
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
@@ -155,8 +156,8 @@ TEST_P(LoopTest, NestedLoops)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
@@ -174,8 +175,8 @@ TEST_P(LoopTest, ForLoopWithContinue)
         }
         return sum, iterations
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 25);
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
@@ -194,8 +195,8 @@ TEST_P(LoopTest, ForLoopWithBreak)
         }
         return sum, iterations
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 10);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
@@ -217,8 +218,8 @@ TEST_P(LoopTest, ForLoopWithBreakAndContinue)
         }
         return sum, iterations
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 25);
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
@@ -233,8 +234,8 @@ TEST_P(LoopTest, ForEachLoopWithLet)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
@@ -249,8 +250,8 @@ TEST_P(LoopTest, ForEachLoopWithExistingVariable)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
@@ -266,8 +267,8 @@ TEST_P(LoopTest, ForEachLoopTwoVariablesWithLet)
         }
         return sum_keys * 1000 + sum_values
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
@@ -285,8 +286,8 @@ TEST_P(LoopTest, ForEachLoopTwoVariablesExisting)
         }
         return sum_keys * 1000 + sum_values
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
@@ -303,8 +304,8 @@ TEST_P(LoopTest, ForEachLoopZeroIndexed)
         }
         return 0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 100);
 }
 
@@ -318,8 +319,8 @@ TEST_P(LoopTest, ForInLoopWithExplicitPairs)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 60);
 }
 
@@ -335,8 +336,8 @@ TEST_P(LoopTest, ForInLoopWithTwoVariablesPairs)
         }
         return sum_keys * 1000 + sum_values
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
@@ -369,8 +370,8 @@ TEST_P(LoopTest, CustomIteratorReverseIteration)
         }
         return result
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 30020010);
 }
 
@@ -384,8 +385,8 @@ TEST_P(LoopTest, ForEachLoopEmptyTable)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -402,8 +403,8 @@ TEST_P(LoopTest, NestedForEachLoops)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 90);
 }
 
@@ -421,8 +422,8 @@ TEST_P(LoopTest, ForInLoopWithPreDeclaredVariables)
         }
         return sum_keys * 1000 + sum_values
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 3060);
 }
 
@@ -449,8 +450,8 @@ TEST_P(LoopTest, ForEachMixedArrayAndHashParts)
         
         return count * 1000 + found_array * 100 + found_hash
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 6303);
 }
 
@@ -463,8 +464,8 @@ TEST_P(LoopTest, OptimizedForLoopIncrement)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 45);
 }
 
@@ -477,8 +478,8 @@ TEST_P(LoopTest, OptimizedForLoopDecrement)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
@@ -491,8 +492,8 @@ TEST_P(LoopTest, OptimizedForLoopWithStep)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 63);
 }
 
@@ -505,8 +506,8 @@ TEST_P(LoopTest, OptimizedForLoopInclusiveLessOrEqual)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
@@ -519,8 +520,8 @@ TEST_P(LoopTest, OptimizedForLoopInclusiveGreaterOrEqual)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
@@ -534,8 +535,8 @@ TEST_P(LoopTest, ForLoopWithComplexCondition)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 105);
 }
 
@@ -551,8 +552,8 @@ TEST_P(LoopTest, ForLoopWithFunctionCallInCondition)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
@@ -566,8 +567,8 @@ TEST_P(LoopTest, ForLoopWithTableAccessInCondition)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 28); // 0+1+...+7
 }
 
@@ -581,8 +582,8 @@ TEST_P(LoopTest, ForLoopWithArithmeticInCondition)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 45);
 }
 
@@ -600,8 +601,8 @@ TEST_P(LoopTest, ForLoopWithLogicalOrCondition)
         }
         return sum, count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 45);
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
@@ -621,8 +622,8 @@ TEST_P(LoopTest, ForLoopWithBooleanCondition)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
@@ -638,8 +639,8 @@ TEST_P(LoopTest, ForLoopWithComplexUpdate)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 26);
 }
 
@@ -654,8 +655,8 @@ TEST_P(LoopTest, ForLoopWithMultipleUpdates)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 50);
 }
 
@@ -670,8 +671,8 @@ TEST_P(LoopTest, ForLoopVariableBounds)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 95);
 }
 
@@ -684,8 +685,8 @@ TEST_P(LoopTest, ForLoopWithFloatBounds)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 12.5);
 }
 
@@ -699,8 +700,8 @@ TEST_P(LoopTest, ForLoopWithExistingVariable)
         }
         return sum, i
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 10);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
@@ -715,8 +716,8 @@ TEST_P(LoopTest, ForLoopExistingVariableComplex)
         }
         return k, results[10], results[8], results[6]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     ASSERT_EQ(behl::to_integer(S, -4), 4);
     ASSERT_EQ(behl::to_integer(S, -3), 20);
     ASSERT_EQ(behl::to_integer(S, -2), 16);
@@ -736,8 +737,8 @@ TEST_P(LoopTest, ForLoopExistingVariableNestedScope)
         }
         return outer
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
@@ -750,8 +751,8 @@ TEST_P(LoopTest, ForLoopMultipleVariableDeclarations)
         }
         return result
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 50);
 }
 
@@ -764,8 +765,8 @@ TEST_P(LoopTest, ForLoopMultipleVariableDeclarationsComplex)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1607);
 }
 
@@ -778,8 +779,8 @@ TEST_P(LoopTest, ForLoopZeroIterationsAscending)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -792,8 +793,8 @@ TEST_P(LoopTest, ForLoopZeroIterationsDescending)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -806,8 +807,8 @@ TEST_P(LoopTest, ForLoopStepOvershootsLimit)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
@@ -820,8 +821,8 @@ TEST_P(LoopTest, ForLoopDescendingNonUnitStep)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     // 10 + 7 + 4 + 1
     ASSERT_EQ(behl::to_integer(S, -1), 22);
 }
@@ -838,8 +839,8 @@ TEST_P(LoopTest, ForLoopBodyWritesLoopVariable)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     // i advances by 2 per iteration: 0, 2, 4, 6, 8
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
@@ -854,8 +855,8 @@ TEST_P(LoopTest, ForLoopBodyShadowsLoopVariable)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 300);
 }
 
@@ -874,8 +875,8 @@ TEST_P(LoopTest, ForLoopClosureWritesLoopVariable)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     // i advances by 2 per iteration: 0, 2, 4, 6, 8
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
@@ -891,8 +892,8 @@ TEST_P(LoopTest, ForLoopNearIntegerMaxInclusive)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
@@ -906,8 +907,8 @@ TEST_P(LoopTest, ForLoopNearIntegerMaxOvershootStep)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     // 9223372036854775797, +4, +4; the next step would pass the limit
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
@@ -921,8 +922,8 @@ TEST_P(LoopTest, ForLoopIntBoundsFloatStep)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_DOUBLE_EQ(behl::to_number(S, -1), 10.0);
 }
 
@@ -939,8 +940,8 @@ TEST_P(LoopTest, ForLoopRuntimeZeroStepAscendingRunsWhileConditionHolds)
         }
         return count, last
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 5);
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
@@ -956,8 +957,8 @@ TEST_P(LoopTest, ForLoopRuntimeZeroStepAscendingFalseConditionRunsZeroTimes)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -974,8 +975,8 @@ TEST_P(LoopTest, ForLoopRuntimeZeroStepDescendingRunsWhileConditionHolds)
         }
         return count, last
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 5);
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
@@ -991,8 +992,8 @@ TEST_P(LoopTest, ForLoopRuntimeZeroStepDescendingFalseConditionRunsZeroTimes)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -1009,8 +1010,8 @@ TEST_P(LoopTest, ForLoopRuntimeNegativeStepAscendingMovesAwayFromLimit)
         }
         return count, last
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 5);
     ASSERT_EQ(behl::to_integer(S, -1), -4);
 }
@@ -1028,8 +1029,8 @@ TEST_P(LoopTest, ForLoopRuntimeNegativeStepDescendingMovesAwayFromLimit)
         }
         return count, last
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 5);
     ASSERT_EQ(behl::to_integer(S, -1), 14);
 }
@@ -1044,8 +1045,8 @@ TEST_P(LoopTest, ForLoopLiteralZeroStepRunsWhileConditionHolds)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
@@ -1062,8 +1063,8 @@ TEST_P(LoopTest, ForLoopStepFromFunctionArgumentMatchesCondition)
         }
         return run(0, 10, 3) * 1000 + run(0, 10, 0) * 100 + run(20, 10, 0) * 10 + run(0, 10, -2)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 4505);
 }
 
@@ -1078,8 +1079,8 @@ TEST_P(LoopTest, ForLoopLimitVariableWrittenInBody)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
@@ -1094,8 +1095,8 @@ TEST_P(LoopTest, ForLoopLimitLengthGrowsInBody)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
@@ -1112,8 +1113,8 @@ TEST_P(LoopTest, ForLoopStepVariableWrittenInBody)
         }
         return count, last
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     ASSERT_EQ(behl::to_integer(S, -2), 5);
     ASSERT_EQ(behl::to_integer(S, -1), 14);
 }
@@ -1130,8 +1131,8 @@ TEST_P(LoopTest, ForLoopLimitWrittenByClosureCalledInBody)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
@@ -1144,8 +1145,8 @@ TEST_P(LoopTest, ForLoopLimitCallEvaluatedEachIteration)
         }
         return calls
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 4);
 }
 
@@ -1160,8 +1161,8 @@ TEST_P(LoopTest, ForLoopStrictFloatLimitKeepsIntegerIndex)
         }
         return count, last, typeof(last)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::to_integer(S, -3), 6);
     ASSERT_EQ(behl::to_integer(S, -2), 5);
     ASSERT_EQ(behl::to_string(S, -1), "integer");
@@ -1177,8 +1178,8 @@ TEST_P(LoopTest, ForLoopStrictLimitAtIntegerMinRunsZeroTimes)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -1192,8 +1193,8 @@ TEST_P(LoopTest, ForLoopStrictLimitAtIntegerMaxRunsZeroTimes)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
@@ -1208,8 +1209,8 @@ TEST_P(LoopTest, ForLoopLimitMetamethodIsCalled)
         }
         return count
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
@@ -1223,8 +1224,8 @@ TEST_P(LoopTest, ForBodyLocalCapturedPerIterationAtTopLevel)
         }
         return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "0,10,20");
 }
 
@@ -1240,8 +1241,8 @@ TEST_P(LoopTest, WhileBodyLocalCapturedPerIterationAtTopLevel)
         }
         return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "0,10,20");
 }
 
@@ -1255,8 +1256,8 @@ TEST_P(LoopTest, ForeachBodyLocalCapturedPerIterationAtTopLevel)
         }
         return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]())
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "5,6,7");
 }
 
@@ -1280,8 +1281,8 @@ TEST_P(LoopTest, LoopBodyLocalCapturedWithContinueAndBreakAtTopLevel)
         }
         return tostring(fs[0]()) + "," + tostring(fs[1]()) + "," + tostring(fs[2]()) + "," + tostring(n)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "0,20,30,3");
 }
 
@@ -1293,16 +1294,12 @@ TEST_P(LoopTest, LoopBodyBeyondJumpRangeRunsCorrectlyOrFailsToCompile)
         code += "x = x + 1\n";
     }
     code += "}\nreturn x\n";
-    try
-    {
-        behl::load_string(S, code);
-    }
-    catch (const std::exception&)
+    if (behl::load_string(S, code) < 0)
     {
         SUCCEED();
         return;
     }
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 140000);
 }
 

@@ -94,15 +94,15 @@ int main() {
         return x + y;
     )";
     
-    try {
-        behl::load_string(S, script);
-        behl::call(S, 0, 1);
-        int result = behl::to_integer(S, -1);
+    // load_string returns 0 on success, call returns the result count or a negative status code
+    if (behl::load_string(S, script) != 0 || behl::call(S, 0, 1) < 0) {
+        // The error message (or error value) is on top of the stack
+        std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+    } else {
+        behl::Integer result = behl::to_integer(S, -1);
         std::cout << "Result from C++: " << result << "\n";
-        behl::pop(S, 1);
-    } catch (const behl::BehlException& e) {
-        std::cerr << "Error: " << e.what() << "\n";
     }
+    behl::pop(S, 1);
     
     // Cleanup
     behl::close(S);

@@ -220,7 +220,7 @@ std::string_view str = behl::to_string(S, -1);
 
 ## Type Checking
 
-These functions throw `TypeError` if the value is not of the expected type.
+These functions are meant to be called from C functions that Behl called. If the value is not of the expected type they raise an error with a message such as `TypeError: bad argument #1 (expected integer, got string)` and do not return. The surrounding `behl::call` or script `pcall` reports the error.
 
 ### `check_type(State*, int32_t, Type)`
 
@@ -228,7 +228,7 @@ These functions throw `TypeError` if the value is not of the expected type.
 behl::check_type(S, 0, behl::Type::kInteger);
 ```
 
-**Throws:** `TypeError` with descriptive message if type doesn't match.
+**Raises:** an error with a descriptive message if type doesn't match.
 
 ### `check_integer(State*, int32_t)`
 
@@ -237,7 +237,7 @@ behl::Integer n = behl::check_integer(S, 0);
 ```
 
 **Returns:** The integer value.
-**Throws:** `TypeError` if not an integer.
+**Raises:** an error if not an integer.
 
 ### `check_number(State*, int32_t)`
 
@@ -246,7 +246,7 @@ behl::FP f = behl::check_number(S, 0);
 ```
 
 **Returns:** The number value.
-**Throws:** `TypeError` if not a number.
+**Raises:** an error if not a number.
 
 ### `check_string(State*, int32_t)`
 
@@ -255,7 +255,7 @@ std::string_view s = behl::check_string(S, 0);
 ```
 
 **Returns:** The string value.
-**Throws:** `TypeError` if not a string.
+**Raises:** an error if not a string.
 
 ### `check_boolean(State*, int32_t)`
 
@@ -264,7 +264,7 @@ bool b = behl::check_boolean(S, 0);
 ```
 
 **Returns:** The boolean value.
-**Throws:** `TypeError` if not a boolean.
+**Raises:** an error if not a boolean.
 
 ---
 

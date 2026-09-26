@@ -374,7 +374,7 @@ file_read(table);  // TypeError: bad argument #1 (expected userdata, got table)
 
 let file1 = file_open("a.txt", "r");
 let vec = vec2_new(1.0, 2.0);
-file_read(vec);    // TypeError: userdata type mismatch
+file_read(vec);    // RuntimeError: Type mismatch: userdata uid does not match expected type
 ```
 
 ### Creating Userdata

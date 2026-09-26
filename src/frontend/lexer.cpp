@@ -7,7 +7,7 @@
 
 #include <algorithm>
 #include <array>
-#include <behl/exceptions.hpp>
+#include "vm/vm_error.hpp"
 #include <cassert>
 #include <functional>
 #include <ranges>
@@ -78,6 +78,7 @@ namespace behl
         int line = 1;
         int column = 1;
         GCString* chunkname;
+        State* S = nullptr;
     };
 
     static unsigned char continuation_byte(const LexerState& L, size_t pos)
@@ -86,7 +87,7 @@ namespace behl
         unsigned char b = static_cast<unsigned char>(L.source[pos]);
         if ((b & 0xC0) != 0x80)
         {
-            throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
         }
         return b;
     }
@@ -106,13 +107,13 @@ namespace behl
         }
         else if (byte1 < 0xC2)
         {
-            throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
         }
         else if (byte1 < 0xE0)
         {
             if (start_pos + 1 >= L.source.size())
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             bytes = 2;
             return static_cast<char32_t>((byte1 & 0x1F) << 6 | (continuation_byte(L, start_pos + 1) & 0x3F));
@@ -121,14 +122,14 @@ namespace behl
         {
             if (start_pos + 2 >= L.source.size())
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             const unsigned char byte2 = continuation_byte(L, start_pos + 1);
             const unsigned char byte3 = continuation_byte(L, start_pos + 2);
             const char32_t cp = static_cast<char32_t>((byte1 & 0x0F) << 12 | (byte2 & 0x3F) << 6 | (byte3 & 0x3F));
             if (cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF))
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             bytes = 3;
             return cp;
@@ -137,7 +138,7 @@ namespace behl
         {
             if (start_pos + 3 >= L.source.size())
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             const unsigned char byte2 = continuation_byte(L, start_pos + 1);
             const unsigned char byte3 = continuation_byte(L, start_pos + 2);
@@ -146,14 +147,14 @@ namespace behl
                 (byte1 & 0x07) << 18 | (byte2 & 0x3F) << 12 | (byte3 & 0x3F) << 6 | (byte4 & 0x3F));
             if (cp < 0x10000 || cp > 0x10FFFF)
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             bytes = 4;
             return cp;
         }
         else
         {
-            throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
         }
     }
 
@@ -360,7 +361,7 @@ namespace behl
             char32_t c = current_codepoint(L);
             if (c == U'\0')
             {
-                throw SyntaxError("Unterminated string", SourceLocation(L.chunkname, start_line, start_col));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, start_line, start_col), "Unterminated string");
             }
             if (c == '\\')
             {
@@ -381,7 +382,7 @@ namespace behl
 
         if (current_codepoint(L) != quote)
         {
-            throw SyntaxError("Unterminated string", SourceLocation(L.chunkname, start_line, start_col));
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, start_line, start_col), "Unterminated string");
         }
         advance_codepoint(L);
         return { TokenType::kString, str, start_line, start_col };
@@ -647,7 +648,7 @@ namespace behl
                 type = TokenType::kBNot;
                 break;
             default:
-                throw SyntaxError("Unexpected character", SourceLocation(L.chunkname, start_line, start_col));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, start_line, start_col), "Unexpected character");
         }
         for (int i = 0; i < advance_count; ++i)
         {
@@ -659,7 +660,7 @@ namespace behl
     AutoVector<Token> tokenize(State* state, std::string_view source, std::string_view chunkname)
     {
         GCString* chunk = gc_new_string(state, chunkname.empty() ? std::string_view("<script>") : chunkname);
-        LexerState L{ source, 0, 1, 1, chunk };
+        LexerState L{ source, 0, 1, 1, chunk, state };
 
         AutoVector<Token> tokens(state);
 

@@ -42,7 +42,9 @@ void trigger_callback() {
     // Accessing g_callback_ref - MAY CRASH!
     // The function might have been garbage collected
     behl::dup(g_state, g_callback_ref);
-    behl::call(g_state, 0, 0);
+    if (behl::call(g_state, 0, 0) < 0) {
+        behl::pop(g_state, 1);
+    }
 }
 ```
 
@@ -75,10 +77,10 @@ public:
     EventHandler(behl::State* S) : state(S), callback_handle(behl::PinHandle::kInvalid) {}
     
     // Register a callback function
-    void register_callback() {
+    bool register_callback() {
         // Expect function on top of stack
         if (!behl::is_function(state, -1)) {
-            behl::error(state, "Expected function");
+            return false;
         }
         
         // Release old callback if exists
@@ -88,6 +90,7 @@ public:
         
         // Pin the function (pops it from stack)
         callback_handle = behl::pin(state);
+        return true;
     }
     
     // Trigger the callback later
@@ -102,8 +105,11 @@ public:
         // Push arguments
         behl::push_string(state, event_name);
         
-        // Call the function
-        behl::call(state, 1, 0);
+        // Call the function, the error value is left on the stack on failure
+        if (behl::call(state, 1, 0) < 0) {
+            std::cerr << "Callback failed: " << behl::to_string(state, -1) << "\n";
+            behl::pop(state, 1);
+        }
     }
     
     ~EventHandler() {
@@ -121,6 +127,7 @@ Here's a full implementation of an event system using pinning:
 
 ```cpp
 #include <behl/behl.hpp>
+#include <iostream>
 #include <vector>
 #include <string>
 
@@ -182,8 +189,10 @@ public:
                     behl::push_nil(S);
                 }
                 
-                // Call callback
-                behl::call(S, 1, 0);
+                // Call callback, re-raise its error to the script that called emit
+                if (behl::call(S, 1, 0) < 0) {
+                    behl::error_value(S);
+                }
             }
         }
         
@@ -220,7 +229,7 @@ int main() {
     behl::set_global(S, "events");
     
     // Use from Behl
-    behl::load_string(S, R"(
+    const char* script = R"(
         // Register event handlers
         events:on("data_received", function(data) {
             print("Received: " + tostring(data));
@@ -233,9 +242,12 @@ int main() {
         // Trigger events
         events:emit("data_received", 42);
         events:emit("error", "Connection failed");
-    )");
+    )";
     
-    behl::call(S, 0, 0);
+    if (behl::load_string(S, script) != 0 || behl::call(S, 0, 0) < 0) {
+        std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+        behl::pop(S, 1);
+    }
     behl::close(S);
     
     return 0;
@@ -307,7 +319,9 @@ void example(behl::State* S) {
     
     // Later, push it back
     callback.push();
-    behl::call(S, 0, 0);
+    if (behl::call(S, 0, 0) < 0) {
+        behl::pop(S, 1);  // Error value
+    }
     
     // Automatically unpinned when callback goes out of scope
 }
@@ -334,7 +348,9 @@ public:
     
     void on_tick() {
         behl::pinned_push(state, callback);
-        behl::call(state, 0, 0);
+        if (behl::call(state, 0, 0) < 0) {
+            behl::pop(state, 1);  // Error value
+        }
     }
 };
 ```
@@ -357,14 +373,10 @@ public:
     }
     
     void complete(bool success, const std::string& result) {
-        if (success) {
-            behl::pinned_push(state, on_success);
-            behl::push_string(state, result);
-            behl::call(state, 1, 0);
-        } else {
-            behl::pinned_push(state, on_error);
-            behl::push_string(state, result);
-            behl::call(state, 1, 0);
+        behl::pinned_push(state, success ? on_success : on_error);
+        behl::push_string(state, result);
+        if (behl::call(state, 1, 0) < 0) {
+            behl::pop(state, 1);  // Error value
         }
     }
     
@@ -449,15 +461,19 @@ void unchecked_example(behl::State* S) {
 }
 
 // [GOOD] CORRECT - Proper error handling
-void safe_example(behl::State* S) {
+bool safe_example(behl::State* S) {
     behl::PinHandle h = behl::pin(S);
     if (h == behl::PinHandle::kInvalid) {
-        behl::error(S, "Failed to pin value");
+        return false;
     }
     
     behl::pinned_push(S, h);
-    behl::call(S, 0, 0);
+    const bool ok = behl::call(S, 0, 0) >= 0;
+    if (!ok) {
+        behl::pop(S, 1);  // Error value
+    }
     behl::unpin(S, h);
+    return ok;
 }
 ```
 
@@ -479,7 +495,9 @@ public:
         std::lock_guard<std::mutex> lock(mtx);
         
         behl::pinned_push(state, callback);
-        behl::call(state, 0, 0);
+        if (behl::call(state, 0, 0) < 0) {
+            behl::pop(state, 1);  // Error value
+        }
     }
 };
 ```

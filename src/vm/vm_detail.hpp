@@ -7,6 +7,7 @@
 #include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 
 #include <cassert>
@@ -182,7 +183,7 @@ namespace behl
                 // __tostring must return a string, otherwise error
                 if (!result.is_string())
                 {
-                    throw TypeError("__tostring must return a string", get_current_location(frame));
+                    raise_type_error(S, get_current_location(frame), "__tostring must return a string");
                 }
                 return result;
             }

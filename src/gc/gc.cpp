@@ -819,6 +819,11 @@ namespace behl
         gc_log("Marking globals table");
         mark_gray(S, S->globals_table.get_gcobject());
 
+        if (S->memory_error_message != nullptr)
+        {
+            mark_gray(S, S->memory_error_message);
+        }
+
         // Stack
         auto& stack = S->stack;
         gc_log("Marking stack ({} values, {} frames)", stack.size(), S->call_stack.size());
@@ -1401,7 +1406,7 @@ namespace behl
     void gc_collect(State* S)
     {
         // Requests made from inside a finalizer are ignored
-        if (S->gc.gc_running)
+        if (S->gc.gc_running || S->gc.gc_paused)
         {
             return;
         }

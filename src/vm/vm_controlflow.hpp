@@ -8,54 +8,16 @@
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
 #include "vm_upvalues.hpp"
 
 #include <algorithm>
-#include <behl/exceptions.hpp>
 #include <cassert>
 
 namespace behl
 {
-    // Forward declarations for functions used by control flow handlers
-    [[noreturn]] BEHL_NOINLINE inline void throw_bad_call(const Value& val, const CallFrame& frame, State* S)
-    {
-        const auto loc = get_current_location(frame);
-        std::string msg;
-        switch (val.get_type())
-        {
-            case Type::kNil:
-                msg = "attempt to call nil value";
-                break;
-            case Type::kBoolean:
-                msg = "attempt to call boolean value";
-                break;
-            case Type::kInteger:
-                msg = "attempt to call integer value";
-                break;
-            case Type::kNumber:
-                msg = "attempt to call number value";
-                break;
-            case Type::kString:
-                msg = "attempt to call string value";
-                break;
-            case Type::kTable:
-                msg = "attempt to call table value";
-                break;
-            case Type::kUserdata:
-                msg = "attempt to call userdata value";
-                break;
-            default:
-                msg = "attempt to call unknown value";
-                break;
-        }
-
-        std::string stacktrace = build_stacktrace_internal(S);
-        std::string full_msg = behl::format<"{}\n{}">(msg, stacktrace);
-        throw TypeError(full_msg, loc);
-    }
-
     BEHL_FORCEINLINE
     static void handler_defer(State* S, CallFrame& frame, Reg block)
     {
@@ -517,7 +479,7 @@ namespace behl
                 }
             }
 
-            throw_bad_call(func, caller_frame, S);
+            raise_bad_call(func, caller_frame, S);
         }
     }
 
@@ -720,11 +682,11 @@ namespace behl
             }
             else
             {
-                throw_bad_call(func, frame, S);
+                raise_bad_call(func, frame, S);
             }
         }
 
-        throw_bad_call(func, frame, S);
+        raise_bad_call(func, frame, S);
     }
 
     // Return instruction handler
@@ -946,8 +908,8 @@ namespace behl
         else
         {
             // Ordering comparison on incompatible types
-            throw TypeError(behl::format("attempt to compare {} with {}", lhs.get_type_string(), rhs.get_type_string()),
-                get_current_location(frame));
+            raise_type_error(S, get_current_location(frame), "attempt to compare {} with {}", lhs.get_type_string(),
+                rhs.get_type_string());
         }
     }
 

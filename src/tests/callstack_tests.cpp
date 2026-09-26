@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 class CallStackTest : public ::testing::TestWithParam<bool>
@@ -37,8 +37,8 @@ TEST_P(CallStackTest, ChainedNonTailCalls)
         }
         return f4(10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
@@ -54,8 +54,8 @@ TEST_P(CallStackTest, DeepNonTailCallStack)
         }
         return recurse(10, 0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
@@ -71,8 +71,8 @@ TEST_P(CallStackTest, MultipleCallsInExpression)
         }
         return add(mul(3, 4), mul(5, 6))
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
@@ -88,8 +88,8 @@ TEST_P(CallStackTest, CallWithMultipleNestedArguments)
         }
         return f(g(1), g(2), g(3))
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
@@ -119,8 +119,8 @@ TEST_P(CallStackTest, DeepCallStackWithLocals)
         }
         return level1(1)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 240);
 }
@@ -142,8 +142,8 @@ TEST_P(CallStackTest, CallStackWithUpvalues)
         let counter = makeCounter()
         return counter()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
@@ -161,8 +161,8 @@ TEST_P(CallStackTest, RecursiveCallsWithLocalVariables)
         }
         return sum_to_n(5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
@@ -183,8 +183,8 @@ TEST_P(CallStackTest, CallStackWithTableArguments)
         }
         return wrapper({1, 2, 3, 4});
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
@@ -204,8 +204,8 @@ TEST_P(CallStackTest, NestedCallsInLoop)
         }
         return sum
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 17);
 }
@@ -227,8 +227,8 @@ TEST_P(CallStackTest, MixedTailAndNonTailCalls)
         }
         return f1(3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 202);
 }
@@ -248,8 +248,8 @@ TEST_P(CallStackTest, CallStackWithMultipleReturns)
         }
         return wrapper()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
@@ -266,8 +266,8 @@ TEST_P(CallStackTest, DeepCallStackStressTest)
         }
         return chain(20, 0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 420);
 }
@@ -302,17 +302,13 @@ TEST_P(CallStackTest, ClosureCapturingMoreThan255UpvaluesBindsTheRightVariables)
     code += "}\n";
     code += "return bad\n";
 
-    try
-    {
-        behl::load_string(S, code);
-    }
-    catch (const behl::BehlException&)
+    if (behl::load_string(S, code) < 0)
     {
         SUCCEED() << "rejected at compile time, which is acceptable";
         return;
     }
 
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     EXPECT_EQ(behl::to_integer(S, -1), 0) << "upvalue indices past 255 resolved to the wrong variables";
 }
@@ -329,8 +325,8 @@ TEST_P(CallStackTest, DeepPlainRecursionUnderPcallSucceedsOrFailsCleanly)
         let after = rec(10)
         return ok, res, after
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
     ASSERT_EQ(behl::get_top(S), 3);
 
     if (behl::to_boolean(S, -3))
@@ -344,8 +340,8 @@ TEST_P(CallStackTest, DeepPlainRecursionUnderPcallSucceedsOrFailsCleanly)
     EXPECT_EQ(behl::to_integer(S, -1), 10);
 
     behl::set_top(S, 0);
-    ASSERT_NO_THROW(behl::load_string(S, "return rec(50)"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, "return rec(50)"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 50);
 }
 

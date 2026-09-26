@@ -404,6 +404,7 @@ Use `create_module()` to register native modules:
 
 ```cpp
 #include <behl/behl.hpp>
+#include <iostream>
 
 static int add(behl::State* S) {
     int a = behl::to_integer(S, 0);
@@ -414,6 +415,7 @@ static int add(behl::State* S) {
 
 int main() {
     behl::State* S = behl::new_state();
+    behl::load_stdlib(S);  // Provides import() and print()
     
     // Define module
     behl::ModuleReg funcs[] = {
@@ -425,11 +427,13 @@ int main() {
     behl::create_module(S, "mymath", def);
     
     // Now available via import("mymath")
-    behl::load_string(S, R"(
+    if (behl::load_string(S, R"(
         const mymath = import("mymath");
         print(mymath.add(5, 3));
-    )");
-    behl::call(S, 0, 0);
+    )") != 0 || behl::call(S, 0, 0) < 0) {
+        std::cerr << behl::to_string(S, -1) << "\n";
+        behl::pop(S, 1);
+    }
     
     behl::close(S);
 }
@@ -513,7 +517,7 @@ print(math.pi);
 let x = globalVar;
 ```
 
-These are **compile-time errors** (thrown as `SemanticError` during parsing), not runtime errors.
+These are **compile-time errors**, not runtime errors. The message carries the `SemanticError` label, and when loading from C++ `load_string` / `load_buffer` return `behl::kErrorSyntax` with that message on the stack.
 
 ## Limitations
 

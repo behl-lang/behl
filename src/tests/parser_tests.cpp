@@ -3,7 +3,7 @@
 #include "frontend/lexer.hpp"
 #include "frontend/parser.hpp"
 
-#include <behl/exceptions.hpp>
+#include "vm/vm_error.hpp"
 
 using namespace behl;
 
@@ -200,7 +200,7 @@ TEST_F(ParserTest, ParserInvalidSyntax)
     const auto source = "let x 1";
     auto tokens = tokenize(S, source);
     AstHolder holder(S);
-    ASSERT_THROW(parse(holder, tokens), behl::SyntaxError);
+    ASSERT_THROW(parse(holder, tokens), behl::Exception);
 }
 
 TEST_F(ParserTest, ParserFunctionDef)
@@ -525,7 +525,7 @@ TEST_F(ParserTest, ParserErrorMissingEnd)
     const auto source = "if true { print()";
     auto tokens = tokenize(S, source);
     AstHolder holder(S);
-    ASSERT_THROW(parse(holder, tokens), behl::SyntaxError);
+    ASSERT_THROW(parse(holder, tokens), behl::Exception);
 }
 
 TEST_F(ParserTest, ParserErrorInvalidAssign)
@@ -533,5 +533,5 @@ TEST_F(ParserTest, ParserErrorInvalidAssign)
     const auto source = "1 = 2";
     auto tokens = tokenize(S, source);
     AstHolder holder(S);
-    ASSERT_THROW(parse(holder, tokens), behl::SyntaxError);
+    ASSERT_THROW(parse(holder, tokens), behl::Exception);
 }

@@ -1,8 +1,8 @@
 #include "state.hpp"
 
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
+#include "test_helpers.hpp"
 #include <string>
 
 class ErrorTest : public ::testing::TestWithParam<bool>
@@ -34,8 +34,9 @@ TEST_P(ErrorTest, TypeError_ArithmeticOnNonNumber)
     constexpr std::string_view code = R"(
         let x = 5 + 'hello'
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CallNonFunction)
@@ -43,8 +44,9 @@ TEST_P(ErrorTest, TypeError_CallNonFunction)
     constexpr std::string_view code = R"(
         let x = 5; x()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CallNil)
@@ -52,8 +54,9 @@ TEST_P(ErrorTest, TypeError_CallNil)
     constexpr std::string_view code = R"(
         let x = nil; x()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CallBoolean)
@@ -61,8 +64,9 @@ TEST_P(ErrorTest, TypeError_CallBoolean)
     constexpr std::string_view code = R"(
         let x = true; x()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CallNumber)
@@ -70,8 +74,9 @@ TEST_P(ErrorTest, TypeError_CallNumber)
     constexpr std::string_view code = R"(
         let x = 3.14; x()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CallString)
@@ -79,8 +84,9 @@ TEST_P(ErrorTest, TypeError_CallString)
     constexpr std::string_view code = R"(
         let x = "hello"; x()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CallTable)
@@ -88,8 +94,9 @@ TEST_P(ErrorTest, TypeError_CallTable)
     constexpr std::string_view code = R"(
         let x = {1, 2, 3}; x()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_IndexNonTable)
@@ -97,8 +104,9 @@ TEST_P(ErrorTest, TypeError_IndexNonTable)
     constexpr std::string_view code = R"(
         let x = 5; let y = x[1]
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_GetLengthOfInvalidType)
@@ -106,8 +114,9 @@ TEST_P(ErrorTest, TypeError_GetLengthOfInvalidType)
     constexpr std::string_view code = R"(
         let x = #123
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, ErrorIncludesSourceLocation)
@@ -115,8 +124,9 @@ TEST_P(ErrorTest, ErrorIncludesSourceLocation)
     constexpr std::string_view code = R"(
         let x = 1 + nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, ErrorInNestedFunction)
@@ -131,8 +141,9 @@ TEST_P(ErrorTest, ErrorInNestedFunction)
         outer()
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, MultipleOperationsShowCorrectError)
@@ -144,8 +155,9 @@ TEST_P(ErrorTest, MultipleOperationsShowCorrectError)
         let d = c * 'invalid'
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code, false)); // Disable optimizations
-    EXPECT_THROW({ behl::call(S, 0, 0); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code, false)); // Disable optimizations
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 TEST_P(ErrorTest, ErrorFunction_BasicThrow)
 {
@@ -153,17 +165,10 @@ TEST_P(ErrorTest, ErrorFunction_BasicThrow)
         error("test error message")
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
-    try
-    {
-        behl::call(S, 0, 0);
-        FAIL() << "Expected exception to be thrown";
-    }
-    catch (const behl::BehlException& e)
-    {
-        EXPECT_NE(std::string_view(e.what()).find("test error message"), std::string_view::npos);
-    }
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 0));
+    EXPECT_NE(behl_test::error_text(S).find("test error message"), std::string::npos);
 }
 
 TEST_P(ErrorTest, ErrorFunction_CaughtByPcall)
@@ -176,8 +181,8 @@ TEST_P(ErrorTest, ErrorFunction_CaughtByPcall)
         return success, err;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
 
     ASSERT_EQ(behl::get_top(S), 2);
     ASSERT_FALSE(behl::to_boolean(S, -2));
@@ -196,12 +201,12 @@ TEST_P(ErrorTest, ErrorFunction_WithNumberConvertsToString)
         return success, err;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
 
     ASSERT_FALSE(behl::to_boolean(S, -2));
-    std::string_view err_msg = behl::to_string(S, -1);
-    EXPECT_NE(err_msg.find("42"), std::string::npos);
+    ASSERT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
 TEST_P(ErrorTest, ErrorFunction_InNestedCalls)
@@ -220,8 +225,8 @@ TEST_P(ErrorTest, ErrorFunction_InNestedCalls)
         return success, err;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
 
     ASSERT_FALSE(behl::to_boolean(S, -2));
     std::string_view err_msg = behl::to_string(S, -1);
@@ -239,8 +244,8 @@ TEST_P(ErrorTest, ErrorFunction_WithConcatenatedMessage)
         return success, err;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
 
     ASSERT_FALSE(behl::to_boolean(S, -2));
     std::string_view err_msg = behl::to_string(S, -1);
@@ -261,8 +266,8 @@ TEST_P(ErrorTest, ErrorFunction_InClosure)
         return success, err;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
 
     ASSERT_FALSE(behl::to_boolean(S, -2));
     std::string_view err_msg = behl::to_string(S, -1);
@@ -281,8 +286,8 @@ TEST_P(ErrorTest, ErrorFunction_MultipleInSequence)
         return s1, e1, s2, e2;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
 
     ASSERT_EQ(behl::get_top(S), 4);
 
@@ -309,8 +314,8 @@ TEST_P(ErrorTest, ErrorFunction_InLoop)
         return success, err;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
 
     ASSERT_FALSE(behl::to_boolean(S, -2));
     std::string_view err_msg = behl::to_string(S, -1);
@@ -323,8 +328,9 @@ TEST_P(ErrorTest, TypeError_CompareIncompatibleTypes_LessThan)
     constexpr std::string_view code = R"(
         return 5 < "hello";
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CompareIncompatibleTypes_LessOrEqual)
@@ -332,8 +338,9 @@ TEST_P(ErrorTest, TypeError_CompareIncompatibleTypes_LessOrEqual)
     constexpr std::string_view code = R"(
         return true <= 42;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, TypeError_CompareTableWithNumber)
@@ -342,8 +349,9 @@ TEST_P(ErrorTest, TypeError_CompareTableWithNumber)
         let t = {1, 2, 3};
         return t < 10;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
 TEST_P(ErrorTest, LongErrorMessageIsNotReadPastItsEnd)
@@ -362,24 +370,19 @@ TEST_P(ErrorTest, LongErrorMessageIsNotReadPastItsEnd)
         return #msg, at, string.sub(err, at + #msg, at + #msg)
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 3));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
 
     ASSERT_EQ(behl::to_integer(S, -3), 320);
     ASSERT_GE(behl::to_integer(S, -2), 0) << "error text does not contain the message that was raised";
-    EXPECT_EQ(behl::to_string(S, -1), "\n") << "bytes were read past the end of the message payload";
+    EXPECT_EQ(behl::to_string(S, -1), "") << "bytes were read past the end of the message payload";
 }
 
 static std::string run_and_capture_error(behl::State* S, const std::string& code)
 {
-    try
+    if (behl::load_string(S, code, false) < 0 || behl::call(S, 0, 0) < 0)
     {
-        behl::load_string(S, code, false);
-        behl::call(S, 0, 0);
-    }
-    catch (const behl::BehlException& e)
-    {
-        return e.what();
+        return behl_test::error_text(S);
     }
     return {};
 }
@@ -436,8 +439,8 @@ TEST_P(ErrorTest, ConcatInvalidMessageNamesTheProblemAndLocation)
 TEST_P(ErrorTest, RuntimeErrorCaughtByPcallCarriesLocation)
 {
     constexpr std::string_view code = "let pad = 0\nlet f = function(a) { return a.field }\nlet ok, err = pcall(f, 5)\nreturn ok, err\n";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
-    ASSERT_NO_THROW(behl::call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_FALSE(behl::to_boolean(S, -2));
     const std::string_view err = get_error();
     EXPECT_NE(err.find("attempt to index"), std::string_view::npos) << err;
@@ -452,8 +455,8 @@ TEST_P(ErrorTest, LoopStartNotANumberRaises)
         for (let i = s; i < 3; i = i + 1) { n = n + 1; if (n > 10) { break } }
         return n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
 TEST_P(ErrorTest, LoopLimitStringRaises)
@@ -464,8 +467,8 @@ TEST_P(ErrorTest, LoopLimitStringRaises)
         for (let i = 0; i < lim; i = i + 1) { n = n + 1; if (n > 10) { break } }
         return n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
 TEST_P(ErrorTest, LoopLimitNilRaises)
@@ -476,8 +479,8 @@ TEST_P(ErrorTest, LoopLimitNilRaises)
         for (let i = 0; i < lim; i = i + 1) { n = n + 1; if (n > 10) { break } }
         return n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
 TEST_P(ErrorTest, DescendingLoopLimitTableRaises)
@@ -488,8 +491,8 @@ TEST_P(ErrorTest, DescendingLoopLimitTableRaises)
         for (let i = 10; i > lim; i = i - 1) { n = n + 1; if (n > 20) { break } }
         return n
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::BehlException);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, ErrorTest, ::testing::Bool(),

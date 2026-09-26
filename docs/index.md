@@ -126,12 +126,11 @@ int main() {
     behl::State* S = behl::new_state();
     behl::load_stdlib(S);
     
-    // Load and run a script
-    behl::load_string(S, "return 2 + 3");
-    behl::call(S, 0, 1);
-    
-    int result = behl::to_integer(S, -1);
-    // result == 5
+    // Load and run a script, both return a negative status code on error
+    if (behl::load_string(S, "return 2 + 3") == 0 && behl::call(S, 0, 1) >= 0) {
+        behl::Integer result = behl::to_integer(S, -1);
+        // result == 5
+    }
     
     behl::close(S);
     return 0;
