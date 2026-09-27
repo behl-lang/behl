@@ -2,7 +2,7 @@
 
 #include "bytecode.hpp"
 #include "frame.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
@@ -10,12 +10,11 @@
 #include "vm_operands.hpp"
 
 #include <algorithm>
-#include <behl/exceptions.hpp>
 #include <cassert>
 
 namespace behl
 {
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     uint32_t find_or_create_upvalue(State* S, uint32_t stack_index)
     {
         const int32_t target = static_cast<int32_t>(stack_index);
@@ -74,7 +73,7 @@ namespace behl
         return new_idx;
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void close_upvalues(State* S, uint32_t from_index)
     {
         auto& open = S->open_upvalue_indices;
@@ -104,6 +103,7 @@ namespace behl
             {
                 Upvalue& uv = upvalues[uv_idx];
                 uv.closed_value = stack[static_cast<size_t>(uv.index)];
+                gc_keep_alive(S, uv.closed_value);
                 uv.index = -1;
             }
             open.clear();
@@ -119,6 +119,7 @@ namespace behl
         {
             Upvalue& uv = upvalues[*close_it];
             uv.closed_value = stack[static_cast<size_t>(uv.index)];
+            gc_keep_alive(S, uv.closed_value);
             uv.index = -1;
         }
 
@@ -126,7 +127,7 @@ namespace behl
         open.resize(S, static_cast<size_t>(std::distance(open.begin(), it)));
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     Value& upvalue_ref(State* S, uint32_t upvalue_index)
     {
         assert(upvalue_index < S->upvalues.size() && "upvalue_ptr: upvalue_index out of bounds");

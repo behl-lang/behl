@@ -33,11 +33,12 @@ x = {1, 2, 3};     // now x holds a table
 | `nil` | Absence of value | `nil` |
 | `boolean` | True or false | `true`, `false` |
 | `integer` | 64-bit signed integer | `42`, `0xFF`, `-10` |
-| `number` | 64-bit floating point | `3.14`, `1.5e-10` |
+| `number` | 64-bit floating point | `3.14`, `.5`, `5.` |
 | `string` | Immutable text | `"hello"`, `'world'` |
 | `function` | Callable function | Functions and closures |
 | `table` | Associative array | `{1, 2, 3}` |
 | `userdata` | C++ objects | Managed from C++ API |
+| `buffer` | Mutable byte array | `buffer.create(16)` |
 
 ## Type Query
 
@@ -53,6 +54,31 @@ print(typeof(y)); // "number"
 let s = "hello";
 print(typeof(s)); // "string"
 ```
+
+`typeid()` returns the numeric type tag of a value. The values are bit-encoded (category bits plus a small index), not a dense `0..n` range, so treat them as opaque and only compare them against each other:
+
+```cpp
+print(typeid(nil));    // 0
+print(typeid(42));     // 35
+print(typeid(3.14));   // 36
+print(typeid("hi"));   // 69
+print(typeid({}));     // 86
+```
+
+| Type | `typeid()` | `typeof()` |
+|------|-----------|-----------|
+| `nil` | 0 | `"nil"` |
+| `boolean` | 2 | `"boolean"` |
+| `integer` | 35 | `"integer"` |
+| `number` | 36 | `"number"` |
+| `string` | 69 | `"string"` |
+| `table` | 86 | `"table"` |
+| `userdata` | 89 | `"userdata"` |
+| `buffer` | 74 | `"buffer"` |
+| closure | 199 | `"function"` |
+| C function | 136 | `"function"` |
+
+Note that `typeid()` distinguishes a Behl closure from a C function, while `typeof()` reports `"function"` for both.
 
 ## Nil
 
@@ -124,9 +150,14 @@ let f = 0123;      // 123 (decimal, not octal)
 
 ```cpp
 let f1 = 3.14;
-let f2 = 1.5e-10;  // Scientific notation
-let f3 = .5;       // 0.5
-let f4 = 5.;       // 5.0
+let f2 = .5;       // 0.5
+let f3 = 5.;       // 5.0
+```
+
+**Note**: Scientific notation is **not** supported by the lexer. `1.5e-10` is not a single literal, it lexes as `1.5`, the identifier `e`, `-` and `10`. Scientific notation is accepted at runtime by `tonumber()`:
+
+```cpp
+let small = tonumber("1.5e-10");  // 1.5e-10
 ```
 
 ### Type Promotion
@@ -135,9 +166,11 @@ Arithmetic operations promote to floating-point when needed:
 
 ```cpp
 let x = 10 / 3;    // 3.333... (number)
-let y = 10 / 2;    // 5 (integer - exact division)
+let y = 10 / 2;    // 5.0 (number - / is always float division)
 let z = 5 + 3.14;  // 8.14 (promoted to number)
 ```
+
+**Note**: `/` always produces a `number`, even when both operands are integers and the division is exact.
 
 ### Number Precision
 
@@ -152,8 +185,8 @@ Integer arithmetic uses **wrapping** (two's complement) on overflow:
 let max = 9223372036854775807  // INT64_MAX
 let overflowed = max + 1        // Wraps to INT64_MIN (-9223372036854775808)
 
-let min = -9223372036854775808  // INT64_MIN  
-let underflowed = min - 1       // Wraps to INT64_MAX (9223372036854775807)
+let min = -9223372036854775807 - 1  // INT64_MIN, computed at runtime
+let underflowed = min - 1           // Wraps to INT64_MAX (9223372036854775807)
 
 // Multiplication overflow
 let large = 9223372036854775807
@@ -161,6 +194,8 @@ let result = large * 2          // Wraps to -2
 ```
 
 **Note**: Overflow does not cause errors or convert to floats - values wrap around silently.
+
+**Note**: The literal `-9223372036854775808` is lexed as a negation applied to `9223372036854775808`, which does not fit in a 64-bit integer, so it becomes a `number` (double) instead. Write `-9223372036854775807 - 1` to get INT64_MIN as an integer.
 
 ## Strings
 
@@ -226,15 +261,17 @@ let x = "Value: " + tostring(42); // OK
 
 ### String Length
 
-Use the `#` operator (via rawlen) or `string.len()`:
+Use the `#` operator or `string.len()`:
 
 ```cpp
 const string = import("string");
 
 let s = "hello";
-print(rawlen(s));        // 5
+print(#s);               // 5
 print(string.len(s));    // 5
 ```
+
+**Note**: `rawlen()` only works on tables. It returns `0` for a string or any other non-table value.
 
 ### String Operations
 
@@ -293,8 +330,9 @@ Userdata represents opaque C++ objects exposed to Behl scripts through the C++ A
 ### Usage from Scripts
 
 ```js
-// Created from C++ API
-let file = os.open("data.txt", "r");
+// Created from C++ API, or from an opt-in module such as fs
+const fs = import("fs");
+let file = fs.open("data.txt", "r");
 print(typeof(file));  // "userdata"
 
 // Access through C++ functions
@@ -338,7 +376,7 @@ file_read(table);  // TypeError: bad argument #1 (expected userdata, got table)
 
 let file1 = file_open("a.txt", "r");
 let vec = vec2_new(1.0, 2.0);
-file_read(vec);    // TypeError: userdata type mismatch
+file_read(vec);    // RuntimeError: Type mismatch: userdata uid does not match expected type
 ```
 
 ### Creating Userdata
@@ -352,6 +390,60 @@ See [Userdata](../embedding/userdata) for details on creating and managing userd
 - Network sockets
 - Complex data structures (trees, graphs)
 - Native library bindings
+
+## Buffers
+
+A buffer is a mutable, fixed-length array of bytes. Buffers are created by the [buffer module](../stdlib/buffer) or from C++ (see [API Reference](../embedding/api-reference#buffers)).
+
+```cpp
+const buffer = import("buffer");
+
+let b = buffer.create(4);
+print(typeof(b));  // "buffer"
+print(#b);         // 4
+print(b[0]);       // 0 (new buffers are zero-filled)
+```
+
+### Characteristics
+
+- **Mutable**: bytes are changed in place, unlike strings
+- **Reference semantics**: `==` compares identity, two buffers with the same bytes are not equal
+- **Table keys**: a buffer can be used as a table key (by identity)
+- **Printing**: `tostring(b)` gives `buffer:0x...`
+- **Garbage collected**: freed when no longer referenced
+- **Slices**: `buffer.slice` creates a buffer that shares bytes with another one, see [Slices](../stdlib/buffer#slices)
+
+### Indexing
+
+`b[i]` reads or writes one byte. Indices are 0-based and run from `0` to `#b - 1`.
+
+- A read returns an `integer` from `0` to `255`.
+- A write stores the low 8 bits of the value, so `256` stores `0` and `-1` stores `255`.
+- Integral floats are accepted as index and as value, `b[2.0] = 7.0` is the same as `b[2] = 7`.
+
+```cpp
+const buffer = import("buffer");
+
+let b = buffer.create(3);
+b[0] = 65;
+b[1] = 256;
+b[2.0] = -1;
+print(b[0], b[1], b[2]);  // 65  0  255
+print(#b);                // 3
+```
+
+`#b` is the length in bytes.
+
+### Errors
+
+| Operation | Error |
+|-----------|-------|
+| `b[3]` on a 3-byte buffer, or `b[-1]` | `RuntimeError: buffer index 3 out of range (length 3)` |
+| `b[1.5]` or `b[0] = 1.5` | `TypeError: number has no integer representation` |
+| `b["x"]` or `b.x` | `TypeError: attempt to index a buffer with a 'string' value` |
+| `b[0] = "x"` | `TypeError: attempt to store a 'string' value in a buffer` |
+
+For bulk copies, strings and typed little-endian values (`u16`, `i32`, `f64`, ...) see the [buffer module](../stdlib/buffer).
 
 ## Type Conversions
 
@@ -373,7 +465,7 @@ let bad = tonumber("xyz");  // nil
 Behl has **minimal** implicit conversion:
 
 - **Arithmetic**: Integer + Float → Float
-- **Comparison**: Same-type comparison only
+- **Comparison**: Integers and floats compare against each other (the integer is promoted to float)
 - **Strings**: No automatic number coercion
 
 ```cpp

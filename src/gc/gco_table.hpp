@@ -5,12 +5,17 @@
 #include "gc_object.hpp"
 #include "vm/value.hpp"
 
+#include <cstddef>
+#include <type_traits>
+
 namespace behl
 {
 
     struct GCTable : GCObject
     {
         static constexpr auto kObjectType = GCType::kTable;
+
+        GCOHeader header{};
 
         Vector<Value> array;
         HashMap<Value, Value, ValueHash, ValueEq> hash;
@@ -33,14 +38,27 @@ namespace behl
             return internal_name_len > 0;
         }
 
+        static constexpr int32_t array_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCTable, array));
+        }
+
+        static constexpr int32_t color_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCTable, header) + offsetof(GCOHeader, color));
+        }
+
         void clear_name()
         {
             internal_name_len = 0;
         }
 
-    private:
+    public:
         char internal_name[63];
         uint8_t internal_name_len{};
     };
+
+    static_assert(std::is_standard_layout_v<GCTable>);
+    static_assert(offsetof(GCTable, header) == 0);
 
 } // namespace behl

@@ -1,4 +1,6 @@
 #include "common/format.hpp"
+#include "state.hpp"
+#include "test_helpers.hpp"
 
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
@@ -15,7 +17,7 @@ constexpr std::string_view TEST_SHELL_FLAG = "-c";
 constexpr std::string_view TEST_SLEEP_CMD = "sleep";
 #endif
 
-class ProcessTest : public ::testing::Test
+class ProcessTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -23,6 +25,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
         behl::load_lib_process(S);
     }
@@ -33,7 +36,7 @@ protected:
     }
 };
 
-TEST_F(ProcessTest, BasicSpawnAndWait)
+TEST_P(ProcessTest, BasicSpawnAndWait)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -43,12 +46,12 @@ TEST_F(ProcessTest, BasicSpawnAndWait)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(ProcessTest, CustomExitCode)
+TEST_P(ProcessTest, CustomExitCode)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -58,12 +61,12 @@ TEST_F(ProcessTest, CustomExitCode)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ProcessTest, CaptureStdout)
+TEST_P(ProcessTest, CaptureStdout)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -74,14 +77,14 @@ TEST_F(ProcessTest, CaptureStdout)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("test_output") != std::string_view::npos);
 }
 
-TEST_F(ProcessTest, ExecCapturesOutput)
+TEST_P(ProcessTest, ExecCapturesOutput)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -90,14 +93,14 @@ TEST_F(ProcessTest, ExecCapturesOutput)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("hello") != std::string_view::npos);
 }
 
-TEST_F(ProcessTest, ExecReturnsExitCode)
+TEST_P(ProcessTest, ExecReturnsExitCode)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -106,12 +109,12 @@ TEST_F(ProcessTest, ExecReturnsExitCode)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(ProcessTest, GetPid)
+TEST_P(ProcessTest, GetPid)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -122,12 +125,12 @@ TEST_F(ProcessTest, GetPid)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_GT(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(ProcessTest, IsRunning)
+TEST_P(ProcessTest, IsRunning)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -153,12 +156,12 @@ TEST_F(ProcessTest, IsRunning)
         TEST_SLEEP_CMD);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(ProcessTest, ForceKillExitCode)
+TEST_P(ProcessTest, ForceKillExitCode)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -180,13 +183,13 @@ TEST_F(ProcessTest, ForceKillExitCode)
         TEST_SLEEP_CMD);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     // Exit code should be 137 (128 + SIGKILL(9))
     EXPECT_EQ(behl::to_integer(S, -1), 137);
 }
 
-TEST_F(ProcessTest, SignalTermExitCode)
+TEST_P(ProcessTest, SignalTermExitCode)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -208,12 +211,12 @@ TEST_F(ProcessTest, SignalTermExitCode)
         TEST_SLEEP_CMD);
 #endif
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 143);
 }
 
-TEST_F(ProcessTest, PlatformConstant)
+TEST_P(ProcessTest, PlatformConstant)
 {
     constexpr std::string_view code = R"(
         const process = import("process");
@@ -221,8 +224,8 @@ TEST_F(ProcessTest, PlatformConstant)
         return platform;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code.data()));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code.data()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto platform = to_string(S, -1);
 #ifdef _WIN32
@@ -234,35 +237,83 @@ TEST_F(ProcessTest, PlatformConstant)
 #endif
 }
 
-TEST_F(ProcessTest, SignalConstants)
+TEST_P(ProcessTest, SignalConstants)
 {
     constexpr std::string_view code = R"(
         const process = import("process");
         return process.SIGTERM;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code.data()));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code.data()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_integer(S, -1), 15);
 }
 
-TEST_F(ProcessTest, StdinPipe)
+TEST_P(ProcessTest, StdinPipe)
+{
+#ifdef _WIN32
+    auto code = behl::format(R"(
+        const process = import("process");
+        let proc = process.spawn("{}", {{"{}", "5"}}, {{stdin = "pipe", stdout = "null"}});
+        let written = proc:write("test data\n");
+        proc:kill();
+        proc:wait();
+        return written;
+    )",
+        TEST_SLEEP_CMD, TEST_SLEEP_ARG);
+#else
+    auto code = behl::format(R"(
+        const process = import("process");
+        let proc = process.spawn("{}", {{"5"}}, {{stdin = "pipe", stdout = "null"}});
+        let written = proc:write("test data\n");
+        proc:kill();
+        proc:wait();
+        return written;
+    )",
+        TEST_SLEEP_CMD);
+#endif
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_P(ProcessTest, WriteToExitedChildDoesNotTerminateHost)
 {
     auto code = behl::format(R"(
         const process = import("process");
         let proc = process.spawn("{}", {{"{}", "exit 0"}}, {{stdin = "pipe"}});
-        let written = proc:write("test data\n");
         proc:wait();
-        return written > 0;
+        let written = proc:write("data the child will never read\n");
+        return written;
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
-    EXPECT_TRUE(to_boolean(S, -1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
 }
 
-TEST_F(ProcessTest, NullStdio)
+TEST_P(ProcessTest, RepeatedWritesToExitedChildStaySafe)
+{
+    auto code = behl::format(R"(
+        const process = import("process");
+        let proc = process.spawn("{}", {{"{}", "exit 0"}}, {{stdin = "pipe"}});
+        proc:wait();
+        let total = 0;
+        for (let i = 0; i < 16; i++) {{
+            total = total + proc:write("payload\n");
+        }}
+        return total;
+    )",
+        TEST_SHELL, TEST_SHELL_FLAG);
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
+}
+
+TEST_P(ProcessTest, NullStdio)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -272,13 +323,13 @@ TEST_F(ProcessTest, NullStdio)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     auto exitcode = to_integer(S, -1);
     EXPECT_GE(exitcode, 0);
 }
 
-TEST_F(ProcessTest, CloseHandle)
+TEST_P(ProcessTest, CloseHandle)
 {
     auto code = behl::format(R"(
         const process = import("process");
@@ -289,12 +340,12 @@ TEST_F(ProcessTest, CloseHandle)
     )",
         TEST_SHELL, TEST_SHELL_FLAG);
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(ProcessTest, InvalidCommand)
+TEST_P(ProcessTest, InvalidCommand)
 {
     constexpr std::string_view code = R"(
         const process = import("process");
@@ -302,12 +353,12 @@ TEST_F(ProcessTest, InvalidCommand)
         return typeof(result) == "boolean" && result == false;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code.data()));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code.data()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(ProcessTest, CustomEnvironmentVariable)
+TEST_P(ProcessTest, CustomEnvironmentVariable)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -329,14 +380,14 @@ TEST_F(ProcessTest, CustomEnvironmentVariable)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("test_value") != std::string_view::npos);
 }
 
-TEST_F(ProcessTest, CustomEnvironmentMultipleVariables)
+TEST_P(ProcessTest, CustomEnvironmentMultipleVariables)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -358,15 +409,15 @@ TEST_F(ProcessTest, CustomEnvironmentMultipleVariables)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("hello") != std::string_view::npos);
     EXPECT_TRUE(output.find("world") != std::string_view::npos);
 }
 
-TEST_F(ProcessTest, InheritedEnvironment)
+TEST_P(ProcessTest, InheritedEnvironment)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -388,15 +439,15 @@ TEST_F(ProcessTest, InheritedEnvironment)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_FALSE(output.empty());
     EXPECT_TRUE(output.size() > 3);
 }
 
-TEST_F(ProcessTest, ExecWithCustomEnvironment)
+TEST_P(ProcessTest, ExecWithCustomEnvironment)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -414,14 +465,14 @@ TEST_F(ProcessTest, ExecWithCustomEnvironment)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("exec_value") != std::string_view::npos);
 }
 
-TEST_F(ProcessTest, CustomEnvironmentIsolatesFromParent)
+TEST_P(ProcessTest, CustomEnvironmentIsolatesFromParent)
 {
 #ifdef _WIN32
     auto code = behl::format(R"(
@@ -443,9 +494,12 @@ TEST_F(ProcessTest, CustomEnvironmentIsolatesFromParent)
         TEST_SHELL, TEST_SHELL_FLAG);
 #endif
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     auto output = to_string(S, -1);
     EXPECT_TRUE(output.find("isolated") != std::string_view::npos);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, ProcessTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

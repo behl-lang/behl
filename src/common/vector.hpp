@@ -1,7 +1,7 @@
 #pragma once
 
 #include "memory.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -21,13 +21,6 @@ namespace behl
     template<typename T>
     struct Vector
     {
-#ifndef NDEBUG
-        // Avoid realloc optimizations in debug builds to help catch pointer invalidation bugs.
-        static constexpr bool kVectorPointerInvalidation = true;
-#else
-        static constexpr bool kVectorPointerInvalidation = false;
-#endif
-
         using iterator = T*;
         using const_iterator = const T*;
         using reverse_iterator = std::reverse_iterator<iterator>;
@@ -143,7 +136,8 @@ namespace behl
 
             if (size_ >= capacity_)
             {
-                grow(state, capacity_ == 0 ? 4 : capacity_ * 2);
+                grow_at(state, size_, value);
+                return;
             }
 
             std::construct_at(&data_[size_++], value);
@@ -156,7 +150,8 @@ namespace behl
 
             if (size_ >= capacity_)
             {
-                grow(state, capacity_ == 0 ? 4 : capacity_ * 2);
+                grow_at(state, size_, std::move(value));
+                return;
             }
 
             std::construct_at(&data_[size_++], std::move(value));
@@ -169,7 +164,7 @@ namespace behl
 
             if (size_ >= capacity_)
             {
-                grow(state, capacity_ == 0 ? 4 : capacity_ * 2);
+                return grow_at(state, size_, std::forward<Args>(args)...);
             }
 
             if constexpr (sizeof...(args) > 0 || !std::is_trivially_default_constructible_v<T>)
@@ -305,10 +300,15 @@ namespace behl
                 return data_ + index;
             }
 
+            const bool aliases = (first >= data_ && first < data_ + size_);
+            const size_t alias_offset = aliases ? static_cast<size_t>(first - data_) : 0;
+
             if (size_ + count > capacity_)
             {
                 grow(state, size_ + count);
             }
+
+            const T* source = aliases ? data_ + alias_offset : first;
 
             for (size_t i = size_; i > index; --i)
             {
@@ -316,7 +316,7 @@ namespace behl
             }
             for (size_t i = 0; i < count; ++i)
             {
-                data_[index + i] = first[i];
+                data_[index + i] = source[i];
             }
 
             size_ += count;
@@ -332,7 +332,8 @@ namespace behl
 
             if (size_ >= capacity_)
             {
-                grow(state, capacity_ == 0 ? 4 : capacity_ * 2);
+                grow_at(state, index, value);
+                return data_ + index;
             }
 
             // Shift elements right
@@ -485,10 +486,6 @@ namespace behl
             return const_reverse_iterator(begin());
         }
 
-#if defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
-#endif
         static constexpr int32_t data_offset()
         {
             return static_cast<int32_t>(offsetof(Vector, data_));
@@ -499,9 +496,10 @@ namespace behl
             return static_cast<int32_t>(offsetof(Vector, size_));
         }
 
-#if defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#endif
+        static constexpr int32_t capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(Vector, capacity_));
+        }
 
     private:
         BEHL_FORCEINLINE
@@ -513,49 +511,78 @@ namespace behl
             // Calculate next power of 2, with minimum of 4
             size_t new_capacity = std::max(size_t(4), std::bit_ceil(min_capacity));
 
-            T* new_data;
+            T* new_data = mem_alloc_array<T>(state, new_capacity);
 
-            if constexpr (std::is_trivially_copyable_v<T> && !kVectorPointerInvalidation)
+            for (size_t i = 0; i < size_; ++i)
             {
-                // For POD types, we can use realloc which is more efficient
-                new_data = mem_realloc_array<T>(state, data_, capacity_, new_capacity);
+                relocate(&new_data[i], data_[i]);
             }
-            else
+
+            if constexpr (!std::is_trivially_destructible_v<T>)
             {
-                // For non-POD types, allocate new memory, move/copy construct, and destroy old
-                new_data = mem_alloc_array<T>(state, new_capacity);
-
-                // Move or copy existing elements
-                if constexpr (std::is_nothrow_move_constructible_v<T>)
+                for (size_t i = 0; i < size_; ++i)
                 {
-                    for (size_t i = 0; i < size_; ++i)
-                    {
-                        std::construct_at(&new_data[i], std::move(data_[i]));
-                    }
+                    std::destroy_at(&data_[i]);
                 }
-                else
-                {
-                    for (size_t i = 0; i < size_; ++i)
-                    {
-                        std::construct_at(&new_data[i], data_[i]);
-                    }
-                }
-
-                // Destroy old elements
-                if constexpr (!std::is_trivially_destructible_v<T>)
-                {
-                    for (size_t i = 0; i < size_; ++i)
-                    {
-                        std::destroy_at(&data_[i]);
-                    }
-                }
-
-                // Free old memory
-                mem_free_array<T>(state, data_, capacity_);
             }
+
+            mem_free_array<T>(state, data_, capacity_);
 
             data_ = new_data;
             capacity_ = new_capacity;
+        }
+
+        template<typename... Args>
+        T& grow_at(State* state, size_t index, Args&&... args)
+        {
+            assert(state != nullptr && "State can not be null");
+            assert(index <= size_ && "grow_at index out of range");
+
+            const size_t new_capacity = std::max(size_t(4), std::bit_ceil(size_ + 1));
+            T* new_data = mem_alloc_array<T>(state, new_capacity);
+
+            if constexpr (sizeof...(Args) > 0 || !std::is_trivially_default_constructible_v<T>)
+            {
+                std::construct_at(&new_data[index], std::forward<Args>(args)...);
+            }
+
+            for (size_t i = 0; i < index; ++i)
+            {
+                relocate(&new_data[i], data_[i]);
+            }
+            for (size_t i = index; i < size_; ++i)
+            {
+                relocate(&new_data[i + 1], data_[i]);
+            }
+
+            if constexpr (!std::is_trivially_destructible_v<T>)
+            {
+                for (size_t i = 0; i < size_; ++i)
+                {
+                    std::destroy_at(&data_[i]);
+                }
+            }
+
+            mem_free_array<T>(state, data_, capacity_);
+
+            data_ = new_data;
+            capacity_ = new_capacity;
+            ++size_;
+
+            return data_[index];
+        }
+
+        BEHL_FORCEINLINE
+        static void relocate(T* dest, T& source)
+        {
+            if constexpr (std::is_nothrow_move_constructible_v<T>)
+            {
+                std::construct_at(dest, std::move(source));
+            }
+            else
+            {
+                std::construct_at(dest, source);
+            }
         }
 
     private:

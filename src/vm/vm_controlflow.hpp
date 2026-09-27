@@ -4,65 +4,27 @@
 #include "common/format.hpp"
 #include "frame.hpp"
 #include "jit/jit.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 #include "vm_operands.hpp"
 #include "vm_upvalues.hpp"
 
 #include <algorithm>
-#include <behl/exceptions.hpp>
 #include <cassert>
 
 namespace behl
 {
-    // Forward declarations for functions used by control flow handlers
-    [[noreturn]] BEHL_NOINLINE inline void throw_bad_call(const Value& val, const CallFrame& frame, State* S)
-    {
-        const auto loc = get_current_location(frame);
-        std::string msg;
-        switch (val.get_type())
-        {
-            case Type::kNil:
-                msg = "attempt to call nil value";
-                break;
-            case Type::kBoolean:
-                msg = "attempt to call boolean value";
-                break;
-            case Type::kInteger:
-                msg = "attempt to call integer value";
-                break;
-            case Type::kNumber:
-                msg = "attempt to call number value";
-                break;
-            case Type::kString:
-                msg = "attempt to call string value";
-                break;
-            case Type::kTable:
-                msg = "attempt to call table value";
-                break;
-            case Type::kUserdata:
-                msg = "attempt to call userdata value";
-                break;
-            default:
-                msg = "attempt to call unknown value";
-                break;
-        }
-
-        std::string stacktrace = build_stacktrace_internal(S);
-        std::string full_msg = behl::format<"{}\n{}">(msg, stacktrace);
-        throw TypeError(full_msg, loc);
-    }
-
     BEHL_FORCEINLINE
     static void handler_defer(State* S, CallFrame& frame, Reg block)
     {
         frame_header(S, frame).defer_mask |= (1u << block);
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     static void handler_defercall(State* S, CallFrame& frame, Reg block)
     {
         const uint32_t bit = 1u << block;
@@ -86,7 +48,7 @@ namespace behl
     }
 
     // Setup a new call frame for any function call
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     CallFrame& setup_call_frame(
         State* S, const GCProto* proto, uint32_t new_base, uint32_t actual_num_args, uint32_t call_pos, uint8_t nresults)
     {
@@ -99,6 +61,8 @@ namespace behl
         header.call_pos = call_pos;
         header.nresults = nresults;
         header.defer_mask = 0;
+        header.num_varargs = 0;
+        header.ret_base = 0;
 
         if (proto && proto->is_vararg) [[unlikely]]
         {
@@ -109,8 +73,8 @@ namespace behl
     }
 
     // Prepare stack for a function call (ensure enough space)
-    BEHL_FORCEINLINE
-    void prepare_call(State* S, uint32_t frame_size, uint32_t new_base, uint32_t actual_num_args)
+    BEHL_INLINE
+    void prepare_call(State* S, uint32_t frame_size, uint32_t new_base, uint32_t actual_num_args, uint32_t num_params = 0)
     {
         const auto items_to_move = actual_num_args + 1;
         const auto items_count = new_base + items_to_move;
@@ -118,10 +82,23 @@ namespace behl
         const auto required_size = (items_count > proto_size) ? items_count : proto_size;
 
         S->stack.resize(S, required_size);
+
+        // Parameters the caller did not pass must read nil. resize only constructs
+        // slots past the current stack size, so a slot reused from an earlier call
+        // would otherwise hand the callee a stale value.
+        if (actual_num_args < num_params)
+        {
+            const auto first = new_base + 1 + actual_num_args;
+            const auto last = new_base + 1 + num_params;
+            for (uint32_t i = first; i < last; ++i)
+            {
+                S->stack[i].set_nil();
+            }
+        }
     }
 
     // Move arguments for tail call (handles forward and backward moves)
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void move_tail_call_args(State* S, uint32_t func_abs_pos, uint32_t frame_base, uint32_t items_to_move) noexcept
     {
         auto& stack = S->stack;
@@ -150,7 +127,7 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void move_results(Vector<Value>& stack, State* S, uint32_t src_base, uint32_t dest, uint32_t count, uint32_t available,
         uint32_t min_final_size = 0)
     {
@@ -205,7 +182,7 @@ namespace behl
 
     // Count the actual number of arguments passed to a function.
     BEHL_FORCEINLINE
-    static uint32_t count_actual_args(State* S, const CallFrame& frame, uint32_t func_pos, uint8_t num_args) noexcept
+    uint32_t count_actual_args(State* S, const CallFrame& frame, uint32_t func_pos, uint8_t num_args) noexcept
     {
         if (num_args == static_cast<uint8_t>(kMultArgs))
         {
@@ -217,9 +194,8 @@ namespace behl
     }
 
     // Core return implementation
-    BEHL_FORCEINLINE
-    static bool return_from_function(
-        State* S, const CallFrame& frame, uint8_t a, uint8_t num_results, uint32_t entry_call_depth)
+    BEHL_INLINE
+    bool return_from_function(State* S, const CallFrame& frame, uint8_t a, uint8_t num_results, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -295,8 +271,8 @@ namespace behl
         return false;
     }
 
-    BEHL_FORCEINLINE
-    static void handler_saveret(State* S, CallFrame& frame, Reg a, uint8_t num_results)
+    BEHL_INLINE
+    void handler_saveret(State* S, CallFrame& frame, Reg a, uint8_t num_results)
     {
         auto& stack = S->stack;
         const uint32_t result_base = frame.base + a;
@@ -326,8 +302,8 @@ namespace behl
         }
     }
 
-    BEHL_FORCEINLINE
-    static bool handler_retsaved(State* S, const CallFrame& frame, uint32_t entry_call_depth)
+    BEHL_INLINE
+    bool handler_retsaved(State* S, const CallFrame& frame, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -390,8 +366,8 @@ namespace behl
     }
 
     // Execute C function implementation
-    BEHL_FORCEINLINE
-    static uint32_t execute_native_impl(State* S, CFunction cfunc, uint32_t func_pos, uint32_t num_args)
+    BEHL_INLINE
+    uint32_t execute_native_impl(State* S, CFunction cfunc, uint32_t func_pos, uint32_t num_args)
     {
         auto& stack = S->stack;
 
@@ -414,7 +390,7 @@ namespace behl
     }
 
     // Main function call logic
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void call_function(State* S, uint8_t a, uint8_t num_args, uint8_t num_results)
     {
         // Manual loop for the metamethod case to avoid C++ stack frame growth
@@ -438,7 +414,7 @@ namespace behl
                 const auto* closure_data = func.get_closure();
                 const auto* proto = closure_data->proto;
                 setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
-                prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
+                prepare_call(S, proto->max_stack_size, new_base, actual_num_args, proto->num_params);
 
                 return;
             }
@@ -503,7 +479,7 @@ namespace behl
                 }
             }
 
-            throw_bad_call(func, caller_frame, S);
+            raise_bad_call(func, caller_frame, S);
         }
     }
 
@@ -516,8 +492,7 @@ namespace behl
 
     // Call instruction handler
     template<bool TExecuteCallee = true>
-    BEHL_FORCEINLINE CallFrame* handler_call(
-        State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
+    BEHL_INLINE void handler_call(State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
     {
         if (S->gc.gc_debt > 0)
         {
@@ -545,18 +520,19 @@ namespace behl
             {
                 S->stack[call_pos] = S->stack[frame.base];
             }
-            CallFrame& new_frame = setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
-            prepare_call(S, proto->max_stack_size, new_base, actual_num_args);
+
+            setup_call_frame(S, proto, new_base, actual_num_args, call_pos, num_results);
+            prepare_call(S, proto->max_stack_size, new_base, actual_num_args, proto->num_params);
+
 #if BEHL_JIT_SUPPORTED
             if constexpr (TExecuteCallee)
             {
-                if (!S->debug.enabled && jit_try_execute(S, proto))
+                if (!S->debug.enabled)
                 {
-                    return &S->call_stack.back();
+                    jit_try_execute(S, proto);
                 }
             }
 #endif
-            return &new_frame;
         }
         else
         {
@@ -569,25 +545,22 @@ namespace behl
             const auto frame_window = new_frame.base + new_frame.proto->max_stack_size;
             const auto stack_after_call = (frame_window > frame_header(S, new_frame).top) ? frame_window
                                                                                           : frame_header(S, new_frame).top;
-
             S->stack.resize(S, stack_after_call);
 #if BEHL_JIT_SUPPORTED
             if constexpr (TExecuteCallee)
             {
-                if (S->call_stack.size() > depth_before && !S->debug.enabled && jit_try_execute(S, new_frame.proto))
+                if (S->call_stack.size() > depth_before && !S->debug.enabled)
                 {
-                    return &S->call_stack.back();
+                    jit_try_execute(S, new_frame.proto);
                 }
             }
 #endif
-            return &new_frame;
         }
     }
 
     // Tail call instruction handler
-    BEHL_FORCEINLINE
-    static bool handler_tailcall(
-        State* S, CallFrame& frame, Reg a, uint8_t num_args, bool is_self_call, uint32_t entry_call_depth)
+    BEHL_INLINE
+    bool handler_tailcall(State* S, CallFrame& frame, Reg a, uint8_t num_args, bool is_self_call, uint32_t entry_call_depth)
     {
         const auto func_abs_pos = frame.base + a;
         const uint32_t actual_num_args = count_actual_args(S, frame, static_cast<uint32_t>(func_abs_pos), num_args);
@@ -709,24 +682,24 @@ namespace behl
             }
             else
             {
-                throw_bad_call(func, frame, S);
+                raise_bad_call(func, frame, S);
             }
         }
 
-        throw_bad_call(func, frame, S);
+        raise_bad_call(func, frame, S);
     }
 
     // Return instruction handler
     BEHL_FORCEINLINE
-    static bool handler_return(State* S, const CallFrame& frame, Reg a, uint8_t num_results, uint32_t entry_call_depth)
+    bool handler_return(State* S, const CallFrame& frame, Reg a, uint8_t num_results, uint32_t entry_call_depth)
     {
         return return_from_function(S, frame, a, num_results, entry_call_depth);
     }
 
     // Return instruction handler for RETURN0: returning no values, skips the
     // kMultRet/available accounting of the general return path.
-    BEHL_FORCEINLINE
-    static bool handler_return0(State* S, const CallFrame& frame, uint32_t entry_call_depth)
+    BEHL_INLINE
+    bool handler_return0(State* S, const CallFrame& frame, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -780,8 +753,8 @@ namespace behl
     }
 
     // Return instruction handler for RETURN1: returning exactly one value.
-    BEHL_FORCEINLINE
-    static bool handler_return1(State* S, const CallFrame& frame, Reg a, uint32_t entry_call_depth)
+    BEHL_INLINE
+    bool handler_return1(State* S, const CallFrame& frame, Reg a, uint32_t entry_call_depth)
     {
         auto& call_stack = S->call_stack;
         auto& stack = S->stack;
@@ -846,13 +819,13 @@ namespace behl
 
     // Try comparison metamethod
     template<MetaMethodType MMIndex>
-    BEHL_FORCEINLINE static bool try_comparison_metamethod(State* S, const Value first, const Value second, bool& result)
+    BEHL_INLINE bool try_comparison_metamethod(State* S, const Value first, const Value second, bool& result)
     {
         if constexpr (MMIndex == MetaMethodType::kEq)
         {
             // Both operands must be tables OR userdata with metatables for __eq to trigger,
             // skip the metamethod lookups entirely when they are not
-            if (!first.is_table_like() || !second.is_table_like())
+            if (!first.is_table_like() || !second.is_table_like() || first.get_gcobject() == second.get_gcobject())
             {
                 return false;
             }
@@ -892,13 +865,17 @@ namespace behl
     }
 
     // General comparison operation
-    template<MetaMethodType MMIndex, typename CmpFunc>
-    BEHL_FORCEINLINE void comparison_op_general(State* S, CallFrame& frame, auto&& lhs, auto&& rhs, CmpFunc&& cmp)
+    template<MetaMethodType MMIndex, bool TNegateMeta, typename CmpFunc>
+    BEHL_INLINE void comparison_op_general(State* S, CallFrame& frame, auto&& lhs, auto&& rhs, CmpFunc&& cmp)
     {
         // Try metamethod first
         bool result = false;
         if (try_comparison_metamethod<MMIndex>(S, lhs, rhs, result))
         {
+            if constexpr (TNegateMeta)
+            {
+                result = !result;
+            }
             frame.pc += static_cast<uint32_t>(!result);
             return;
         }
@@ -931,25 +908,26 @@ namespace behl
         else
         {
             // Ordering comparison on incompatible types
-            throw TypeError(behl::format("attempt to compare {} with {}", lhs.get_type_string(), rhs.get_type_string()),
-                get_current_location(frame));
+            raise_type_error(
+                S, get_current_location(frame), "attempt to compare {} with {}", lhs.get_type_string(), rhs.get_type_string());
         }
     }
 
     // Generic comparison handler template
-    template<MetaMethodType MMIndex, typename CmpOp, auto TGetLhs, auto TGetRhs, typename... Args>
+    template<MetaMethodType MMIndex, bool TNegateMeta, typename CmpOp, auto TGetLhs, auto TGetRhs, typename... Args>
     BEHL_FORCEINLINE void handler_cmp(State* S, CallFrame& frame, Args&&... args)
     {
         const auto& lhs = TGetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = TGetRhs(S, frame, operand_arg<1>(args...));
-        comparison_op_general<MMIndex>(S, frame, lhs, rhs, CmpOp{});
+        comparison_op_general<MMIndex, TNegateMeta>(S, frame, lhs, rhs, CmpOp{});
     }
 
     // Test instruction handler
     BEHL_FORCEINLINE
-    void handler_test(State* S, CallFrame& frame, Reg a, bool invert)
+    void handler_test(State* S, CallFrame& frame, Reg a, bool invert, bool nil_only)
     {
-        const bool cond = get_register(S, frame, a).is_truthy() ^ invert;
+        const Value& value = get_register(S, frame, a);
+        const bool cond = (nil_only ? !value.is_nil() : value.is_truthy()) ^ invert;
         frame.pc += static_cast<uint32_t>(!cond);
     }
 

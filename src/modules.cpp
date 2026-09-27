@@ -51,49 +51,44 @@ namespace behl
             std::string normalized_path(importing_file);
             std::replace(normalized_path.begin(), normalized_path.end(), '\\', '/');
 
-            // For VFS paths, we need to prepend / if working with relative paths
             std::filesystem::path importer_path(normalized_path);
-
-            // If relative path, prepend / for VFS access
-            std::string vfs_normalized = normalized_path;
-            if (!vfs_normalized.empty() && vfs_normalized[0] != '/')
-            {
-                vfs_normalized = "/" + vfs_normalized;
-            }
-
             std::filesystem::path importer_dir = importer_path.parent_path();
 
-            std::error_code ec;
+            // Try in same directory as importer, then in its modules/ subdirectory
+            const std::filesystem::path candidates[] = {
+                importer_dir / filename,
+                importer_dir / "modules" / filename,
+            };
 
-            // Try in same directory as importer
-            std::filesystem::path same_dir = importer_dir / filename;
-
-            // Prepend / for VFS access
-            std::string vfs_same_dir = same_dir.string();
-            if (!vfs_same_dir.empty() && vfs_same_dir[0] != '/')
+            for (const auto& candidate : candidates)
             {
-                vfs_same_dir = "/" + vfs_same_dir;
-            }
+                std::error_code ec;
+                if (std::filesystem::exists(candidate, ec) && !ec)
+                {
+                    std::error_code canonical_ec;
+                    std::filesystem::path canonical = std::filesystem::canonical(candidate, canonical_ec);
+                    if (!canonical_ec)
+                    {
+                        return canonical.string();
+                    }
+                }
 
-            bool exists1 = std::filesystem::exists(vfs_same_dir, ec);
-            if (exists1 && !ec)
-            {
-                return std::filesystem::canonical(vfs_same_dir).string();
-            }
-
-            // Try in modules/ subdirectory relative to importer
-            std::filesystem::path modules_dir = importer_dir / "modules" / filename;
-            // Prepend / for VFS access
-            std::string vfs_modules_dir = modules_dir.string();
-            if (!vfs_modules_dir.empty() && vfs_modules_dir[0] != '/')
-            {
-                vfs_modules_dir = "/" + vfs_modules_dir;
-            }
-
-            bool exists2 = std::filesystem::exists(vfs_modules_dir, ec);
-            if (exists2 && !ec)
-            {
-                return std::filesystem::canonical(vfs_modules_dir).string();
+#if defined(__EMSCRIPTEN__)
+                if (!candidate.is_absolute())
+                {
+                    const std::filesystem::path rooted = std::filesystem::path("/") / candidate;
+                    std::error_code vfs_ec;
+                    if (std::filesystem::exists(rooted, vfs_ec) && !vfs_ec)
+                    {
+                        std::error_code canonical_ec;
+                        std::filesystem::path canonical = std::filesystem::canonical(rooted, canonical_ec);
+                        if (!canonical_ec)
+                        {
+                            return canonical.string();
+                        }
+                    }
+                }
+#endif
             }
         }
         catch (...)

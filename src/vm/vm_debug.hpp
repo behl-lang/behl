@@ -4,7 +4,8 @@
 #include "common/format.hpp"
 #include "common/print.hpp"
 #include "frame.hpp"
-#include "platform.hpp"
+#include "gc/gco_table.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "state_debug.hpp"
 #include "value.hpp"
@@ -21,7 +22,7 @@ namespace behl
     // Debug Helpers
 
     // Check if execution should pause for debugging
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     bool should_break_for_debug(State* S, const CallFrame& frame, DebugEvent& out_event)
     {
         if (!S->debug.enabled)
@@ -51,7 +52,7 @@ namespace behl
             if (bp.line == current_line)
             {
                 // If breakpoint has no file specified, or file matches
-                if (bp.file == nullptr || GCString::equals(bp.file, frame.proto->source_name))
+                if (GCString::equals(bp.file, frame.proto->source_name))
                 {
                     out_event = DebugEvent::BreakpointHit;
                     return true;
@@ -131,7 +132,7 @@ namespace behl
     }
 
     // Process pending debug commands
-    BEHL_FORCEINLINE
+    BEHL_INLINE
     void process_debug_commands(State* S)
     {
         if (S->debug.pending_command == DebugCommand::None)
@@ -172,12 +173,14 @@ namespace behl
         S->debug.step_completed = false;
     }
 
-    inline std::string get_function_name(State* S, const CallFrame& frame)
+    template<typename Out>
+    void append_function_name(Out& out, State* S, const CallFrame& frame)
     {
         // Get function name
         if (frame.proto && frame.proto->name && frame.proto->name->size() > 0)
         {
-            return std::string{ frame.proto->name->view() };
+            out.append(frame.proto->name->view());
+            return;
         }
 
         const Value& closure = S->stack[frame.base];
@@ -201,7 +204,8 @@ namespace behl
                             continue;
                         }
                         auto* str = key.get_string();
-                        return std::string{ str->view() };
+                        out.append(str->view());
+                        return;
                     }
                 }
             }
@@ -227,28 +231,27 @@ namespace behl
                                 continue;
                             }
                             auto* str = key.get_string();
-                            return behl::format("{}.{}", mod_name->view(), str->view());
+                            format_to(out, "{}.{}", mod_name->view(), str->view());
+                            return;
                         }
                     }
                 }
             }
         }
 
-        return "<unknown>";
+        out.append(std::string_view{ "<unknown>" });
     }
 
-    inline std::string build_stacktrace_internal(State* S)
+    template<typename Out>
+    void append_stacktrace(Out& out, State* S)
     {
-        std::string result;
-        result.reserve(512);
-
         if (S->call_stack.empty())
         {
-            result = "<empty call stack>";
-            return result;
+            out.append(std::string_view{ "<empty call stack>" });
+            return;
         }
 
-        result = "Stack trace:\n";
+        out.append(std::string_view{ "Stack trace:\n" });
 
         // Walk the call stack from most recent to oldest
         for (int i = static_cast<int>(S->call_stack.size()) - 1; i >= 0; --i)
@@ -256,36 +259,42 @@ namespace behl
             const auto& frame = S->call_stack[static_cast<size_t>(i)];
             const auto loc = get_current_location(frame);
 
-            // Get function name
-            const auto func_name = get_function_name(S, frame);
-
             const std::string_view file = loc.filename != nullptr ? loc.filename->view() : std::string_view{};
 
             // Format: filename(line,col): at function
             if (!file.empty() && loc.line > 0 && loc.column > 0)
             {
-                result += behl::format("  {}({},{}): at {}", file, loc.line, loc.column, func_name);
+                format_to(out, "  {}({},{}): at ", file, loc.line, loc.column);
             }
             else if (!file.empty() && loc.line > 0)
             {
-                result += behl::format("  {}({}): at {}", file, loc.line, func_name);
+                format_to(out, "  {}({}): at ", file, loc.line);
             }
             else if (!file.empty())
             {
-                result += behl::format<"  {}: at {}">(file, func_name);
+                format_to(out, "  {}: at ", file);
             }
             else
             {
-                result += behl::format<"  at {}">(func_name);
+                out.append(std::string_view{ "  at " });
             }
+
+            // Get function name
+            append_function_name(out, S, frame);
 
             if (i > 0)
             {
-                result += "\n";
+                out += '\n';
             }
         }
+    }
 
-        return result;
+    BEHL_INLINE
+    GCString* build_stacktrace_internal(State* S)
+    {
+        format_buffer buffer;
+        append_stacktrace(buffer, S);
+        return gc_new_string(S, buffer.view());
     }
 
     BEHL_FORCEINLINE

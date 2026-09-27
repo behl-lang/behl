@@ -5,6 +5,7 @@
 #include "gc/gco_userdata.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
+#include "vm/vm_error.hpp"
 
 #include <cassert>
 
@@ -36,7 +37,8 @@ namespace behl
         }
         else
         {
-            return static_cast<ptrdiff_t>(S->stack.size()) + idx;
+            const ptrdiff_t resolved = static_cast<ptrdiff_t>(S->stack.size()) + idx;
+            return resolved < static_cast<ptrdiff_t>(get_cfunction_base(S)) ? -1 : resolved;
         }
     }
 
@@ -60,7 +62,7 @@ namespace behl
         }
         else
         {
-            size_t to_pop = static_cast<size_t>(-n);
+            size_t to_pop = static_cast<size_t>(-static_cast<int64_t>(n));
             if (to_pop > current_size)
             {
                 new_size = base;
@@ -78,10 +80,12 @@ namespace behl
     {
         assert(S != nullptr && "State can not be null");
 
-        const auto count = static_cast<size_t>(n);
-        assert(count <= S->stack.size() && "Pop count exceeds stack size");
+        if (n <= 0)
+        {
+            return;
+        }
 
-        S->stack.resize(S, S->stack.size() - count);
+        set_top(S, -n);
     }
 
     void dup(State* S, int32_t idx)
@@ -194,7 +198,7 @@ namespace behl
         // Allocate the actual data buffer
         if (userdata == nullptr || (userdata->data == nullptr && size > 0))
         {
-            error(S, "Out of memory allocating userdata");
+            raise_runtime_error(S, SourceLocation{}, "Out of memory allocating userdata");
         }
 
         // Set the type UID for type safety
@@ -256,7 +260,7 @@ namespace behl
         ptrdiff_t r_idx = resolve_index(S, idx);
         if (r_idx < 0 || r_idx >= static_cast<ptrdiff_t>(S->stack.size()))
         {
-            error(S, "Invalid stack index");
+            raise_runtime_error(S, SourceLocation{}, "Invalid stack index");
         }
 
         const Value& v = S->stack[static_cast<size_t>(r_idx)];
@@ -264,7 +268,7 @@ namespace behl
 
         if (userdata->uid != uid)
         {
-            error(S, "Type mismatch: userdata uid does not match expected type");
+            raise_runtime_error(S, SourceLocation{}, "Type mismatch: userdata uid does not match expected type");
         }
 
         return userdata->data;

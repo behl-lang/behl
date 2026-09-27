@@ -11,19 +11,18 @@
 #include "vm/bytecode.hpp"
 #include "vm/bytecode_meta.hpp"
 
+#include <algorithm>
 #include <span>
 #include <string>
 
 namespace behl
 {
 
-    static std::string get_annotation(const GCProto& proto, size_t i)
+    static void append_annotation(format_buffer& out, const GCProto& proto, size_t i)
     {
         const auto& instr = proto.code[i];
 
         const OpCode op = instr.op();
-        std::string comment;
-        std::string constant_info;
 
         switch (op)
         {
@@ -35,7 +34,7 @@ namespace behl
                     auto* str = proto.str_constants[k].get_string();
                     if (str)
                     {
-                        constant_info = behl::format("K{} = \"{}\"", k, str->view());
+                        format_to(out, "K{} = \"{}\"", k, str->view());
                     }
                 }
                 break;
@@ -45,7 +44,7 @@ namespace behl
                 const auto k = instr.const_or_proto_index();
                 if (k < proto.int_constants.size() && proto.int_constants[k].is_integer())
                 {
-                    constant_info = behl::format("K{} = {}", k, proto.int_constants[k].get_integer());
+                    format_to(out, "K{} = {}", k, proto.int_constants[k].get_integer());
                 }
                 break;
             }
@@ -54,7 +53,7 @@ namespace behl
                 const auto k = instr.const_or_proto_index();
                 if (k < proto.fp_constants.size() && proto.fp_constants[k].is_fp())
                 {
-                    constant_info = behl::format("K{} = {}", k, proto.fp_constants[k].get_fp());
+                    format_to(out, "K{} = {}", k, proto.fp_constants[k].get_fp());
                 }
                 break;
             }
@@ -67,7 +66,7 @@ namespace behl
                     auto* str = proto.str_constants[k].get_string();
                     if (str)
                     {
-                        constant_info = behl::format("K{} = \"{}\"", k, str->view());
+                        format_to(out, "K{} = \"{}\"", k, str->view());
                     }
                 }
                 break;
@@ -82,7 +81,7 @@ namespace behl
                     auto* str = proto.str_constants[k].get_string();
                     if (str)
                     {
-                        constant_info = behl::format("K{} = \"{}\"", k, str->view());
+                        format_to(out, "K{} = \"{}\"", k, str->view());
                     }
                 }
                 break;
@@ -97,7 +96,7 @@ namespace behl
                 const auto k = instr.small_const_index();
                 if (k < proto.int_constants.size() && proto.int_constants[k].is_integer())
                 {
-                    constant_info = behl::format("K{} = {}", k, proto.int_constants[k].get_integer());
+                    format_to(out, "K{} = {}", k, proto.int_constants[k].get_integer());
                 }
                 break;
             }
@@ -111,7 +110,7 @@ namespace behl
                 const auto k = instr.small_const_index();
                 if (k < proto.fp_constants.size() && proto.fp_constants[k].is_fp())
                 {
-                    constant_info = behl::format("K{} = {}", k, proto.fp_constants[k].get_fp());
+                    format_to(out, "K{} = {}", k, proto.fp_constants[k].get_fp());
                 }
                 break;
             }
@@ -124,7 +123,7 @@ namespace behl
                     auto* str = proto.str_constants[k].get_string();
                     if (str)
                     {
-                        constant_info = behl::format("K{} = \"{}\"", k, str->view());
+                        format_to(out, "K{} = \"{}\"", k, str->view());
                     }
                 }
                 break;
@@ -132,14 +131,14 @@ namespace behl
             case OpCode::kOpClosure:
             {
                 const auto p = instr.const_or_proto_index();
-                comment = behl::format("proto #{}", p);
+                format_to(out, "proto #{}", p);
                 break;
             }
             case OpCode::kOpJmp:
             {
                 const auto offset = instr.jump_offset();
                 const auto target = static_cast<int>(i) + offset + 1;
-                comment = behl::format("to {}", target);
+                format_to(out, "to {}", target);
                 break;
             }
             case OpCode::kOpForPrep:
@@ -147,31 +146,56 @@ namespace behl
             {
                 const auto offset = instr.signed_offset();
                 const auto target = static_cast<int>(i) + offset + 1;
-                comment = behl::format("to {}", target);
+                format_to(out, "to {}", target);
                 break;
             }
             default:
                 break;
         }
+    }
 
-        if (!constant_info.empty())
+    static void append_operand_modes(format_buffer& out, const OpCodeMeta& meta)
+    {
+        const auto mode_to_str = [](OpMode mode) -> std::string_view {
+            switch (mode)
+            {
+                case OpMode::kRead:
+                    return "R";
+                case OpMode::kWrite:
+                    return "W";
+                case OpMode::kRW:
+                    return "RW";
+                case OpMode::kNone:
+                    return "";
+                default:
+                    return "?";
+            }
+        };
+
+        for (const OpMode mode : { meta.a, meta.b, meta.c })
         {
-            return constant_info;
+            const std::string_view str = mode_to_str(mode);
+            if (str.empty())
+            {
+                continue;
+            }
+            if (out.size() != 0)
+            {
+                out += ' ';
+            }
+            out.append(str);
         }
-        else if (!comment.empty())
-        {
-            return comment;
-        }
-        return "";
-    };
+    }
 
     void dump_proto(const GCProto& proto, int32_t indent)
     {
-        std::string ind(static_cast<size_t>(indent * 2), ' ');
+        format_buffer indent_buffer;
+        indent_buffer.append(static_cast<size_t>(indent * 2), ' ');
+        const std::string_view ind = indent_buffer.view();
 
         println("{}Proto: {} params, {}, max_stack_size: {}, source: {}", ind, proto.num_params,
             (proto.is_vararg ? "vararg" : "fixed"), proto.max_stack_size,
-            proto.source_path ? proto.source_path->view() : std::string_view{"<unknown>"});
+            proto.source_path ? proto.source_path->view() : std::string_view{ "<unknown>" });
 
         const auto print_constants = [&](const std::span<const Value> constants) {
             for (size_t i = 0; i < constants.size(); ++i)
@@ -245,106 +269,32 @@ namespace behl
 
         println("{}Code:", ind);
 
-        const auto mode_to_str = [](OpMode mode) -> std::string_view {
-            switch (mode)
-            {
-                case OpMode::kRead:
-                    return "R";
-                case OpMode::kWrite:
-                    return "W";
-                case OpMode::kRW:
-                    return "RW";
-                case OpMode::kNone:
-                    return "";
-                default:
-                    return "?";
-            }
-        };
-
         size_t max_annotation_width = 0;
         size_t max_operand_width = 0;
         for (size_t i = 0; i < proto.code.size(); ++i)
         {
-            std::string annotation = get_annotation(proto, i);
+            format_buffer annotation;
+            append_annotation(annotation, proto, i);
             max_annotation_width = std::max(max_annotation_width, annotation.size());
 
-            const OpCode op = proto.code[i].op();
-            const auto& meta = get_opcode_meta(op);
-
-            std::string operand_info;
-            auto a_str = mode_to_str(meta.a);
-            auto b_str = mode_to_str(meta.b);
-            auto c_str = mode_to_str(meta.c);
-
-            if (!a_str.empty())
-            {
-                operand_info += std::string(a_str);
-            }
-            if (!b_str.empty())
-            {
-                if (!operand_info.empty())
-                {
-                    operand_info += " ";
-                }
-                operand_info += std::string(b_str);
-            }
-            if (!c_str.empty())
-            {
-                if (!operand_info.empty())
-                {
-                    operand_info += " ";
-                }
-                operand_info += std::string(c_str);
-            }
-
+            format_buffer operand_info;
+            append_operand_modes(operand_info, get_opcode_meta(proto.code[i].op()));
             max_operand_width = std::max(max_operand_width, operand_info.size());
         }
 
         for (size_t i = 0; i < proto.code.size(); ++i)
         {
             std::string instr_str = instruction_to_string(proto.code[i], i);
-            std::string annotation = get_annotation(proto, i);
 
-            if (annotation.size() < max_annotation_width)
-            {
-                annotation += std::string(max_annotation_width - annotation.size(), ' ');
-            }
+            format_buffer annotation;
+            append_annotation(annotation, proto, i);
+            annotation.append(max_annotation_width - annotation.size(), ' ');
 
-            const OpCode op = proto.code[i].op();
-            const auto& meta = get_opcode_meta(op);
+            format_buffer operand_info;
+            append_operand_modes(operand_info, get_opcode_meta(proto.code[i].op()));
+            operand_info.append(max_operand_width - operand_info.size(), ' ');
 
-            std::string operand_info;
-            auto a_str = mode_to_str(meta.a);
-            auto b_str = mode_to_str(meta.b);
-            auto c_str = mode_to_str(meta.c);
-
-            if (!a_str.empty())
-            {
-                operand_info += std::string(a_str);
-            }
-            if (!b_str.empty())
-            {
-                if (!operand_info.empty())
-                {
-                    operand_info += " ";
-                }
-                operand_info += std::string(b_str);
-            }
-            if (!c_str.empty())
-            {
-                if (!operand_info.empty())
-                {
-                    operand_info += " ";
-                }
-                operand_info += std::string(c_str);
-            }
-
-            if (operand_info.size() < max_operand_width)
-            {
-                operand_info += std::string(max_operand_width - operand_info.size(), ' ');
-            }
-
-            print("{}{:>4} | {:<22} | {} | {}", ind, i, instr_str, operand_info, annotation);
+            print("{}{:>4} | {:<22} | {} | {}", ind, i, instr_str, operand_info.view(), annotation.view());
 
             if (i < proto.line_info.size() && i < proto.column_info.size())
             {
@@ -355,7 +305,6 @@ namespace behl
                 println("");
             }
         }
-
         for (size_t i = 0; i < proto.protos.size(); ++i)
         {
             println("{}Nested proto {}:", ind, i);

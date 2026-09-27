@@ -8,11 +8,11 @@ namespace behl
 
     static int os_hrtime(State* S)
     {
-        using clock = std::chrono::high_resolution_clock;
+        using clock = std::chrono::steady_clock;
 
-        const auto elapsed = clock::now() - clock::time_point{};
+        const auto elapsed = clock::now() - S->start_time;
 
-        double seconds = std::chrono::duration_cast<std::chrono::duration<double>>(elapsed).count();
+        const auto seconds = std::chrono::duration_cast<std::chrono::duration<double>>(elapsed).count();
         push_number(S, seconds);
 
         return 1;
@@ -24,7 +24,7 @@ namespace behl
 
         const auto elapsed = clock::now().time_since_epoch();
 
-        double seconds = std::chrono::duration_cast<std::chrono::duration<double>>(elapsed).count();
+        const auto seconds = std::chrono::duration_cast<std::chrono::duration<double>>(elapsed).count();
         push_number(S, seconds);
 
         return 1;

@@ -21,10 +21,9 @@ Complete C++ API function reference.
 
 ## Header Files
 
-To use the behl API:
+To use the Behl API:
 ```cpp
-#include <behl/behl.hpp>        // Core API
-#include <behl/exceptions.hpp>  // Exception types
+#include <behl/behl.hpp>  // Core API, includes <behl/types.hpp>
 ```
 
 ---
@@ -35,7 +34,7 @@ To use the behl API:
 ```cpp
 State* new_state()
 ```
-Creates a new behl interpreter state.
+Creates a new Behl interpreter state.
 
 ### `close(State*)`
 ```cpp
@@ -47,7 +46,15 @@ Closes and cleans up the interpreter state.
 ```cpp
 void load_stdlib(State* S)
 ```
-Loads all standard library modules. Modules must be explicitly imported using `import()`.
+Loads the core, table, gc, jit, debug, math, os, string and buffer libraries. Core installs its functions
+directly as globals (`print`, `pcall`, `error`, `pairs`, `import`, ...); the other libraries are
+modules and must be explicitly imported using `import()`.
+
+### `load_lib_buffer(State*)`
+```cpp
+void load_lib_buffer(State* S)
+```
+Registers only the `buffer` module (see [buffer](../stdlib/buffer)). `load_stdlib` already calls it.
 
 ---
 
@@ -133,7 +140,7 @@ Pushes a C function onto the stack.
 Type type(State* S, int32_t idx)
 ```
 Returns the type of value at `idx`.
-- Types: `kNil`, `kBoolean`, `kInteger`, `kNumber`, `kString`, `kTable`, `kClosure`, `kCFunction`, `kUserdata`
+- Types: `kNil`, `kBoolean`, `kInteger`, `kNumber`, `kString`, `kTable`, `kClosure`, `kCFunction`, `kUserdata`, `kBuffer`
 
 ### `type_name(Type)`
 ```cpp
@@ -181,43 +188,49 @@ Returns pointer to userdata, or `nullptr` if not userdata.
 
 ## Type Checking
 
-All `check_*` functions throw `TypeError` if validation fails.
+The `check_*` functions are meant to be called from C functions that Behl called. If validation fails they raise an error with a message such as `TypeError: bad argument #1 (expected integer, got string)`, which the surrounding `call` or script `pcall` reports. They do not return in that case.
 
 ### `check_type(State*, int32_t, Type)`
 ```cpp
 void check_type(State* S, int32_t idx, Type expected)
 ```
-Throws if value at `idx` is not of expected type.
+Raises an error if value at `idx` is not of expected type.
 
 ### `check_integer(State*, int32_t)`
 ```cpp
 Integer check_integer(State* S, int32_t idx)
 ```
-Returns integer value. Throws if not an integer.
+Returns integer value. Also accepts a float whose value is integral (for example `3.0`). Raises an error otherwise.
 
 ### `check_number(State*, int32_t)`
 ```cpp
 FP check_number(State* S, int32_t idx)
 ```
-Returns number value. Throws if not a number.
+Returns number value. Raises an error if not a number.
 
 ### `check_string(State*, int32_t)`
 ```cpp
 std::string_view check_string(State* S, int32_t idx)
 ```
-Returns string value. Throws if not a string.
+Returns string value. Raises an error if not a string.
 
 ### `check_boolean(State*, int32_t)`
 ```cpp
 bool check_boolean(State* S, int32_t idx)
 ```
-Returns boolean value. Throws if not a boolean.
+Returns boolean value. Raises an error if not a boolean.
 
 ### `check_userdata(State*, int32_t, uint32_t)`
 ```cpp
 void* check_userdata(State* S, int32_t idx, uint32_t uid)
 ```
-Returns userdata pointer. Throws if not userdata or UID mismatch.
+Returns userdata pointer. Raises an error if not userdata or UID mismatch.
+
+### `check_buffer(State*, int32_t)`
+```cpp
+std::span<std::byte> check_buffer(State* S, int32_t idx)
+```
+Returns the bytes of the buffer at `idx`. Raises `bad argument #n (expected buffer, got T)` if the value is not a buffer. The span follows the rules in [Buffers](#buffers).
 
 ---
 
@@ -247,22 +260,29 @@ Registers a C function as a global function.
 
 ### `load_string(State*, std::string_view, bool)`
 ```cpp
-void load_string(State* S, std::string_view code, bool optimize = true)
+[[nodiscard]] int32_t load_string(State* S, std::string_view code, bool optimize = true)
 ```
-Compiles a string and pushes resulting function. Throws `SyntaxError` or `ParserError` on compilation failure.
+Compiles a string. Returns `0` and pushes the resulting function on success. On failure returns `kErrorSyntax` (or `kErrorMemory`) and pushes the error message string (`<string>(line,col): SyntaxError: ...`). Does not throw.
 
 ### `load_buffer(State*, std::string_view, std::string_view, bool)`
 ```cpp
-void load_buffer(State* S, std::string_view code, 
-                std::string_view chunkname, bool optimize = true)
+[[nodiscard]] int32_t load_buffer(State* S, std::string_view code,
+                                  std::string_view chunkname, bool optimize = true)
 ```
-Like `load_string` but with custom chunk name for error messages. Throws on error.
+Like `load_string` but with custom chunk name for error messages. Same return values.
 
 ### `call(State*, int32_t, int32_t)`
 ```cpp
-void call(State* S, int32_t nargs, int32_t nresults)
+[[nodiscard]] int32_t call(State* S, int32_t nargs, int32_t nresults)
 ```
-Calls function with `nargs` arguments, expecting `nresults` return values. Throws `RuntimeError`, `TypeError`, or other `BehlException` on error.
+Calls function with `nargs` arguments, expecting `nresults` return values (or `kMultRet`). Returns the number of results pushed (`>= 0`) on success. On error returns `kErrorRuntime` or `kErrorMemory`, removes the function and arguments, and pushes the error value, which can be any type. Script errors are not thrown. C++ exceptions thrown by C functions (other than `std::bad_alloc`) are not caught and propagate to the caller.
+
+```cpp
+if (behl::load_string(S, code) != 0 || behl::call(S, 0, 0) < 0) {
+    std::cerr << behl::to_string(S, -1) << "\n";
+    behl::pop(S, 1);
+}
+```
 
 ---
 
@@ -286,15 +306,15 @@ void table_set(State* S, int32_t idx)
 ```
 Sets value in table. Pops key and value.
 
-### `table_rawget_field(State*, int32_t, std::string_view)`
+### `table_rawgetfield(State*, int32_t, std::string_view)`
 ```cpp
-void table_rawget_field(State* S, int32_t idx, std::string_view field)
+void table_rawgetfield(State* S, int32_t idx, std::string_view field)
 ```
 Gets field by string key (no metatable lookup).
 
-### `table_rawset_field(State*, int32_t, std::string_view)`
+### `table_rawsetfield(State*, int32_t, std::string_view)`
 ```cpp
-void table_rawset_field(State* S, int32_t idx, std::string_view field)
+void table_rawsetfield(State* S, int32_t idx, std::string_view field)
 ```
 Sets field by string key (no metatable lookup). Pops value.
 
@@ -302,17 +322,18 @@ Sets field by string key (no metatable lookup). Pops value.
 
 ## Metatables
 
-### `set_metatable(State*, int32_t)`
+### `metatable_set(State*, int32_t)`
 ```cpp
-void set_metatable(State* S, int32_t idx)
+void metatable_set(State* S, int32_t idx)
 ```
 Sets metatable for value at `idx`. Pops the metatable from stack.
 
-### `get_metatable(State*, int32_t)`
+### `metatable_get(State*, int32_t)`
 ```cpp
-bool get_metatable(State* S, int32_t idx)
+bool metatable_get(State* S, int32_t idx)
 ```
-Gets metatable of value at `idx` and pushes it. Returns `false` if no metatable.
+Gets metatable of value at `idx` and pushes it. If there is no metatable it pushes nil and returns
+`false`, so a value is pushed either way and the caller must pop it.
 
 ---
 
@@ -344,6 +365,66 @@ Generates unique 32-bit identifier from string using FNV-1a.
 
 ---
 
+## Buffers
+
+A buffer is a mutable byte array (script type `buffer`, `Type::kBuffer`). Buffer lengths are `SysInt`
+(`size_t`). See [buffer](../stdlib/buffer) for the script side.
+
+The functions below return a `std::span<std::byte>` over the buffer's bytes. The span stays valid
+while the buffer is reachable and has not been resized, the same rule as the `string_view` returned
+by `to_string`. Any resize (`buffer_resize` or the script function `buffer.resize`) invalidates
+spans obtained earlier, including spans of slices of that buffer.
+
+### `buffer_new(State*, SysInt)`
+```cpp
+std::span<std::byte> buffer_new(State* S, SysInt len)
+```
+Pushes a new zero-filled buffer of `len` bytes and returns its bytes. For `len == 0` the span is empty.
+
+### `buffer_get(State*, int32_t)`
+```cpp
+std::span<std::byte> buffer_get(State* S, int32_t idx)
+```
+Returns the bytes of the buffer at `idx`, or an empty span if the value is not a buffer.
+
+### `buffer_len(State*, int32_t)`
+```cpp
+SysInt buffer_len(State* S, int32_t idx)
+```
+Returns the length in bytes of the buffer at `idx`, or `0` if the value is not a buffer.
+
+### `buffer_resize(State*, int32_t, SysInt)`
+```cpp
+std::span<std::byte> buffer_resize(State* S, int32_t idx, SysInt new_len)
+```
+Resizes the buffer at `idx` to `new_len` bytes and returns its new bytes. Existing bytes up to
+`new_len` are kept and new bytes are zero. Spans obtained earlier are invalidated.
+
+The value must be a buffer that is not a slice. Anything else is API misuse: it asserts in Debug
+builds, and in Release builds nothing is changed and an empty span is returned.
+
+```cpp
+auto bytes = behl::buffer_new(S, 4);
+bytes[0] = std::byte{ 0x2A };
+bytes = behl::buffer_resize(S, -1, 8);   // the old span is no longer valid
+behl::set_global(S, "data");             // scripts see an 8-byte buffer, data[0] == 42
+```
+
+`check_buffer` (see [Type Checking](#type-checking)) is the variant for arguments of C functions.
+
+```cpp
+static int sum_bytes(behl::State* S) {
+    behl::Integer total = 0;
+    for (std::byte b : behl::check_buffer(S, 0)) {
+        total += std::to_integer<behl::Integer>(b);
+    }
+    behl::push_integer(S, total);
+    return 1;
+}
+```
+
+---
+
 ## Modules
 
 ### `create_module(State*, std::string_view, const ModuleDef&)`
@@ -366,7 +447,7 @@ struct ModuleReg {
 
 struct ModuleConst {
     std::string_view name;
-    Value value;
+    std::variant<Integer, FP, std::string_view, bool> value;
 };
 ```
 
@@ -378,40 +459,29 @@ struct ModuleConst {
 ```cpp
 [[noreturn]] void error(State* S, std::string_view msg)
 ```
-Throws a `RuntimeError` exception. Does not return.
+Raises a runtime error. The error value is the string `RuntimeError: <msg>` followed by a newline and the stack trace. Does not return.
 
-### Exception Types
+### `error_value(State*)`
+```cpp
+[[noreturn]] void error_value(State* S)
+```
+Raises the value on top of the stack as the error, whatever its type. Does not return.
 
-All behl exceptions inherit from `behl::BehlException`:
+Both functions must only be called from within a C function that Behl called (while a call is active). Calling them outside a call is API misuse and asserts.
+
+### Status Codes
+
+Defined in `<behl/types.hpp>`:
 
 ```cpp
 namespace behl {
-    class BehlException : public std::exception { };
-    class SyntaxError : public BehlException { };      // Syntax errors
-    class ParserError : public BehlException { };      // Parser errors
-    class SemanticError : public BehlException { };    // Semantic errors
-    class RuntimeError : public BehlException { };     // Runtime errors
-    class TypeError : public BehlException { };        // Type errors
-    class ReferenceError : public BehlException { };   // Undefined variables
-    class ArithmeticError : public BehlException { };  // Math errors
+    constexpr int32_t kErrorRuntime = -1;  // call: runtime error
+    constexpr int32_t kErrorMemory = -2;   // call, load_*: allocation failure
+    constexpr int32_t kErrorSyntax = -3;   // load_*: compile error
 }
 ```
 
-**Usage:**
-```cpp
-try {
-    behl::load_string(S, code);
-    behl::call(S, 0, 0);
-} catch (const behl::SyntaxError& e) {
-    // Handle compile error
-} catch (const behl::TypeError& e) {
-    // Handle type error
-} catch (const behl::RuntimeError& e) {
-    // Handle runtime error
-} catch (const behl::BehlException& e) {
-    // Catch all behl errors
-}
-```
+There are no public C++ exception types. See [Error Handling](error-handling) for the complete error model.
 
 ---
 
@@ -473,30 +543,42 @@ namespace behl {
     using PrintHandler = void (*)(State* S, std::string_view msg);
     
     // Value pin handle
-    using PinHandle = /* implementation-defined */;
-    
-    // Type enumeration
-    enum class Type {
-        kNil, kBoolean, kInteger, kNumber,
-        kString, kTable, kClosure, kCFunction,
-        kUserdata
+    enum class PinHandle : int32_t {
+        kInvalid = -1,
     };
     
-    // Special indices
-    constexpr int32_t REGISTRY_INDEX = /* ... */;
+    // Type enumeration, the enumerator values carry category bits and are not sequential
+    enum class Type : uint8_t {
+        kNil, kBoolean, kInteger, kNumber,
+        kString, kTable, kClosure, kCFunction,
+        kUserdata, kBuffer
+    };
 }
 ```
 
 ---
 
-## Constants
+## Named Metatables
 
-### `REGISTRY_INDEX`
+Metatables can be registered under a name and looked up again later, which is how you attach a
+shared metatable to every instance of a userdata type.
 
-Special stack index for the registry table. Use for storing metatables and other internal values.
+### `metatable_new(State*, std::string_view)`
+```cpp
+bool metatable_new(State* S, std::string_view name)
+```
+Creates a metatable with the given name and pushes it. Returns `false` if one with that name already
+exists; the existing metatable is pushed in that case.
+
+### `metatable_find(State*, std::string_view)`
+```cpp
+void metatable_find(State* S, std::string_view name)
+```
+Pushes the metatable registered under `name`, or nil if there is none.
 
 ```cpp
-behl::table_rawset_field(S, behl::REGISTRY_INDEX, "MyType_mt");
+behl::metatable_find(S, "MyType_mt");
+behl::metatable_set(S, -2);
 ```
 
 ---

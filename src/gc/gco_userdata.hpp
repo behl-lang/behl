@@ -2,6 +2,9 @@
 
 #include "gc_object.hpp"
 
+#include <cstddef>
+#include <type_traits>
+
 namespace behl
 {
     struct GCTable;
@@ -10,6 +13,8 @@ namespace behl
     {
         static constexpr auto kObjectType = GCType::kUserdata;
 
+        GCOHeader header{};
+
         GCTable* metatable = nullptr;
 
         void* data = nullptr;
@@ -17,9 +22,12 @@ namespace behl
         uint32_t uid = 0;
 
         UserdataData()
-            : GCObject(kObjectType)
+            : header(kObjectType)
         {
         }
     };
+
+    static_assert(std::is_standard_layout_v<UserdataData>);
+    static_assert(offsetof(UserdataData, header) == 0);
 
 } // namespace behl

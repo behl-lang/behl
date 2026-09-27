@@ -6,7 +6,10 @@
 #include "gc/gco_userdata.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
+#include "vm/vm_detail.hpp"
+#include "vm/vm_error.hpp"
 #include "vm/vm_metatable.hpp"
+#include "vm/vm_table.hpp"
 
 #include <behl/behl.hpp>
 #include <variant>
@@ -67,25 +70,7 @@ namespace behl
         auto* t = table_val.get_table();
         assert(t != nullptr);
 
-        if (key.is_integer())
-        {
-            int64_t k = key.get_integer();
-            if (k >= 0 && static_cast<size_t>(k) < t->array.size())
-            {
-                S->stack.push_back(S, t->array[static_cast<size_t>(k)]);
-                return;
-            }
-        }
-
-        auto it = t->hash.find(key);
-        if (it != t->hash.end())
-        {
-            S->stack.push_back(S, it->second);
-        }
-        else
-        {
-            push_nil(S);
-        }
+        S->stack.push_back(S, table_raw_getfield(t, key));
     }
 
     void table_rawset(State* S, int32_t idx)
@@ -117,24 +102,7 @@ namespace behl
         GCTable* t = table_val.get_table();
         assert(t != nullptr);
 
-        if (key.is_integer())
-        {
-            int64_t k = key.get_integer();
-            if (k >= 0)
-            {
-                size_t sk = static_cast<size_t>(k);
-                if (sk >= t->array.size())
-                {
-                    t->array.resize(S, sk + 1);
-                }
-
-                t->array[sk] = std::move(val);
-                return;
-            }
-        }
-
-        t->hash.insert_or_assign(S, key, val);
-        // t->hash.emplace(key, val);
+        table_raw_setfield(S, t, key, val);
     }
 
     void table_rawgetfield(State* S, int32_t idx, std::string_view k)
@@ -182,17 +150,9 @@ namespace behl
         size_t start_i = 0;
         if (!prev_key.is_nil())
         {
-            if (prev_key.is_integer())
+            if (const auto index = key_as_positive_index(prev_key); index.has_value() && *index < t->array.size())
             {
-                auto pk = prev_key.get_integer();
-                if (pk >= 0)
-                {
-                    start_i = static_cast<size_t>(pk) + 1;
-                }
-                else
-                {
-                    in_array_phase = false;
-                }
+                start_i = *index + 1;
             }
             else
             {
@@ -223,10 +183,9 @@ namespace behl
                 ++prev_it;
                 it = prev_it;
             }
-            else if (!prev_key.is_integer())
+            else if (!in_array_phase || start_i > t->array.size())
             {
-                // Non-integer key not found in hash - error
-                return false;
+                raise_runtime_error(S, SourceLocation{}, "invalid key to 'next'");
             }
 
             // integer key not in hash means we just finished array part, start hash iteration
@@ -304,14 +263,10 @@ namespace behl
         Value result;
         bool found = false;
 
-        if (key.is_integer())
+        if (const auto index = key_as_positive_index(key); index.has_value() && *index < t->array.size())
         {
-            int64_t k = key.get_integer();
-            if (k >= 0 && static_cast<size_t>(k) < t->array.size())
-            {
-                result = t->array[static_cast<size_t>(k)];
-                found = !result.is_nil();
-            }
+            result = t->array[*index];
+            found = !result.is_nil();
         }
 
         if (!found)
@@ -406,16 +361,9 @@ namespace behl
         // Check if key exists in the table (raw check)
         bool exists = false;
 
-        if (key.is_integer())
+        if (const auto index = key_as_positive_index(key); index.has_value() && *index < t->array.size())
         {
-            const auto k = key.get_integer();
-            if (k >= 0 && static_cast<size_t>(k) < t->array.size())
-            {
-                if (!t->array[static_cast<size_t>(k)].is_nil())
-                {
-                    exists = true;
-                }
-            }
+            exists = !t->array[*index].is_nil();
         }
 
         if (!exists)
@@ -430,21 +378,7 @@ namespace behl
         // If key exists, do raw set
         if (exists)
         {
-            if (key.is_integer())
-            {
-                const auto k = key.get_integer();
-                if (k >= 0)
-                {
-                    size_t sk = static_cast<size_t>(k);
-                    if (sk >= t->array.size())
-                    {
-                        t->array.resize(S, sk + 1);
-                    }
-                    t->array[sk] = std::move(val);
-                    return;
-                }
-            }
-            t->hash.insert_or_assign(S, key, val);
+            table_raw_setfield(S, t, key, val);
             return;
         }
 
@@ -454,21 +388,7 @@ namespace behl
         if (!newindex_mm.has_value())
         {
             // No metamethod, do raw set
-            if (key.is_integer())
-            {
-                const auto k = key.get_integer();
-                if (k >= 0)
-                {
-                    size_t sk = static_cast<size_t>(k);
-                    if (sk >= t->array.size())
-                    {
-                        t->array.resize(S, sk + 1);
-                    }
-                    t->array[sk] = std::move(val);
-                    return;
-                }
-            }
-            t->hash.insert_or_assign(S, key, val);
+            table_raw_setfield(S, t, key, val);
             return;
         }
 
@@ -614,10 +534,18 @@ namespace behl
 
         if (target.is_table())
         {
+            if (metatable != nullptr)
+            {
+                gc_barrier(S, target.get_table(), Value(metatable));
+            }
             target.get_table()->metatable = metatable;
         }
         else if (target.is_userdata())
         {
+            if (metatable != nullptr)
+            {
+                gc_barrier(S, target.get_userdata(), Value(metatable));
+            }
             target.get_userdata()->metatable = metatable;
         }
     }

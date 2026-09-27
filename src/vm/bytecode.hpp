@@ -2,7 +2,7 @@
 
 #include "common/string.hpp"
 #include "config_internal.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -117,10 +117,11 @@ namespace behl
         kOpMMBxor,
         kOpMMShl,
         kOpMMShr,
+        kOpClose,
     };
 
     // Total number of opcodes - computed from last enum value
-    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpMMShr) + 1;
+    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpClose) + 1;
 
     struct Instruction
     {
@@ -362,11 +363,11 @@ namespace behl
         return i;
     }
 
-    constexpr Instruction make_op_setlist(Reg a, uint8_t num_fields, uint8_t extra) noexcept
+    constexpr Instruction make_op_setlist(Reg a, uint8_t num_fields, uint8_t batch) noexcept
     {
         Instruction i{};
         i.raw = (static_cast<uint32_t>(OpCode::kOpSetList) << 25) | static_cast<uint32_t>(a)
-            | (static_cast<uint32_t>(num_fields) << 8) | (static_cast<uint32_t>(extra) << 16);
+            | (static_cast<uint32_t>(num_fields) << 8) | (static_cast<uint32_t>(batch) << 16);
         return i;
     }
 
@@ -508,6 +509,13 @@ namespace behl
         return i;
     }
 
+    constexpr Instruction make_op_close(Reg a) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpClose) << 25) | static_cast<uint32_t>(a);
+        return i;
+    }
+
     constexpr Instruction make_op_closure(Reg a, ProtoIndex proto_idx) noexcept
     {
         Instruction i{};
@@ -515,11 +523,11 @@ namespace behl
         return i;
     }
 
-    constexpr Instruction make_op_test(Reg a, bool invert) noexcept
+    constexpr Instruction make_op_test(Reg a, bool invert, bool nil_only = false) noexcept
     {
         Instruction i{};
-        i.raw = (static_cast<uint32_t>(OpCode::kOpTest) << 25) | static_cast<uint32_t>(a)
-            | (static_cast<uint32_t>(invert) << 8);
+        i.raw = (static_cast<uint32_t>(OpCode::kOpTest) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(invert) << 8)
+            | (static_cast<uint32_t>(nil_only) << 16);
         return i;
     }
 
@@ -561,6 +569,9 @@ namespace behl
         i.raw = (static_cast<uint32_t>(OpCode::kOpReturn1) << 25) | static_cast<uint32_t>(a);
         return i;
     }
+
+    inline constexpr int32_t kForModeDescending = 1;
+    inline constexpr int32_t kForModeInclusive = 2;
 
     constexpr Instruction make_op_forprep(Reg a, int32_t offset) noexcept
     {
@@ -794,8 +805,7 @@ namespace behl
     constexpr Instruction make_op_saveret(Reg a, uint8_t b) noexcept
     {
         Instruction i{};
-        i.raw = (static_cast<uint32_t>(OpCode::kOpSaveRet) << 25) | static_cast<uint32_t>(a)
-            | (static_cast<uint32_t>(b) << 8);
+        i.raw = (static_cast<uint32_t>(OpCode::kOpSaveRet) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8);
         return i;
     }
 

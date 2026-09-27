@@ -93,6 +93,6 @@ namespace behl
         int column;
     };
 
-    BEHL_API_INTERNAL AutoVector<Token> tokenize(State* state, std::string_view source, std::string_view chunkname = "<script>");
+    AutoVector<Token> tokenize(State* state, std::string_view source, std::string_view chunkname = "<script>");
 
 } // namespace behl

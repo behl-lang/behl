@@ -1,12 +1,16 @@
 #pragma once
 
+#include "common/format.hpp"
 #include "gc_object.hpp"
 #include "gc_types.hpp"
 
-#include <behl/exceptions.hpp>
+#include <behl/config.hpp>
 #include <behl/export.hpp>
 #include <memory>
 #include <span>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 
 namespace behl
 {
@@ -14,6 +18,7 @@ namespace behl
     struct GCString;
     struct GCTable;
     struct UserdataData;
+    struct GCBuffer;
     struct GCClosure;
     struct GCProto;
     struct Proto;
@@ -21,6 +26,7 @@ namespace behl
     void gc_init(State* S);
     BEHL_API void gc_collect(State* S);
     BEHL_API void gc_step(State* S);
+    void gc_barrier_slow(State* S, GCObject* stored) noexcept;
     void gc_close(State* S);
     void gc_pause(State* S);
     bool gc_is_paused(State* S);
@@ -35,7 +41,21 @@ namespace behl
 
     GCString* gc_new_string(State* S, std::initializer_list<std::string_view> strings);
 
+    template<typename... Args>
+    GCString* gc_new_string_format(State* S, format_string<std::type_identity_t<Args>...> fmt, Args&&... args)
+    {
+        format_buffer buffer;
+        format_to(buffer, fmt, std::forward<Args>(args)...);
+        return gc_new_string(S, buffer.view());
+    }
+
     UserdataData* gc_new_userdata(State* S, size_t size);
+
+    GCBuffer* gc_new_buffer(State* S, SysInt len);
+
+    GCBuffer* gc_new_buffer_slice(State* S, GCBuffer* source, SysInt offset, SysInt len);
+
+    void gc_buffer_resize(State* S, GCBuffer* root, SysInt new_len);
 
     GCClosure* gc_new_closure(State* S, GCProto* proto_owner);
 

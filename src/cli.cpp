@@ -34,7 +34,10 @@ struct Options
 {
     Mode mode = Mode::Interactive;
     std::string execute_code;
-    std::vector<std::string> scripts;
+    std::string script;
+    std::vector<std::string> script_args;
+    bool disable_jit = false;
+    bool jit_stats = false;
 };
 
 template<typename... TArgs>
@@ -60,6 +63,11 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
     for (int i = 1; i < argc; ++i)
     {
         std::string_view arg = argv[i];
+        if (!opts.script.empty())
+        {
+            opts.script_args.emplace_back(arg);
+            continue;
+        }
         if (arg == "-i")
         {
             if (mode_set)
@@ -96,6 +104,14 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
             opts.execute_code = argv[++i];
             mode_set = true;
         }
+        else if (arg == "--nojit")
+        {
+            opts.disable_jit = true;
+        }
+        else if (arg == "--jit-stats")
+        {
+            opts.jit_stats = true;
+        }
         else if (arg.starts_with('-'))
         {
             error_msg = behl::format("unrecognized option '{}'", arg);
@@ -103,14 +119,14 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
         }
         else
         {
-            opts.scripts.emplace_back(arg);
+            opts.script = arg;
         }
     }
 
     // Determine mode based on what was provided
     if (!mode_set)
     {
-        if (!opts.scripts.empty())
+        if (!opts.script.empty())
         {
             opts.mode = Mode::Run;
         }
@@ -119,7 +135,7 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
             opts.mode = Mode::Interactive;
         }
     }
-    else if (!opts.scripts.empty())
+    else if (!opts.script.empty())
     {
         // Mode was explicitly set, apply it to scripts
         if (opts.mode == Mode::Interactive)
@@ -142,6 +158,15 @@ std::optional<Options> parse_args(int argc, char* argv[], std::string& error_msg
     return opts;
 }
 
+static std::string error_text(behl::State* S)
+{
+    if (behl::type(S, -1) == behl::Type::kString)
+    {
+        return std::string(behl::to_string(S, -1));
+    }
+    return behl::format("(error object is a {} value)", behl::value_typename(S, -1));
+}
+
 bool load_file(behl::State* S, std::string_view filename, std::string& error_msg)
 {
     std::ifstream file(filename.data(), std::ios::binary);
@@ -158,7 +183,12 @@ bool load_file(behl::State* S, std::string_view filename, std::string& error_msg
     file.seekg(0, std::ios::beg);
     file.read(&content[0], static_cast<std::streamsize>(content.size()));
 
-    behl::load_buffer(S, content, filename.data(), true);
+    if (behl::load_buffer(S, content, filename.data(), true) < 0)
+    {
+        error_msg = error_text(S);
+        behl::pop(S, 1);
+        return false;
+    }
 
     return true;
 }
@@ -200,13 +230,10 @@ static void print_results(behl::State* S)
     // Move print to bottom (before all results)
     behl::insert(S, 0);
 
-    try
+    if (behl::call(S, num_results, 0) < 0)
     {
-        behl::call(S, num_results, 0);
-    }
-    catch (const std::exception& ex)
-    {
-        print_error("Error printing results: {}", ex.what());
+        print_error("Error printing results: {}", error_text(S));
+        behl::pop(S, 1);
     }
 }
 
@@ -228,50 +255,45 @@ void repl(behl::State* S)
             continue;
         }
 
-        try
+        if (behl::load_string(S, line) < 0 || behl::call(S, 0, behl::kMultRet) < 0)
         {
-            behl::load_string(S, line);
-            behl::call(S, 0, behl::kMultRet);
-
-            print_results(S);
+            print_error("{}", error_text(S));
             behl::set_top(S, 0);
+            continue;
         }
-        catch (const std::exception& ex)
-        {
-            print_error("{}", ex.what());
-        }
+
+        print_results(S);
+        behl::set_top(S, 0);
     }
     println("");
 }
 
 static int run_execute_mode(behl::State* S, const Options& opts)
 {
-    behl::load_string(S, opts.execute_code);
-    behl::call(S, 0, behl::kMultRet);
+    if (behl::load_string(S, opts.execute_code) < 0 || behl::call(S, 0, behl::kMultRet) < 0)
+    {
+        print_error("{}", error_text(S));
+        return 1;
+    }
     print_results(S);
     return 0;
 }
 
 static int run_dump_mode(behl::State* S, const Options& opts)
 {
-    if (!opts.scripts.empty())
+    if (!opts.script.empty())
     {
-        if (opts.scripts.size() > 1)
-        {
-            print_error("Error: bytecode dump (-b) only works with a single file");
-            return 1;
-        }
-
         std::string load_error;
-        if (!load_file(S, opts.scripts[0], load_error))
+        if (!load_file(S, opts.script, load_error))
         {
             print_error("{}", load_error);
             return 1;
         }
     }
-    else
+    else if (behl::load_string(S, opts.execute_code) < 0)
     {
-        behl::load_string(S, opts.execute_code);
+        print_error("{}", error_text(S));
+        return 1;
     }
 
     dump_closure_bytecode(S);
@@ -280,18 +302,24 @@ static int run_dump_mode(behl::State* S, const Options& opts)
 
 static int run_script_mode(behl::State* S, const Options& opts)
 {
-    for (const auto& script : opts.scripts)
+    std::string load_error;
+    if (!load_file(S, opts.script, load_error))
     {
-        std::string load_error;
-        if (!load_file(S, script, load_error))
-        {
-            print_error("{}", load_error);
-            return 1;
-        }
-
-        behl::call(S, 0, behl::kMultRet);
-        print_results(S);
+        print_error("{}", load_error);
+        return 1;
     }
+
+    for (const auto& script_arg : opts.script_args)
+    {
+        behl::push_string(S, script_arg);
+    }
+
+    if (behl::call(S, static_cast<int32_t>(opts.script_args.size()), behl::kMultRet) < 0)
+    {
+        print_error("{}", error_text(S));
+        return 1;
+    }
+    print_results(S);
     return 0;
 }
 
@@ -341,6 +369,10 @@ int main(int argc, char* argv[])
     const Options& opts = *opts_result;
 
     behl::State* S = behl::new_state();
+    if (opts.disable_jit)
+    {
+        S->jit_enabled = false;
+    }
     behl::load_stdlib(S);
     behl::load_lib_fs(S);
     behl::load_lib_process(S);
@@ -354,6 +386,13 @@ int main(int argc, char* argv[])
     {
         fatal_error("{}", ex.what());
     }
+
+#if BEHL_JIT_SUPPORTED
+    if (opts.jit_stats)
+    {
+        behl::jit_stats_print(S);
+    }
+#endif
 
     behl::close(S);
     return exit_code;

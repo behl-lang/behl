@@ -1,7 +1,13 @@
-#include <behl/behl.hpp>
-#include <gtest/gtest.h>
+#include "state.hpp"
+#include "test_helpers.hpp"
 
-class ModuleTest : public ::testing::Test
+#include <behl/behl.hpp>
+#include <filesystem>
+#include <fstream>
+#include <gtest/gtest.h>
+#include <string>
+
+class ModuleTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -9,6 +15,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_stdlib(S);
     }
@@ -22,14 +29,14 @@ protected:
     }
 };
 
-TEST_F(ModuleTest, Module_ExportConst)
+TEST_P(ModuleTest, Module_ExportConst)
 {
     constexpr std::string_view code = R"(
         module;
         export const VALUE = 42;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
     behl::table_rawgetfield(S, -1, "VALUE");
@@ -37,7 +44,7 @@ TEST_F(ModuleTest, Module_ExportConst)
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ModuleTest, Module_ExportFunction)
+TEST_P(ModuleTest, Module_ExportFunction)
 {
     constexpr std::string_view code = R"(
         module;
@@ -45,8 +52,8 @@ TEST_F(ModuleTest, Module_ExportFunction)
             return a + b;
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
     behl::table_rawgetfield(S, -1, "add");
@@ -54,11 +61,11 @@ TEST_F(ModuleTest, Module_ExportFunction)
 
     behl::push_integer(S, 5);
     behl::push_integer(S, 3);
-    ASSERT_NO_THROW(behl::call(S, 2, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 2, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 8);
 }
 
-TEST_F(ModuleTest, Module_PrivateVariables)
+TEST_P(ModuleTest, Module_PrivateVariables)
 {
     constexpr std::string_view code = R"(
         module;
@@ -70,8 +77,8 @@ TEST_F(ModuleTest, Module_PrivateVariables)
             return privateVar + privateFunc();
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
     behl::table_rawgetfield(S, -1, "privateVar");
@@ -84,11 +91,11 @@ TEST_F(ModuleTest, Module_PrivateVariables)
 
     behl::table_rawgetfield(S, -1, "getPrivate");
     ASSERT_EQ(behl::type(S, -1), behl::Type::kClosure);
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 579);
 }
 
-TEST_F(ModuleTest, Module_NoGlobalAccess)
+TEST_P(ModuleTest, Module_NoGlobalAccess)
 {
     behl::push_integer(S, 999);
     behl::set_global(S, "globalVar");
@@ -100,10 +107,10 @@ TEST_F(ModuleTest, Module_NoGlobalAccess)
         }
     )";
 
-    EXPECT_THROW(behl::load_string(S, code), std::exception);
+    EXPECT_TRUE(behl_test::load_fails(S, code));
 }
 
-TEST_F(ModuleTest, Module_NoGlobalSet)
+TEST_P(ModuleTest, Module_NoGlobalSet)
 {
     constexpr std::string_view code = R"(
         module;
@@ -111,10 +118,10 @@ TEST_F(ModuleTest, Module_NoGlobalSet)
         export const TEST = 1;
     )";
 
-    EXPECT_THROW(behl::load_string(S, code), std::exception);
+    EXPECT_TRUE(behl_test::load_fails(S, code));
 }
 
-TEST_F(ModuleTest, Module_CanUseBuiltins)
+TEST_P(ModuleTest, Module_CanUseBuiltins)
 {
     constexpr std::string_view code = R"(
         module;
@@ -128,29 +135,29 @@ TEST_F(ModuleTest, Module_CanUseBuiltins)
             return typeof(x);
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
     behl::table_rawgetfield(S, -1, "stringify");
     behl::push_integer(S, 42);
-    ASSERT_NO_THROW(behl::call(S, 1, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 1, 1));
     EXPECT_EQ(behl::to_string(S, -1), "42");
     behl::pop(S, 1);
 
     behl::table_rawgetfield(S, -1, "parseNum");
     behl::push_string(S, "123");
-    ASSERT_NO_THROW(behl::call(S, 1, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 1, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 123);
     behl::pop(S, 1);
 
     behl::table_rawgetfield(S, -1, "getType");
     behl::push_integer(S, 42);
-    ASSERT_NO_THROW(behl::call(S, 1, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 1, 1));
     EXPECT_EQ(behl::to_string(S, -1), "integer");
 }
 
-TEST_F(ModuleTest, Module_StatefulExports)
+TEST_P(ModuleTest, Module_StatefulExports)
 {
     constexpr std::string_view code = R"(
         module;
@@ -166,47 +173,47 @@ TEST_F(ModuleTest, Module_StatefulExports)
             counter = 0;
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
     behl::table_rawgetfield(S, -1, "increment");
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 1);
     behl::pop(S, 1);
 
     behl::table_rawgetfield(S, -1, "increment");
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 2);
     behl::pop(S, 1);
 
     behl::table_rawgetfield(S, -1, "getCount");
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 2);
     behl::pop(S, 1);
 
     behl::table_rawgetfield(S, -1, "reset");
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     behl::table_rawgetfield(S, -1, "getCount");
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(ModuleTest, Module_Empty)
+TEST_P(ModuleTest, Module_Empty)
 {
     constexpr std::string_view code = R"(
         module;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
     behl::push_nil(S);
     EXPECT_FALSE(behl::table_next(S, -2));
 }
 
-TEST_F(ModuleTest, Module_UndefinedVariable)
+TEST_P(ModuleTest, Module_UndefinedVariable)
 {
     constexpr std::string_view code = R"(
         module;
@@ -215,10 +222,10 @@ TEST_F(ModuleTest, Module_UndefinedVariable)
         }
     )";
 
-    EXPECT_THROW(behl::load_string(S, code), std::exception);
+    EXPECT_TRUE(behl_test::load_fails(S, code));
 }
 
-TEST_F(ModuleTest, Module_CanAccessStdLib)
+TEST_P(ModuleTest, Module_CanAccessStdLib)
 {
     constexpr std::string_view code = R"(
         module;
@@ -231,23 +238,23 @@ TEST_F(ModuleTest, Module_CanAccessStdLib)
             return math.abs(x);
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::type(S, -1), behl::Type::kTable);
 
     behl::table_rawgetfield(S, -1, "upperCase");
     behl::push_string(S, "hello");
-    ASSERT_NO_THROW(behl::call(S, 1, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 1, 1));
     EXPECT_EQ(behl::to_string(S, -1), "HELLO");
     behl::pop(S, 1);
 
     behl::table_rawgetfield(S, -1, "abs");
     behl::push_integer(S, -42);
-    ASSERT_NO_THROW(behl::call(S, 1, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 1, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(ModuleTest, Module_CannotAccessStdLibWithoutImport)
+TEST_P(ModuleTest, Module_CannotAccessStdLibWithoutImport)
 {
     constexpr std::string_view code = R"(
         module;
@@ -256,5 +263,230 @@ TEST_F(ModuleTest, Module_CannotAccessStdLibWithoutImport)
         }
     )";
 
-    EXPECT_THROW(behl::load_string(S, code), std::exception);
+    EXPECT_TRUE(behl_test::load_fails(S, code));
 }
+
+class ModuleFileTest : public ::testing::TestWithParam<bool>
+{
+protected:
+    behl::State* S = nullptr;
+    std::filesystem::path root;
+
+    void SetUp() override
+    {
+        S = behl::new_state();
+        S->jit_enabled = GetParam();
+        ASSERT_NE(S, nullptr);
+        behl::load_stdlib(S);
+
+        const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        root = std::filesystem::temp_directory_path() / "behl_module_tests" / info->name();
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        std::filesystem::create_directories(root);
+    }
+
+    void TearDown() override
+    {
+        if (S)
+        {
+            behl::close(S);
+        }
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+
+    void write_file(const std::filesystem::path& relative, std::string_view content)
+    {
+        const auto full = root / relative;
+        std::filesystem::create_directories(full.parent_path());
+        std::ofstream out(full);
+        out << content;
+    }
+
+    std::string main_path() const
+    {
+        return (root / "main.behl").string();
+    }
+};
+
+TEST_P(ModuleFileTest, ImportResolvesSiblingOfImporter)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 99;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.VALUE;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 99);
+}
+
+TEST_P(ModuleFileTest, ExportListExportsSeveralNames)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const A = 1;\n"
+        "const B = 2;\n"
+        "const C = 3;\n"
+        "function add(x, y) { return x + y }\n"
+        "export { A, B, C, add };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.A + h.B + h.C + h.add(10, 20);
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 36);
+}
+
+TEST_P(ModuleFileTest, ExportListWithSingleNameWorks)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const ONLY = 42;\n"
+        "export { ONLY };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.ONLY;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 42);
+}
+
+TEST_P(ModuleFileTest, ExportListDoesNotExportOmittedNames)
+{
+    write_file("helper.behl",
+        "module;\n"
+        "const SHOWN = 1;\n"
+        "const HIDDEN = 2;\n"
+        "export { SHOWN };\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.HIDDEN == nil;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_TRUE(behl::to_boolean(S, -1));
+}
+
+TEST_P(ModuleFileTest, ImportResolvesModulesSubdirectoryOfImporter)
+{
+    write_file("modules/helper.behl", "module;\nexport const VALUE = 7;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("helper");
+        return h.VALUE;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7);
+}
+
+TEST_P(ModuleFileTest, ImportResolvesExplicitRelativePath)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 11;\n");
+
+    constexpr std::string_view code = R"(
+        const h = import("./helper");
+        return h.VALUE;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 11);
+}
+
+TEST_P(ModuleFileTest, ImportResolvesFromNestedImporter)
+{
+    write_file("nested/helper.behl", "module;\nexport const VALUE = 5;\n");
+    write_file("nested/mid.behl", "module;\nconst h = import(\"helper\");\nexport const DOUBLED = h.VALUE * 2;\n");
+
+    constexpr std::string_view code = R"(
+        const m = import("./nested/mid");
+        return m.DOUBLED;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 10);
+}
+
+TEST_P(ModuleFileTest, ImportFailureNamesTheModule)
+{
+    constexpr std::string_view code = R"(
+        const h = import("definitely_absent_module");
+        return 1;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 1)) << "expected import of a missing module to fail";
+    const std::string message = behl_test::error_text(S);
+
+    ASSERT_FALSE(message.empty()) << "expected import of a missing module to fail";
+    EXPECT_NE(message.find("definitely_absent_module"), std::string::npos)
+        << "error message should name the module, got: " << message;
+}
+
+TEST_P(ModuleFileTest, SecondImportReturnsSameTable)
+{
+    write_file("helper.behl", "module;\nexport const V = 1;\n");
+
+    constexpr std::string_view code = R"(
+        const a = import("./helper");
+        const b = import("./helper");
+        return a == b, a.V;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(ModuleFileTest, FailingModuleIsNotCachedAndRunsAgain)
+{
+    write_file("flaky.behl",
+        "attempts = (attempts || 0) + 1\n"
+        "if (attempts == 1) { error(\"first load fails\") }\n"
+        "return { n = attempts }\n");
+
+    const std::string code = "let p = \"" + (root / "flaky").generic_string()
+        + "\"\n"
+          "let ok1 = pcall(import, p)\n"
+          "let ok2, m2 = pcall(import, p)\n"
+          "let ok3, m3 = pcall(import, p)\n"
+          "return ok1, ok2, ok2 && m2.n, ok3 && m2 == m3, attempts\n";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
+    EXPECT_FALSE(behl::to_boolean(S, -5));
+    EXPECT_TRUE(behl::to_boolean(S, -4));
+    EXPECT_EQ(behl::to_integer(S, -3), 2);
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_P(ModuleFileTest, ImportInsideFunctionResolvesRelativeToImporter)
+{
+    write_file("helper.behl", "module;\nexport const VALUE = 3;\n");
+
+    constexpr std::string_view code = R"(
+        function load_dot() { return import("./helper"); }
+        function load_plain() { return import("helper"); }
+        let ok1, a = pcall(load_dot);
+        let ok2, b = pcall(load_plain);
+        return ok1 && a.VALUE, ok2 && b.VALUE;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, main_path()));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 3);
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, ModuleTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
+
+INSTANTIATE_TEST_SUITE_P(Mode, ModuleFileTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -5,6 +5,7 @@
 #include "config_internal.hpp"
 #include "gc_object.hpp"
 #include "gc_types_fmt.hpp"
+#include "gco_buffer.hpp"
 #include "gco_closure.hpp"
 #include "gco_proto.hpp"
 #include "gco_string.hpp"
@@ -18,6 +19,7 @@
 #include "vm/vm_metatable.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 
 namespace behl
@@ -28,7 +30,7 @@ namespace behl
         if constexpr (kGCLoggingEnabled)
         {
             std::string type_info;
-            switch (obj->type)
+            switch (obj->get_header().type)
             {
                 case GCType::kString:
                 {
@@ -46,7 +48,7 @@ namespace behl
                     }
                     else
                     {
-                        type_info = behl::format<"Table[arr={}, hash={}}]">(table->array.size(), table->hash.size());
+                        type_info = behl::format<"Table[arr={}, hash={}]">(table->array.size(), table->hash.size());
                     }
                     break;
                 }
@@ -62,12 +64,19 @@ namespace behl
                     type_info = behl::format<"Userdata[{}b]">(userdata->size);
                     break;
                 }
+                case GCType::kBuffer:
+                {
+                    auto* buffer = static_cast<GCBuffer*>(obj);
+                    type_info = behl::format<"Buffer[{}b]">(buffer->len);
+                    break;
+                }
                 default:
-                    type_info = behl::format<"Unknown[type={}]">(obj->type);
+                    type_info = behl::format<"Unknown[type={}]">(static_cast<int>(obj->get_header().type));
                     break;
             }
 
-            return behl::format<"{{ color={}, {:p} {} }}">(to_string(obj->color), static_cast<const void*>(obj), type_info);
+            return behl::format<"{{ color={}, {:p} {} }}">(
+                to_string(obj->get_header().color), static_cast<const void*>(obj), type_info);
         }
         else
         {
@@ -140,10 +149,10 @@ namespace behl
     {
         auto* obj = mem_create<T>(S);
 
-        obj->type = T::kObjectType;
-        obj->next = nullptr;
-        obj->prev = nullptr;
-        obj->color = GCColor::kBlack; // New objects are black (survive current cycle)
+        obj->header.type = T::kObjectType;
+        obj->header.next = nullptr;
+        obj->header.prev = nullptr;
+        obj->header.color = GCColor::kBlack; // New objects are black (survive current cycle)
 
         S->gc.gc_all_objects.append(obj);
 
@@ -159,24 +168,39 @@ namespace behl
             S->gc.gc_pool_hits++;
 
             new_obj = static_cast<GCTable*>(S->gc.gc_table_pool.pop_front());
-            S->gc.gc_all_objects.append(new_obj);
 
-            assert(new_obj->type == GCType::kTable);
-            new_obj->color = GCColor::kBlack;
-
-            new_obj->metatable = nullptr;
             new_obj->array.reserve(S, initial_array_capacity);
             new_obj->hash.reserve(S, initial_hash_capacity);
+
+            S->gc.gc_all_objects.append(new_obj);
+
+            assert(new_obj->header.type == GCType::kTable);
+            new_obj->header.color = GCColor::kBlack;
+
+            new_obj->metatable = nullptr;
         }
         else
         {
             S->gc.gc_pool_misses++;
 
-            new_obj = gc_allocate_object<GCTable>(S);
+            decltype(GCTable::array) array;
+            decltype(GCTable::hash) hash;
+            array.init(S, initial_array_capacity);
+            try
+            {
+                hash.init(S, initial_hash_capacity);
+                new_obj = gc_allocate_object<GCTable>(S);
+            }
+            catch (...)
+            {
+                hash.destroy(S);
+                array.destroy(S);
+                throw;
+            }
 
             new_obj->metatable = nullptr;
-            new_obj->array.init(S, initial_array_capacity);
-            new_obj->hash.init(S, initial_hash_capacity);
+            new_obj->array = std::move(array);
+            new_obj->hash = std::move(hash);
         }
 
         assert(new_obj != nullptr);
@@ -202,7 +226,7 @@ namespace behl
             size_t smallest_capacity_distance = std::numeric_limits<size_t>::max();
             [[maybe_unused]] size_t search_iterations = 0;
 
-            for (auto* candidate = S->gc.gc_string_pool.head(); candidate != nullptr; candidate = candidate->next)
+            for (auto* candidate = S->gc.gc_string_pool.head(); candidate != nullptr; candidate = candidate->get_header().next)
             {
                 auto* other = static_cast<GCString*>(candidate);
 
@@ -250,8 +274,8 @@ namespace behl
                 S->gc.gc_string_pool.remove(new_obj);
                 S->gc.gc_all_objects.append(new_obj);
 
-                assert(new_obj->type == GCType::kString);
-                new_obj->color = GCColor::kBlack;
+                assert(new_obj->header.type == GCType::kString);
+                new_obj->header.color = GCColor::kBlack;
 
                 // Zero out the buffer if SSO to avoid comparing garbage bytes
                 if (new_obj->is_sso())
@@ -263,7 +287,10 @@ namespace behl
                 size_t offset = 0;
                 for (auto& s : str)
                 {
-                    std::memcpy(new_obj->data() + offset, s.data(), s.size());
+                    if (!s.empty())
+                    {
+                        std::memcpy(new_obj->data() + offset, s.data(), s.size());
+                    }
                     offset += s.size();
                 }
 
@@ -277,7 +304,7 @@ namespace behl
                     new_obj->storage.heap.len = total_size_required;
                 }
 
-                new_obj->str_hash = string_hash32(new_obj->view());
+                new_obj->header.object_hash = StringHash32{}(new_obj->view());
 
                 gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -287,37 +314,54 @@ namespace behl
 
         S->gc.gc_pool_misses++;
 
-        new_obj = gc_allocate_object<GCString>(S);
+        char* heap_data = nullptr;
+        if (total_size_required > GCString::kSSOCapacity)
+        {
+            heap_data = static_cast<char*>(mem_alloc(S, total_size_required));
 
-        if (total_size_required <= GCString::kSSOCapacity)
+            size_t offset = 0;
+            for (auto& s : str)
+            {
+                if (!s.empty())
+                {
+                    std::memcpy(heap_data + offset, s.data(), s.size());
+                }
+                offset += s.size();
+            }
+        }
+
+        try
+        {
+            new_obj = gc_allocate_object<GCString>(S);
+        }
+        catch (...)
+        {
+            mem_free(S, heap_data, total_size_required);
+            throw;
+        }
+
+        if (heap_data == nullptr)
         {
             // Small string - use SSO
             size_t offset = 0;
             for (auto& s : str)
             {
-                std::memcpy(new_obj->storage.sso.buffer + offset, s.data(), s.size());
+                if (!s.empty())
+                {
+                    std::memcpy(new_obj->storage.sso.buffer + offset, s.data(), s.size());
+                }
                 offset += s.size();
             }
             new_obj->storage.sso.len = static_cast<uint8_t>(total_size_required);
         }
         else
         {
-            // Large string - use heap
-            char* heap_data = static_cast<char*>(mem_alloc(S, total_size_required));
-
-            size_t offset = 0;
-            for (auto& s : str)
-            {
-                std::memcpy(heap_data + offset, s.data(), s.size());
-                offset += s.size();
-            }
-
+            new_obj->header.add_flag(GCOFlags::kHeapString);
             new_obj->storage.heap.ptr = heap_data;
             new_obj->storage.heap.len = total_size_required;
-            new_obj->storage.heap.flag = GCString::kHeapFlag;
         }
 
-        new_obj->str_hash = string_hash32(new_obj->view());
+        new_obj->header.object_hash = StringHash32{}(new_obj->view());
 
         gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -336,22 +380,116 @@ namespace behl
 
     UserdataData* gc_new_userdata(State* S, size_t size)
     {
-        auto* new_obj = gc_allocate_object<UserdataData>(S);
+        void* data = size > 0 ? mem_alloc(S, size) : nullptr;
+
+        UserdataData* new_obj = nullptr;
+        try
+        {
+            new_obj = gc_allocate_object<UserdataData>(S);
+        }
+        catch (...)
+        {
+            mem_free(S, data, size);
+            throw;
+        }
+
         new_obj->size = size;
         new_obj->metatable = nullptr;
+        new_obj->data = data;
 
-        if (size > 0)
+        gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
+
+        return new_obj;
+    }
+
+    GCBuffer* gc_new_buffer(State* S, SysInt len)
+    {
+        std::byte* data = nullptr;
+        if (len > 0)
         {
-            new_obj->data = mem_alloc(S, size);
+            data = static_cast<std::byte*>(mem_alloc(S, len));
+            std::memset(data, 0, len);
         }
-        else
+
+        GCBuffer* new_obj = nullptr;
+        try
         {
-            new_obj->data = nullptr;
+            new_obj = gc_allocate_object<GCBuffer>(S);
+        }
+        catch (...)
+        {
+            mem_free(S, data, len);
+            throw;
+        }
+
+        new_obj->owner = new_obj;
+        new_obj->data = data;
+        new_obj->offset = 0;
+        new_obj->len = len;
+
+        gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
+
+        return new_obj;
+    }
+
+    GCBuffer* gc_new_buffer_slice(State* S, GCBuffer* source, SysInt offset, SysInt len)
+    {
+        assert(offset <= source->size() && len <= source->size() - offset);
+
+        GCBuffer* root = source->owner;
+        const SysInt root_offset = source->offset + offset;
+
+        auto* new_obj = gc_allocate_object<GCBuffer>(S);
+        new_obj->owner = root;
+        new_obj->data = nullptr;
+        new_obj->offset = root_offset;
+        new_obj->len = len;
+
+        if (root->header.color == GCColor::kWhite)
+        {
+            gc_barrier_slow(S, root);
         }
 
         gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
         return new_obj;
+    }
+
+    void gc_buffer_resize(State* S, GCBuffer* root, SysInt new_len)
+    {
+        assert(root->is_root());
+
+        const SysInt old_len = root->len;
+        if (new_len == old_len)
+        {
+            return;
+        }
+
+        if (new_len == 0)
+        {
+            mem_free(S, root->data, old_len);
+            root->data = nullptr;
+            root->len = 0;
+            return;
+        }
+
+        std::byte* data = nullptr;
+        if (root->data == nullptr)
+        {
+            data = static_cast<std::byte*>(mem_alloc(S, new_len));
+            std::memset(data, 0, new_len);
+        }
+        else
+        {
+            data = static_cast<std::byte*>(mem_realloc(S, root->data, old_len, new_len));
+            if (new_len > old_len)
+            {
+                std::memset(data + old_len, 0, new_len - old_len);
+            }
+        }
+
+        root->data = data;
+        root->len = new_len;
     }
 
     GCClosure* gc_new_closure(State* S, GCProto* proto_owner)
@@ -365,8 +503,8 @@ namespace behl
             new_obj = static_cast<GCClosure*>(S->gc.gc_closure_pool.pop_front());
             S->gc.gc_all_objects.append(new_obj);
 
-            assert(new_obj->type == GCType::kClosure);
-            new_obj->color = GCColor::kBlack;
+            assert(new_obj->header.type == GCType::kClosure);
+            new_obj->header.color = GCColor::kBlack;
         }
         else
         {
@@ -524,16 +662,26 @@ namespace behl
         mem_destroy(S, userdata);
     }
 
+    static void destroy_buffer(State* S, GCBuffer* buffer)
+    {
+        if (buffer->is_root() && buffer->data != nullptr)
+        {
+            mem_free(S, buffer->data, buffer->len);
+        }
+
+        mem_destroy(S, buffer);
+    }
+
     static void destroy_object(State* S, GCObject* obj, bool poolable)
     {
         gc_log("Destroying: {}", gc_object_to_string(obj));
 
         S->gc.gc_all_objects.remove(obj);
 
-        obj->color = GCColor::kFree;
+        obj->get_header().color = GCColor::kFree;
         // poolable = false;
 
-        switch (obj->type)
+        switch (obj->get_header().type)
         {
             case GCType::kString:
                 destroy_string(S, static_cast<GCString*>(obj), poolable);
@@ -550,6 +698,9 @@ namespace behl
             case GCType::kUserdata:
                 destroy_userdata(S, static_cast<UserdataData*>(obj));
                 break;
+            case GCType::kBuffer:
+                destroy_buffer(S, static_cast<GCBuffer*>(obj));
+                break;
             case GCType::kDead:
                 break;
         }
@@ -559,18 +710,24 @@ namespace behl
 
     static void mark_gray(State* S, GCObject* obj)
     {
-        if (obj->color == GCColor::kWhite)
+        GCOHeader& header = obj->get_header();
+        if (header.color == GCColor::kWhite)
         {
-            obj->color = GCColor::kGray;
+            header.color = GCColor::kGray;
             gc_log("mark_gray: {}", gc_object_to_string(obj));
             // Push to front of gray list
-            obj->gray_next = S->gc.gc_gray_list;
+            header.gray_next = S->gc.gc_gray_list;
             S->gc.gc_gray_list = obj;
         }
         else
         {
-            gc_log("mark_gray SKIP (already {}): {}", obj->color, gc_object_to_string(obj));
+            gc_log("mark_gray SKIP (already {}): {}", header.color, gc_object_to_string(obj));
         }
+    }
+
+    void gc_barrier_slow(State* S, GCObject* stored) noexcept
+    {
+        mark_gray(S, stored);
     }
 
     static void mark_value(State* S, const Value& val)
@@ -681,12 +838,20 @@ namespace behl
         }
     }
 
+    static void blacken_buffer(State* S, GCBuffer* buffer)
+    {
+        if (!buffer->is_root())
+        {
+            mark_gray(S, buffer->owner);
+        }
+    }
+
     static void blacken_object(State* S, GCObject* obj)
     {
         gc_log("blacken_object: {}", gc_object_to_string(obj));
-        obj->color = GCColor::kBlack;
+        obj->get_header().color = GCColor::kBlack;
 
-        switch (obj->type)
+        switch (obj->get_header().type)
         {
             case GCType::kTable:
                 blacken_table(S, static_cast<GCTable*>(obj));
@@ -699,6 +864,9 @@ namespace behl
                 break;
             case GCType::kUserdata:
                 blacken_userdata(S, static_cast<UserdataData*>(obj));
+                break;
+            case GCType::kBuffer:
+                blacken_buffer(S, static_cast<GCBuffer*>(obj));
                 break;
             case GCType::kString:
                 // Strings have no references
@@ -733,11 +901,12 @@ namespace behl
         // Turn all black objects white
         size_t white_count = 0;
         size_t black_kept = 0;
-        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
         {
-            if (obj->color == GCColor::kBlack)
+            if (obj->get_header().color == GCColor::kBlack || obj->get_header().color == GCColor::kGray)
             {
-                obj->color = GCColor::kWhite;
+                obj->get_header().color = GCColor::kWhite;
+                obj->get_header().gray_next = nullptr;
                 white_count++;
                 gc_log("  Turned BLACK->WHITE: {}", gc_object_to_string(obj));
 
@@ -811,6 +980,11 @@ namespace behl
         gc_log("Marking globals table");
         mark_gray(S, S->globals_table.get_gcobject());
 
+        if (S->memory_error_message != nullptr)
+        {
+            mark_gray(S, S->memory_error_message);
+        }
+
         // Stack
         auto& stack = S->stack;
         gc_log("Marking stack ({} values, {} frames)", stack.size(), S->call_stack.size());
@@ -860,12 +1034,49 @@ namespace behl
 
         // Count gray list size for logging
         size_t gray_count = 0;
-        for (GCObject* obj = S->gc.gc_gray_list; obj; obj = obj->gray_next)
+        for (GCObject* obj = S->gc.gc_gray_list; obj; obj = obj->get_header().gray_next)
         {
             gray_count++;
         }
 
         gc_log("Root marking complete, gray_list size: {}", gray_count);
+    }
+
+    static void gc_remark_mutable_roots(State* S)
+    {
+        for (size_t i = 0; i < S->ret_scratch.size(); ++i)
+        {
+            mark_value(S, S->ret_scratch[i]);
+        }
+
+        for (size_t i = 0; i < S->stack.size(); ++i)
+        {
+            mark_value(S, S->stack[i]);
+        }
+
+        for (size_t i = 0; i < S->pinned.size(); ++i)
+        {
+            mark_value(S, S->pinned[i]);
+        }
+
+        for (const auto& upvalue : S->upvalues)
+        {
+            if (!upvalue.is_open())
+            {
+                mark_value(S, upvalue.closed_value);
+            }
+        }
+    }
+
+    static void gc_drain_gray(State* S)
+    {
+        while (S->gc.gc_gray_list != nullptr)
+        {
+            GCObject* obj = S->gc.gc_gray_list;
+            S->gc.gc_gray_list = obj->get_header().gray_next;
+            obj->get_header().gray_next = nullptr;
+            blacken_object(S, obj);
+        }
     }
 
     static size_t gc_propagate_mark(State* S, size_t work_limit)
@@ -877,8 +1088,8 @@ namespace behl
         {
             // Pop from front of gray list
             GCObject* obj = S->gc.gc_gray_list;
-            S->gc.gc_gray_list = obj->gray_next;
-            obj->gray_next = nullptr; // Clear the link
+            S->gc.gc_gray_list = obj->get_header().gray_next;
+            obj->get_header().gray_next = nullptr; // Clear the link
 
             blacken_object(S, obj);
             ++work_done;
@@ -886,14 +1097,18 @@ namespace behl
 
         if (S->gc.gc_gray_list == nullptr)
         {
+            gc_remark_mutable_roots(S);
+            gc_drain_gray(S);
+
             // Before sweeping, find WHITE userdata with finalizers
             // These will be resurrected (marked BLACK) and queued for finalization
             gc_log("Queueing userdata with finalizers");
 
             size_t queued_count = 0;
-            for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+            for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
             {
-                if (obj->color == GCColor::kWhite && obj->type == GCType::kUserdata)
+                if (obj->get_header().color == GCColor::kWhite && obj->get_header().type == GCType::kUserdata
+                    && !obj->get_header().has_flag(GCOFlags::kFinalized))
                 {
                     auto* userdata = static_cast<UserdataData*>(obj);
                     if (userdata->metatable != nullptr)
@@ -908,7 +1123,7 @@ namespace behl
                             }
                             // Mark both the userdata AND its metatable to keep them alive
                             mark_gray(S, userdata);
-                            if (userdata->metatable->color == GCColor::kWhite)
+                            if (userdata->metatable->header.color == GCColor::kWhite)
                             {
                                 mark_gray(S, userdata->metatable);
                             }
@@ -920,6 +1135,8 @@ namespace behl
             }
 
             gc_log("Queued {} userdata, gray list empty: {}", queued_count, S->gc.gc_gray_list == nullptr);
+
+            gc_drain_gray(S);
 
             // If we marked any userdata/metatables, process them before transitioning to sweep
             if (S->gc.gc_gray_list == nullptr)
@@ -1066,9 +1283,9 @@ namespace behl
         while (S->gc.gc_work_current && work_done < work_limit)
         {
             GCObject* obj = S->gc.gc_work_current;
-            GCObject* next = obj->next;
+            GCObject* next = obj->get_header().next;
 
-            if (obj->color == GCColor::kWhite)
+            if (obj->get_header().color == GCColor::kWhite)
             {
                 gc_log("Sweep: Checking WHITE object: {}", gc_object_to_string(obj));
 
@@ -1119,6 +1336,9 @@ namespace behl
             UserdataData* userdata = S->gc.gc_finalize_queue.back();
             S->gc.gc_finalize_queue.pop_back();
 
+            userdata->header.color = GCColor::kWhite;
+            userdata->header.add_flag(GCOFlags::kFinalized);
+
             // Call __gc metamethod
             if (userdata->metatable != nullptr)
             {
@@ -1130,10 +1350,6 @@ namespace behl
                     metatable_call_method(S, gc_method, Value(userdata));
                 }
             }
-
-            // Mark userdata WHITE so it will be collected in the next GC cycle
-            // (it was kept BLACK to survive this cycle's sweep)
-            userdata->color = GCColor::kWhite;
 
             gc_log("Marked finalized userdata {:p} WHITE for next cycle", static_cast<const void*>(userdata));
             ++work_done;
@@ -1187,28 +1403,8 @@ namespace behl
 
     // ===== Main GC Entry Point =====
 
-    void gc_step(State* S)
+    static void gc_step_impl(State* S)
     {
-        // Don't run if GC is paused
-        if (S->gc.gc_paused)
-        {
-            return;
-        }
-
-        // Guard against re-entrant GC (e.g., during finalizers)
-        if (S->gc.gc_running)
-        {
-            return;
-        }
-
-        const bool cycle_active = (S->gc.gc_phase != GCPhase::kIdle);
-        if (!cycle_active && S->gc.gc_debt <= 0)
-        {
-            return;
-        }
-
-        S->gc.gc_running = true;
-
         if constexpr (kGCLoggingEnabled)
         {
             static size_t call_count = 0;
@@ -1232,10 +1428,10 @@ namespace behl
                 size_t black_count = 0;
                 size_t white_count = 0;
                 size_t grey_count = 0;
-                for (auto* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+                for (auto* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
                 {
                     count++;
-                    switch (obj->color)
+                    switch (obj->get_header().color)
                     {
                         case GCColor::kBlack:
                             black_count++;
@@ -1310,8 +1506,40 @@ namespace behl
 
         gc_log("gc_step complete: debt={}, phase={}, total_bytes={}", S->gc.gc_debt, static_cast<int>(S->gc.gc_phase),
             S->gc.gc_total_bytes);
+    }
 
-        // Clear running flag
+    void gc_step(State* S)
+    {
+        // Don't run if GC is paused
+        if (S->gc.gc_paused)
+        {
+            return;
+        }
+
+        // Guard against re-entrant GC (e.g., during finalizers)
+        if (S->gc.gc_running)
+        {
+            return;
+        }
+
+        const bool cycle_active = (S->gc.gc_phase != GCPhase::kIdle);
+        if (!cycle_active && S->gc.gc_debt <= 0)
+        {
+            return;
+        }
+
+        S->gc.gc_running = true;
+
+        try
+        {
+            gc_step_impl(S);
+        }
+        catch (...)
+        {
+            S->gc.gc_running = false;
+            throw;
+        }
+
         S->gc.gc_running = false;
     }
 
@@ -1338,6 +1566,14 @@ namespace behl
 
     void gc_collect(State* S)
     {
+        // Requests made from inside a finalizer are ignored
+        if (S->gc.gc_running || S->gc.gc_paused)
+        {
+            return;
+        }
+
+        S->gc.gc_running = true;
+
         gc_log("===== FULL COLLECTION STARTED =====");
 
         // Completely reset GC state for a fresh cycle
@@ -1346,15 +1582,25 @@ namespace behl
         S->gc.gc_finalize_queue.clear();
         S->gc.gc_work_current = nullptr;
 
-        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->next)
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
         {
-            obj->color = GCColor::kBlack;
+            obj->get_header().color = GCColor::kBlack;
         }
 
-        // Start a new cycle
-        gc_start_cycle(S);
-        gc_advance_cycles(S);
-        gc_destroy_pools(S);
+        try
+        {
+            // Start a new cycle
+            gc_start_cycle(S);
+            gc_advance_cycles(S);
+            gc_destroy_pools(S);
+        }
+        catch (...)
+        {
+            S->gc.gc_running = false;
+            throw;
+        }
+
+        S->gc.gc_running = false;
 
         gc_log("===== FULL COLLECTION COMPLETE: phase={} =====", static_cast<int>(S->gc.gc_phase));
     }
@@ -1362,6 +1608,45 @@ namespace behl
     void gc_close(State* S)
     {
         gc_log("===== GC_CLOSE: Final cleanup, destroying all remaining objects =====");
+
+        {
+            GCPauseGuard pause(S);
+            AutoVector<UserdataData*> pending(S);
+            for (;;)
+            {
+                pending.clear();
+                for (GCObject* obj = S->gc.gc_all_objects.head(); obj; obj = obj->get_header().next)
+                {
+                    if (obj->get_header().type != GCType::kUserdata || obj->get_header().has_flag(GCOFlags::kFinalized))
+                    {
+                        continue;
+                    }
+                    auto* userdata = static_cast<UserdataData*>(obj);
+                    if (userdata->metatable != nullptr
+                        && metatable_get_method<MetaMethodType::kGC>(Value(userdata)).is_callable())
+                    {
+                        pending.push_back(userdata);
+                    }
+                }
+
+                if (pending.empty())
+                {
+                    break;
+                }
+
+                for (UserdataData* userdata : pending)
+                {
+                    userdata->header.add_flag(GCOFlags::kFinalized);
+                    try
+                    {
+                        metatable_call_method(S, metatable_get_method<MetaMethodType::kGC>(Value(userdata)), Value(userdata));
+                    }
+                    catch (...)
+                    {
+                    }
+                }
+            }
+        }
 
         size_t count = 0;
         while (GCObject* obj = S->gc.gc_all_objects.head())

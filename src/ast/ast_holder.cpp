@@ -11,20 +11,16 @@ namespace behl
         : m_state(state)
     {
         m_pools.emplace_back(m_state, m_state);
-        m_nodes.reserve(m_state, 1024);
     }
 
     AstHolder::~AstHolder()
     {
-        destroy_all_nodes();
-        m_nodes.destroy(m_state);
         m_pools.destroy(m_state);
     }
 
     AstHolder::AstHolder(AstHolder&& other) noexcept
         : m_state(other.m_state)
         , m_pools(std::move(other.m_pools))
-        , m_nodes(std::move(other.m_nodes))
     {
         other.m_state = nullptr;
     }
@@ -33,13 +29,10 @@ namespace behl
     {
         if (this != &other)
         {
-            destroy_all_nodes();
-            m_nodes.destroy(m_state);
             m_pools.destroy(m_state);
 
             m_state = other.m_state;
             m_pools = std::move(other.m_pools);
-            m_nodes = std::move(other.m_nodes);
 
             other.m_state = nullptr;
         }
@@ -49,24 +42,21 @@ namespace behl
     void* AstHolder::allocate(size_t size, size_t alignment)
     {
         // Align the current offset
-        auto& pool = m_pools.back();
-        size_t aligned_offset = (pool.offset + alignment - 1) & ~(alignment - 1);
+        Pool* pool = &m_pools.back();
+        size_t aligned_offset = (pool->offset + alignment - 1) & ~(alignment - 1);
 
         // Check if we need a new pool
-        if (aligned_offset + size > Pool::POOL_SIZE)
+        if (aligned_offset + size > pool->capacity)
         {
-            m_pools.emplace_back(m_state, m_state);
-            return allocate(size, alignment);
+            const size_t needed = size + alignment - 1;
+            m_pools.emplace_back(m_state, m_state, std::max(needed, Pool::kDefaultPoolSize));
+            pool = &m_pools.back();
+            aligned_offset = (pool->offset + alignment - 1) & ~(alignment - 1);
         }
 
-        void* ptr = pool.memory + aligned_offset;
-        pool.offset = aligned_offset + size;
+        void* ptr = pool->memory + aligned_offset;
+        pool->offset = aligned_offset + size;
         return ptr;
-    }
-
-    void AstHolder::track_node(AstNode* node)
-    {
-        m_nodes.push_back(m_state, node);
     }
 
     AstString* AstHolder::make_string(std::string_view str)
@@ -77,20 +67,9 @@ namespace behl
 
         // Allocate and construct the AstString node
         void* mem = allocate(sizeof(AstString), alignof(AstString));
-        AstString* node = new (mem) AstString(data, str.size());
-
-        // Track for destruction
-        track_node(node);
+        AstString* node = std::construct_at(static_cast<AstString*>(mem), data, str.size());
 
         return node;
-    }
-
-    void AstHolder::destroy_all_nodes()
-    {
-        for (auto it = m_nodes.rbegin(); it != m_nodes.rend(); ++it)
-        {
-            std::destroy_at(*it);
-        }
     }
 
 } // namespace behl

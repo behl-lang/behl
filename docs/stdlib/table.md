@@ -44,50 +44,9 @@ print(t[2]);  // 30
 
 ---
 
-## table.insert(t, pos, value)
+## table.print(t, options)
 
-Inserts a value at the specified position, shifting other elements.
-
-```cpp
-let t = {10, 20, 30};
-table.insert(t, 1, 15);
-// t is now {10, 15, 20, 30}
-
-print(t[1]);  // 15
-```
-
-**Parameters:**
-- `t` - Table to insert into
-- `pos` - Position to insert at (0-indexed)
-- `value` - Value to insert
-
----
-
-## table.remove(t, pos)
-
-Removes and returns the element at the specified position.
-
-```cpp
-let t = {10, 20, 30};
-let val = table.remove(t, 1);
-
-print(val);   // 20
-print(t[0]);  // 10
-print(t[1]);  // 30 (shifted down)
-print(rawlen(t));  // 2
-```
-
-**Parameters:**
-- `t` - Table to remove from
-- `pos` - Position to remove (0-indexed)
-
-**Returns:** The removed value
-
----
-
-## table.print(t)
-
-Debug print of table contents. Useful for inspecting table structure.
+Debug print of table contents. Useful for inspecting table structure. An optional `options` table accepts `indent` (spaces per level, default 4), `compact` (disable newlines, default false), and `max_recursion` (max nesting depth, default 100).
 
 ```cpp
 let t = {
@@ -99,6 +58,81 @@ let t = {
 
 table.print(t);
 // Output shows all key-value pairs
+
+table.print(t, {compact = true});
+// Prints on a single line
+```
+
+---
+
+## table.rawlen(t)
+
+Returns the length of the array part of a table (consecutive integer keys starting from 0). Equivalent to the global `rawlen`.
+
+```cpp
+let t = {10, 20, 30};
+print(table.rawlen(t));  // 3
+```
+
+---
+
+## table.rawget(t, key)
+
+Get a value from a table without invoking the `__index` metamethod.
+
+```cpp
+let t = {x = 10};
+print(table.rawget(t, "x"));  // 10
+```
+
+---
+
+## table.rawset(t, key, value)
+
+Set a value in a table without invoking the `__newindex` metamethod.
+
+**Returns:** The table
+
+```cpp
+let t = {};
+table.rawset(t, "x", 10);
+```
+
+---
+
+## table.dump(t, options)
+
+Returns a string representation of a table's contents, in the same format as `table.print`. Accepts the same optional `options` table (`indent`, `compact`, `max_recursion`).
+
+```cpp
+let t = {10, 20, 30};
+print(table.dump(t));
+```
+
+---
+
+## table.unpack(t, start, end)
+
+Returns the values of `t` from index `start` to `end`, inclusive, as multiple return values. Both bounds are 0-indexed and optional, defaulting to the full array part (`0` to `rawlen(t) - 1`); out-of-range bounds are clamped.
+
+```cpp
+let t = {10, 20, 30};
+let a, b, c = table.unpack(t);
+// a = 10, b = 20, c = 30
+
+let x, y = table.unpack(t, 0, 1);
+// x = 10, y = 20
+```
+
+---
+
+## table.set_name(t, name)
+
+Sets a debug name for a table.
+
+```cpp
+let t = {};
+table.set_name(t, "MyTable");
 ```
 
 ---
@@ -114,15 +148,6 @@ table.insert(numbers, 10);
 table.insert(numbers, 20);
 table.insert(numbers, 30);
 print(rawlen(numbers));  // 3
-
-// Insert in the middle
-table.insert(numbers, 1, 15);
-// numbers = {10, 15, 20, 30}
-
-// Remove elements
-let removed = table.remove(numbers, 2);
-print(removed);  // 20
-// numbers = {10, 15, 30}
 
 // Debug output
 table.print(numbers);
@@ -145,8 +170,6 @@ table.print(mixed);
 
 ## Notes
 
-- `table.insert` with one argument appends to the end
-- `table.insert` with position shifts elements to make room
-- `table.remove` shifts remaining elements down
-- All positions are **0-indexed** (unlike Lua's 1-indexed)
+- `table.insert(t, value)` always appends to the end of the array part
+- Table indices are **0-indexed** (unlike Lua's 1-indexed)
 - These functions work on the array part of tables (consecutive integer keys from 0)

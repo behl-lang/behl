@@ -32,12 +32,12 @@ print(debug.stacktrace());
 
 ## debug.stacktrace()
 
-Returns a string containing the current call stack.
+Returns a string containing the current call stack, most recent frame first.
 
 ```cpp
+const debug = import("debug");
 function inner() {
     print(debug.stacktrace());
-}
 }
 
 function middle() {
@@ -51,16 +51,17 @@ function outer() {
 outer();
 ```
 
-**Output:**
+**Output** (for a file named `script.behl`):
 ```
 Stack trace:
-  at inner (script.behl:2)
-  at middle (script.behl:6)
-  at outer (script.behl:10)
-  at <main> (script.behl:13)
+  <native>: at debug.stacktrace
+  script.behl(3,27): at inner
+  script.behl(7,10): at middle
+  script.behl(11,11): at outer
+  script.behl(14,6): at <main chunk>
 ```
 
-**Returns:** String with formatted stack trace
+**Returns:** String with formatted stack trace. Each line has the form `file(line,col): at function`; C functions show as `<native>`. This is the same format that is appended to messages raised by `behl::error` and "attempt to call" errors.
 
 **Use Case:**
 - Understanding call flow
@@ -80,7 +81,8 @@ function safeExecute(func) {
     let success, result = pcall(func);
     
     if (!success) {
-        print("Error occurred: " + result);
+        // error("...") no longer carries a stack trace, so build one explicitly
+        print("Error occurred: " + tostring(result));
         print("\nCall stack:");
         print(debug.stacktrace());
         return nil;
@@ -98,8 +100,8 @@ safeExecute(riskyOperation);
 
 // Debug logging with context
 function debugLog(message) {
-    let timestamp = os.time();
-    print("[" + tostring(timestamp) + "] " + message);
+    let elapsed = os.hrtime();
+    print("[" + tostring(elapsed) + "] " + message);
     print("Call stack:");
     print(debug.stacktrace());
 }

@@ -25,7 +25,7 @@ Tables are the primary data structure in Behl. They serve as:
 
 ## Table Literals
 
-Table literals use curly braces `{}` with comma-separated entries.
+Table literals use curly braces `{}` with entries separated by `,` or `;` (the two are interchangeable).
 
 ### Syntax Forms
 
@@ -42,14 +42,21 @@ let t = {};
 // Explicit keys ([key] = value)
 { ["key"] = "value", [0] = 10, [true] = "yes" }  // Any expression as key
 
+// Vararg expansion (only inside a vararg function, must be the last entry)
+{ ... }               // Appends every extra argument as array entries
+
 // Mixed
 { 10, 20, name = "Alice", ["x"] = 100 }  // Combines all forms
+
+// Semicolons work as separators too
+{ 10; 20; name = "Alice" }
 ```
 
 **Key syntax rules:**
 - `key = value` - Only valid when `key` is an identifier (no spaces, special chars, or keywords)
 - `[expr] = value` - Works with any expression as the key
 - Plain `value` - Auto-assigns to next array index (0, 1, 2...)
+- `...` - Expands the varargs into consecutive array indices, and must be the **last** entry in the literal
 
 ### Empty Table
 
@@ -176,7 +183,7 @@ print(t["key"]);   // "value"
 
 ### Key Types
 
-Keys can be any type except `nil`:
+Keys can be any type, including `nil`:
 
 ```cpp
 let t = {};
@@ -195,6 +202,10 @@ t[false] = "no";
 // Table keys (by reference)
 let key_table = {1, 2, 3};
 t[key_table] = "value";
+
+// A nil key is accepted too
+t[nil] = 1;
+print(t[nil]);  // 1
 ```
 
 ## Table Length
@@ -337,19 +348,21 @@ function hasKey(t, key) {
 }
 ```
 
-### Removing Keys
+### Clearing Keys
 
-Set key to `nil` to remove it:
+There is **no** key removal. Assigning `nil` overwrites the slot in place, it never erases the key:
 
 ```cpp
 let t = { a = 1, b = 2, c = 3 };
 
-t["b"] = nil;  // Remove key "b"
+t["b"] = nil;  // Clears the value, the key stays
 
 for (k, v in pairs(t)) {
-    print(k);  // Prints "a" and "c" only
+    print(k, v);  // Prints "a" 1, "b" nil and "c" 3
 }
 ```
+
+A hash key whose value was set to `nil` is still visited by `pairs()`, with `nil` as its value. To drop a key entirely, build a new table without it.
 
 ## Tables as Objects
 
@@ -399,6 +412,27 @@ let mixed = {
 };
 ```
 
+
+---
+
+## The `table` Module
+
+Beyond the language syntax, extra table operations live in the `table` module, which must be imported:
+
+```cpp
+const table = import("table");
+
+let t = {10, 20};
+table.insert(t, 30);        // Appends, t is now {10, 20, 30}
+print(table.rawlen(t));     // 3
+print(table.rawget(t, 0));  // 10
+table.rawset(t, 0, 99);
+table.print(t);
+```
+
+The module provides `insert`, `unpack`, `rawget`, `rawset`, `rawlen`, `dump`, `print` and `set_name`. Note that `table.insert` takes only a table and a value and always appends to the end, there is no positional insert and there is no `table.remove`.
+
+See [Standard Library - table module](../stdlib/table) for the full reference.
 
 ---
 

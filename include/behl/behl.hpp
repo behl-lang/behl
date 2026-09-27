@@ -3,6 +3,7 @@
 #include <behl/config.hpp>
 #include <behl/export.hpp>
 #include <behl/types.hpp>
+#include <cstddef>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -21,6 +22,8 @@ namespace behl
 
     // Causes a runtime error in the given state with the provided message, does not return.
     [[noreturn]] BEHL_API void error(State* S, std::string_view msg);
+
+    [[noreturn]] BEHL_API void error_value(State* S);
 
     // Assigns the value at the top of the stack to the global table _G with the given name, pops the value.
     // All entries in the global table will become global variables.
@@ -129,6 +132,9 @@ namespace behl
     // Throws a type error if not userdata or if the uid doesn't match.
     BEHL_API void* check_userdata(State* S, int32_t idx, uint32_t uid);
 
+    // Checks if the value is a buffer and returns its bytes, raises a type error if not.
+    BEHL_API std::span<std::byte> check_buffer(State* S, int32_t idx);
+
     // Type operations
     ///////////////////////////////////////////////////////////////////////////
 
@@ -161,6 +167,22 @@ namespace behl
 
     // Returns the UID of the userdata at the given index, or 0 if not userdata.
     BEHL_API uint32_t userdata_get_uid(State* S, int32_t idx);
+
+    // Buffer operations
+    ///////////////////////////////////////////////////////////////////////////
+
+    // Pushes a new zero-filled buffer of len bytes onto the stack and returns its bytes.
+    BEHL_API std::span<std::byte> buffer_new(State* S, SysInt len);
+
+    // Returns the bytes of the buffer at idx, if the value is not a buffer returns an empty span.
+    BEHL_API std::span<std::byte> buffer_get(State* S, int32_t idx);
+
+    // Returns the length in bytes of the buffer at idx, if the value is not a buffer returns 0.
+    BEHL_API SysInt buffer_len(State* S, int32_t idx);
+
+    // Resizes the buffer at idx to new_len bytes, zero-filling new space, and returns its new bytes.
+    // Spans obtained earlier are invalidated. The value must be a buffer that is not a slice.
+    BEHL_API std::span<std::byte> buffer_resize(State* S, int32_t idx, SysInt new_len);
 
     // GC pinning operations
     //////////////////////////////////////////////////////////////////////////
@@ -243,12 +265,13 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
 
     // Loads a chunk from the given buffer and pushes the resulting function onto the stack, throws on error.
-    BEHL_API void load_buffer(State* S, std::string_view str, std::string_view chunkname, bool optimize = true);
+    [[nodiscard]] BEHL_API int32_t load_buffer(
+        State* S, std::string_view str, std::string_view chunkname, bool optimize = true);
 
     // Nearly identical to load_buffer but uses "<string>" as the chunk name.
-    BEHL_API void load_string(State* S, std::string_view str, bool optimize = true);
+    [[nodiscard]] BEHL_API int32_t load_string(State* S, std::string_view str, bool optimize = true);
 
-    BEHL_API void call(State* S, int32_t nargs, int32_t nresults);
+    [[nodiscard]] BEHL_API int32_t call(State* S, int32_t nargs, int32_t nresults);
 
     // Garbage collection control
     //////////////////////////////////////////////////////////////////////////
@@ -273,6 +296,7 @@ namespace behl
     BEHL_API void load_lib_math(State* S);    // Math functions
     BEHL_API void load_lib_os(State* S);      // OS functions (time, exit, etc.)
     BEHL_API void load_lib_string(State* S);  // String manipulation functions
+    BEHL_API void load_lib_buffer(State* S);  // Byte buffer functions
     BEHL_API void load_lib_fs(State* S);      // Filesystem operations (security-sensitive, opt-in)
     BEHL_API void load_lib_process(State* S); // Process spawning and management (security-sensitive, opt-in)
 

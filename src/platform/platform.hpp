@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 // Platform detection
 #if defined(_WIN32) || defined(_WIN64)
 #    define BEHL_PLATFORM_WINDOWS 1
@@ -35,6 +37,8 @@
 #    define BEHL_NO_UNIQUE_ADDRESS [[no_unique_address]]
 #endif
 
+#define BEHL_INLINE inline
+
 #ifdef _MSC_VER
 #    define BEHL_FORCEINLINE __forceinline
 #    define BEHL_NOINLINE __declspec(noinline)
@@ -52,3 +56,11 @@
 #        define BEHL_UNREACHABLE() __builtin_unreachable()
 #    endif
 #endif
+
+namespace behl::platform
+{
+    void* exec_alloc(size_t size) noexcept;
+    void exec_free(void* mem, size_t size) noexcept;
+    void exec_write_protect(bool executable) noexcept;
+    void exec_flush_icache(void* mem, size_t size) noexcept;
+} // namespace behl::platform

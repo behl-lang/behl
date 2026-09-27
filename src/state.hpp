@@ -9,12 +9,14 @@
 #include "gc/gc_state.hpp"
 #include "gc/gc_types.hpp"
 #include "gc/gco_string.hpp"
-#include "platform.hpp"
+#include "jit/jit_config.hpp"
+#include "platform/platform.hpp"
 #include "state_debug.hpp"
 #include "vm/frame.hpp"
 #include "vm/upvalue.hpp"
 #include "vm/value.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <type_traits>
@@ -41,6 +43,7 @@ namespace behl
         Vector<uint32_t> closed_upvalue_freelist;
 
         Value globals_table{};
+        GCString* memory_error_message{};
         uint32_t cfunction_stack_base = 0;
 
         // Module system
@@ -55,16 +58,17 @@ namespace behl
 
         PrintHandler print_handler{};
 
+#if BEHL_JIT_SUPPORTED
         JitArena* jit_arena{};
         std::exception_ptr jit_exception{};
         uint32_t jit_depth{};
         bool jit_enabled{ true };
         bool jit_pending_clear{};
-
-#if defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        JitStats jit_stats{};
 #endif
+
+        std::chrono::steady_clock::time_point start_time{};
+
         static constexpr int32_t stack_data_offset()
         {
             return static_cast<int32_t>(offsetof(State, stack) + decltype(stack)::data_offset());
@@ -79,9 +83,51 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(State, call_stack) + decltype(call_stack)::size_offset());
         }
-#if defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#endif
+
+        static constexpr int32_t stack_size_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, stack) + decltype(stack)::size_offset());
+        }
+
+        static constexpr int32_t call_headers_data_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_headers) + decltype(call_headers)::data_offset());
+        }
+
+        static constexpr int32_t call_headers_size_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_headers) + decltype(call_headers)::size_offset());
+        }
+
+        static constexpr int32_t call_stack_capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_stack) + decltype(call_stack)::capacity_offset());
+        }
+
+        static constexpr int32_t call_headers_capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, call_headers) + decltype(call_headers)::capacity_offset());
+        }
+
+        static constexpr int32_t stack_capacity_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, stack) + decltype(stack)::capacity_offset());
+        }
+
+        static constexpr int32_t gc_debt_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, gc) + offsetof(GCState, gc_debt));
+        }
+
+        static constexpr int32_t jit_enabled_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, jit_enabled));
+        }
+
+        static constexpr int32_t debug_enabled_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, debug) + offsetof(DebugState, enabled));
+        }
     };
 
     static_assert(std::is_standard_layout_v<std::exception_ptr>);

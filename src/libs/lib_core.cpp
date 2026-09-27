@@ -15,9 +15,9 @@
 #include "vm/value.hpp"
 #include "vm/vm.hpp"
 #include "vm/vm_detail.hpp"
+#include "vm/vm_error.hpp"
 #include "vm/vm_metatable.hpp"
 
-#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -240,12 +240,13 @@ namespace behl
         // Get current proto to find importing file path
         // Look at the frame BEFORE the current one (since current frame is this C function with proto=null)
         std::string_view importing_file = "./"; // Default to current directory
-        if (S->call_stack.size() >= 2)
+        for (size_t depth = S->call_stack.size(); depth >= 2; --depth)
         {
-            auto& caller_frame = S->call_stack[S->call_stack.size() - 2];
+            auto& caller_frame = S->call_stack[depth - 2];
             if (caller_frame.proto && caller_frame.proto->source_path && caller_frame.proto->source_path->size() > 0)
             {
                 importing_file = caller_frame.proto->source_path->view();
+                break;
             }
         }
 
@@ -257,6 +258,11 @@ namespace behl
         {
             S->stack.push_back(S, it->second);
             return 1;
+        }
+
+        if (resolved_path.empty())
+        {
+            error(S, behl::format("Module not found: {}", module_name));
         }
 
         // Load module file
@@ -271,8 +277,8 @@ namespace behl
         std::string source = buffer.str();
 
         // Compile and execute module using load_buffer
-        load_buffer(S, source, resolved_path, true);
-        call(S, 0, 1);
+        load_unprotected(S, source, resolved_path, true);
+        call_unprotected(S, 0, 1);
 
         // Top of stack should be the module exports (or nil for non-modules)
         Value exports = S->stack.back();
@@ -288,24 +294,8 @@ namespace behl
     // error(message) - Raise an error with the given message
     static int lib_error(State* S)
     {
-        if (get_top(S) < 1)
-        {
-            error(S, "error: expected at least 1 argument (message)");
-        }
-
-        const auto current_frame = S->call_stack.back();
-
-        const Value& arg = S->stack[static_cast<size_t>(resolve_index(S, 0))];
-        Value str_val = vm_tostring(S, arg, current_frame);
-
-        if (str_val.is_string())
-        {
-            error(S, str_val.get_string()->data());
-        }
-        else
-        {
-            error(S, "error"); // Fallback if conversion fails
-        }
+        const Value arg = get_top(S) > 0 ? S->stack[static_cast<size_t>(resolve_index(S, 0))] : Value{};
+        throw Exception(arg);
     }
 
     // pcall(func, ...) - Call function in protected mode
@@ -331,7 +321,7 @@ namespace behl
         try
         {
             // Call function with call_nothrow - results go on top of stack
-            call(S, nargs, kMultRet);
+            call_unprotected(S, nargs, kMultRet);
 
             // Stack now: [result1, result2, ...]
             const int32_t nresults = get_top(S);
@@ -343,6 +333,27 @@ namespace behl
             // Return: true + all results
             return nresults + 1;
         }
+        catch (const Exception& e)
+        {
+            const Value err_value = e.value();
+            truncate_call_frames(S, call_frame_pos);
+
+            set_top(S, 0);
+            push_boolean(S, false);
+            S->stack.push_back(S, err_value);
+
+            return 2;
+        }
+        catch (const std::bad_alloc&)
+        {
+            truncate_call_frames(S, call_frame_pos);
+
+            set_top(S, 0);
+            push_boolean(S, false);
+            S->stack.push_back(S, Value(S->memory_error_message));
+
+            return 2;
+        }
         catch (const std::exception& e)
         {
             // Cleanup on exception
@@ -350,6 +361,17 @@ namespace behl
             truncate_call_frames(S, call_frame_pos);
 
             // Clear stack and push error result
+            set_top(S, 0);
+            push_boolean(S, false);
+            S->stack.push_back(S, Value(err_obj));
+
+            return 2;
+        }
+        catch (...)
+        {
+            auto* err_obj = gc_new_string(S, "unknown C++ exception");
+            truncate_call_frames(S, call_frame_pos);
+
             set_top(S, 0);
             push_boolean(S, false);
             S->stack.push_back(S, Value(err_obj));

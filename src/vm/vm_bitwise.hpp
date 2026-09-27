@@ -2,36 +2,26 @@
 
 #include "bytecode.hpp"
 #include "common/format.hpp"
-#include "exceptions.hpp"
 #include "frame.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "types.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"
+#include "vm_error.hpp"
 #include "vm_metatable.hpp"
 
 namespace behl
 {
 
-    //////////////////////////////////////////////////////////////////////////
-    // Error Throwing Functions
-
-    [[noreturn]] BEHL_NOINLINE static void throw_bad_bitwise(const Value& a, const Value& b, const CallFrame& frame)
+    BEHL_INLINE Integer bitwise_fp_operand(State* S, FP d, const CallFrame& frame)
     {
-        const auto loc = get_current_location(frame);
-        const auto msg = behl::format(
-            "attempt to perform bitwise operation on a '{}' value and a '{}' value", a.get_type_string(), b.get_type_string());
-
-        throw TypeError(msg, loc);
-    }
-
-    [[noreturn]] BEHL_NOINLINE static void throw_bad_bitwise(const Value& a, const CallFrame& frame)
-    {
-        const auto loc = get_current_location(frame);
-        const auto msg = behl::format<"attempt to perform bitwise operation on a {} value">(a.get_type_string());
-
-        throw TypeError(msg, loc);
+        Integer out = 0;
+        if (!arithmetic::try_from_fp(d, out))
+        {
+            raise_no_integer_representation(S, frame);
+        }
+        return out;
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -39,7 +29,7 @@ namespace behl
 
     // Try bitwise metamethod
     template<MetaMethodType MMIndex>
-    static Value try_bitwise_metamethod(State* S, const Value& a, const Value& b)
+    BEHL_INLINE Value try_bitwise_metamethod(State* S, const Value& a, const Value& b)
     {
         // Check left operand first
         Value mm = metatable_get_method<MMIndex>(a);
@@ -87,14 +77,14 @@ namespace behl
     {
         BEHL_FORCEINLINE Integer operator()(Integer a, Integer b) const
         {
-            return a << b;
+            return arithmetic::shl(a, b);
         }
     };
     struct BitwiseShrOp
     {
         BEHL_FORCEINLINE Integer operator()(Integer a, Integer b) const
         {
-            return a >> b;
+            return arithmetic::shr(a, b);
         }
     };
 
@@ -102,7 +92,7 @@ namespace behl
     // Core Bitwise Operations
 
     template<MetaMethodType MMIndex, typename Op>
-    BEHL_FORCEINLINE static void bitwise_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_INLINE void bitwise_binop(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         const uint16_t type_pair = make_type_pair(a, b);
 
@@ -120,7 +110,7 @@ namespace behl
             case kTypePairIntFloat:
             {
                 const Integer ai = a.get_integer();
-                const Integer bf = static_cast<Integer>(b.get_fp());
+                const Integer bf = bitwise_fp_operand(S, b.get_fp(), frame);
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(ai, bf));
                 return;
@@ -128,7 +118,7 @@ namespace behl
 
             case kTypePairFloatInt:
             {
-                const Integer af = static_cast<Integer>(a.get_fp());
+                const Integer af = bitwise_fp_operand(S, a.get_fp(), frame);
                 const Integer bi = b.get_integer();
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(af, bi));
@@ -137,8 +127,8 @@ namespace behl
 
             case kTypePairFloatFloat:
             {
-                const Integer af = static_cast<Integer>(a.get_fp());
-                const Integer bf = static_cast<Integer>(b.get_fp());
+                const Integer af = bitwise_fp_operand(S, a.get_fp(), frame);
+                const Integer bf = bitwise_fp_operand(S, b.get_fp(), frame);
                 Value& dst = get_register(S, frame, dst_reg);
                 dst.emplace<Integer>(op(af, bf));
                 return;
@@ -161,14 +151,14 @@ namespace behl
             return;
         }
 
-        throw_bad_bitwise(a, b, current_frame);
+        raise_bad_bitwise(S, a, b, current_frame);
     }
 
     //////////////////////////////////////////////////////////////////////////
     // Bitwise Handlers
 
     template<typename Op>
-    BEHL_FORCEINLINE static bool try_bitwise_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
+    BEHL_INLINE bool try_bitwise_fast(State* S, Reg dst_reg, const Value& a, const Value& b, CallFrame& frame, Op op)
     {
         switch (make_type_pair(a, b))
         {
@@ -181,19 +171,19 @@ namespace behl
             case kTypePairIntFloat:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(a.get_integer(), static_cast<Integer>(b.get_fp())));
+                dst.emplace<Integer>(op(a.get_integer(), bitwise_fp_operand(S, b.get_fp(), frame)));
                 return true;
             }
             case kTypePairFloatInt:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(static_cast<Integer>(a.get_fp()), b.get_integer()));
+                dst.emplace<Integer>(op(bitwise_fp_operand(S, a.get_fp(), frame), b.get_integer()));
                 return true;
             }
             case kTypePairFloatFloat:
             {
                 Value& dst = get_register(S, frame, dst_reg);
-                dst.emplace<Integer>(op(static_cast<Integer>(a.get_fp()), static_cast<Integer>(b.get_fp())));
+                dst.emplace<Integer>(op(bitwise_fp_operand(S, a.get_fp(), frame), bitwise_fp_operand(S, b.get_fp(), frame)));
                 return true;
             }
             default:
@@ -202,7 +192,7 @@ namespace behl
     }
 
     template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
-    BEHL_FORCEINLINE static void handler_bitwise_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    BEHL_INLINE void handler_bitwise_fast(State* S, CallFrame& frame, Reg dst, Args&&... args)
     {
         const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
@@ -214,20 +204,28 @@ namespace behl
 
     // Generic bitwise handler template
     template<MetaMethodType MMIndex, typename BitwiseOp, auto GetLhs, auto GetRhs, typename... Args>
-    BEHL_FORCEINLINE static void handler_bitwise(State* S, CallFrame& frame, Reg dst, Args&&... args)
+    BEHL_INLINE void handler_bitwise(State* S, CallFrame& frame, Reg dst, Args&&... args)
     {
         const auto& lhs = GetLhs(S, frame, operand_arg<0>(args...));
         const auto& rhs = GetRhs(S, frame, operand_arg<1>(args...));
         bitwise_binop<MMIndex>(S, dst, lhs, rhs, frame, BitwiseOp{});
     }
 
-    BEHL_FORCEINLINE static void handler_bnot(State* S, CallFrame& frame, Reg a, Reg b)
+    BEHL_INLINE
+    void handler_bnot(State* S, CallFrame& frame, Reg a, Reg b)
     {
         const Value& val = get_register(S, frame, b);
 
         if (val.is_integer())
         {
             auto i = val.get_integer();
+            get_register(S, frame, a).emplace<Integer>(~i);
+            return;
+        }
+
+        if (val.is_fp())
+        {
+            const Integer i = bitwise_fp_operand(S, val.get_fp(), frame);
             get_register(S, frame, a).emplace<Integer>(~i);
             return;
         }
@@ -244,7 +242,7 @@ namespace behl
             return;
         }
 
-        throw_bad_bitwise(val, current_frame);
+        raise_bad_bitwise(S, val, current_frame);
     }
 
 } // namespace behl

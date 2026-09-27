@@ -41,6 +41,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         /wd4251 # Disable 'class needs dll-interface' (common in libs)
         /wd4275 # Disable non-dll-interface base class
         /utf-8  # Warning C4819 utf-8 source file
+        /fp:precise # No contraction or reordering of float ops
         $<$<CONFIG:Release>:/Oi> # Enable intrinsic functions
         $<$<CONFIG:Release>:/GS-> # Disable security checks
         $<$<CONFIG:Release>:/Zi> # Debug info in release
@@ -55,6 +56,20 @@ else()
         -Wconversion -Wsign-conversion -Wnull-dereference
         -Wdouble-promotion -Wformat=2
     )
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag(-ffp-contract=off BEHL_HAS_FP_CONTRACT_OFF)
+    if(BEHL_HAS_FP_CONTRACT_OFF)
+        target_compile_options(compiler_opts INTERFACE -ffp-contract=off)
+    endif()
+    target_compile_options(compiler_opts INTERFACE -fno-fast-math)
+    check_cxx_compiler_flag(-msse2 BEHL_HAS_MSSE2)
+    if(BEHL_HAS_MSSE2)
+        target_compile_options(compiler_opts INTERFACE -msse2)
+    endif()
+    check_cxx_compiler_flag(-mfpmath=sse BEHL_HAS_MFPMATH_SSE)
+    if(BEHL_HAS_MFPMATH_SSE)
+        target_compile_options(compiler_opts INTERFACE -mfpmath=sse)
+    endif()
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(compiler_opts INTERFACE -Werror)
     endif()
@@ -70,6 +85,7 @@ if(BEHL_BUILD_TESTS OR BEHL_BUILD_BENCHMARKS)
 endif()
 
 set(BEHL_PRIVATE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_call.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_internal.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/api_debug.cpp
@@ -89,7 +105,9 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/compiler.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/backend/proto.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv_compat.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/ascii.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/charconv_tables.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/format.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/hash_map.hpp
@@ -99,7 +117,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/string.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/vector.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/config_internal.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/exceptions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_error.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/frontend/export_transform.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/frontend/export_transform.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/frontend/lexer.cpp
@@ -131,10 +149,12 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_compiler.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_helpers.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/jit_config.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_core.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_fs.cpp
@@ -162,18 +182,22 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/ast/loop_optimization.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/optimization.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/optimization_pass.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/platform.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/platform.posix.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/platform.win32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/state.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/state_debug.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/bytecode_meta.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/frame.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/integer_ops.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/arithmetic.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/arithmetic.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/upvalue.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/value.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_error.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_arithmetic.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_bitwise.hpp
@@ -185,13 +209,14 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_metatable.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_operands.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_table.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_buffer.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_fields.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm_upvalues.hpp
 )
 
 set(BEHL_PUBLIC_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/config.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/debug.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/exceptions.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/export.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/behl/behl.hpp
@@ -211,10 +236,19 @@ set(BEHL_PRIVATE_INCLUDE_DIRS
 
 add_library(libbehl)
 
+if(BEHL_BUILD_TESTS OR BEHL_BUILD_BENCHMARKS)
+    set(BEHL_VISIBILITY default)
+    set(BEHL_EXPORT_ALL ON)
+else()
+    set(BEHL_VISIBILITY hidden)
+    set(BEHL_EXPORT_ALL OFF)
+endif()
+
 set_target_properties(libbehl PROPERTIES
-    CXX_VISIBILITY_PRESET hidden
+    CXX_VISIBILITY_PRESET ${BEHL_VISIBILITY}
     VISIBILITY_INLINES_HIDDEN ON
     POSITION_INDEPENDENT_CODE ON
+    WINDOWS_EXPORT_ALL_SYMBOLS ${BEHL_EXPORT_ALL}
 )
 
 if(MSVC)
@@ -251,20 +285,21 @@ target_link_libraries(libbehl
 )
 
 target_compile_definitions(libbehl PRIVATE BEHL_BUILDING_LIBRARY)
-if(BUILD_SHARED_LIBS)
+if(BUILD_SHARED_LIBS AND NOT BEHL_EXPORT_ALL)
     target_compile_definitions(libbehl PUBLIC BEHL_SHARED_LIBRARY)
-endif()
-if(BEHL_BUILD_TESTS OR BEHL_BUILD_BENCHMARKS)
-    target_compile_definitions(libbehl PUBLIC BEHL_EXPORT_INTERNAL)
 endif()
 
 # Tests
 if(BEHL_BUILD_TESTS)
     set(BEHL_TEST_SOURCES
         src/tests/main.cpp
+        src/tests/math_tests.cpp
         src/tests/api_tests.cpp
+        src/tests/api_stack_tests.cpp
         src/tests/bitwise_tests.cpp
+        src/tests/buffer_tests.cpp
         src/tests/callstack_tests.cpp
+        src/tests/charconv_tests.cpp
         src/tests/cfunction_tests.cpp
         src/tests/compare_tests.cpp
         src/tests/concat_tests.cpp
@@ -275,10 +310,13 @@ if(BEHL_BUILD_TESTS)
         src/tests/edge_case_tests.cpp
         src/tests/error_tests.cpp
         src/tests/format_tests.cpp
+        src/tests/fs_tests.cpp
         src/tests/string_format_tests.cpp
+        src/tests/string_lib_tests.cpp
         src/tests/string_key_tests.cpp
         src/tests/function_tests.cpp
         src/tests/hash_map_tests.cpp
+        src/tests/jit_codegen_tests.cpp
         src/tests/jit_unwind_tests.cpp
         src/tests/hash_set_tests.cpp
         src/tests/gc_list_tests.cpp
@@ -294,7 +332,9 @@ if(BEHL_BUILD_TESTS)
         src/tests/numeric_literal_tests.cpp
         src/tests/integer_wrapping_tests.cpp
         src/tests/operator_tests.cpp
+        src/tests/os_tests.cpp
         src/tests/parser_tests.cpp
+        src/tests/pow_accuracy_tests.cpp
         src/tests/pcall_tests.cpp
         src/tests/pinning_tests.cpp
         src/tests/process_tests.cpp
@@ -375,6 +415,8 @@ if(BEHL_BUILD_BENCHMARKS AND NOT EMSCRIPTEN)
         src/benchmarks/compiler_benchmarks.cpp
         src/benchmarks/jit_codegen_benchmarks.cpp
         src/benchmarks/scriptcall_benchmarks.cpp
+        src/benchmarks/charconv_benchmarks.cpp
+        src/benchmarks/format_benchmarks.cpp
     )
 
     add_executable(benchmarks)

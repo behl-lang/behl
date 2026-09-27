@@ -109,7 +109,7 @@ for (let i = 0, j = 10; i < j; i++, j--) {  // NOT optimized
 
 ### Performance Impact
 
-Optimized numeric for loops are approximately **2-3x faster** than generic for loops because:
+Optimized numeric for loops are faster than generic for loops because:
 - Loop iteration uses specialized bytecode instructions
 - Condition checking is streamlined
 - No need for generic expression evaluation on each iteration
@@ -285,7 +285,10 @@ This is a deliberate trade: the optimization is significantly faster on the comm
 
 ### Performance Impact
 
-On recursive benchmarks the saving is substantial because the global lookup runs on every call:
+On recursive benchmarks the saving is measurable because the global lookup runs
+on every call. The figures below are **historical, interpreter-only** numbers
+taken before the native JIT landed; they no longer describe default execution
+and no methodology was recorded with them.
 
 | Benchmark | Without opt | With opt | Speedup |
 |-----------|------------:|---------:|--------:|
@@ -533,13 +536,15 @@ When using the C++ embedding API, you can disable all AST-level optimizations by
 
 ```cpp
 // Load with optimizations (default)
-behl::load_string(S, code);
-behl::load_string(S, code, true);
+int32_t status = behl::load_string(S, code);
+status = behl::load_string(S, code, true);
 
 // Load without optimizations
-behl::load_string(S, code, false);
-behl::load_buffer(S, code, "script.behl", false);
+status = behl::load_string(S, code, false);
+status = behl::load_buffer(S, code, "script.behl", false);
 ```
+
+Each call returns `0` on success or a negative status code with the error message on the stack; see [Error Handling](embedding/error-handling).
 
 When optimizations are disabled:
 - Constant folding is **not** performed
@@ -577,7 +582,7 @@ Optimizations are applied in multiple passes:
    - Loop optimization
    - Constant folding
    - Dead store elimination
-   - Applied after parsing, before semantic analysis
+   - Applied after parsing and after semantic analysis, which always runs
 
 2. **Bytecode-level optimizations** (`src/backend/compiler.cpp`)
    - Tail call detection and transformation
@@ -585,7 +590,7 @@ Optimizations are applied in multiple passes:
 
 ### Testing
 
-All optimizations have comprehensive test coverage in `tests/optimizations_tests.cpp` and related test files. The tests verify:
+All optimizations have comprehensive test coverage in `src/tests/optimizations_tests.cpp` and related test files. The tests verify:
 - Correct bytecode generation for optimized cases
 - Proper handling of edge cases
 - Equivalent behavior between optimized and non-optimized code

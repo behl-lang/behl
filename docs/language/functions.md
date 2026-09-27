@@ -27,6 +27,32 @@ function name(param1, param2) {
 }
 ```
 
+### Declaration Forms
+
+| Form | Meaning |
+|------|---------|
+| `function name() {}` | Assigns to the **global** `name` |
+| `let function name() {}` | Local function, visible in the enclosing scope |
+| `const function name() {}` | Same as `let function` |
+| `function a.b.c() {}` | Assigns to the field `c` of `a.b` |
+| `function a.b:m() {}` | Same, but adds an implicit `self` first parameter |
+| `export function name() {}` | Module export, only inside a `module;` file |
+| `let f = function() {}` | Anonymous function assigned to a local |
+
+```cpp
+let obj = { nested = {} };
+
+function obj.nested.helper(x) {   // obj.nested.helper = function(x)
+    return x + 1;
+}
+
+function obj:describe() {         // 'self' is implicit here
+    return typeof(self);
+}
+
+print(obj:describe());            // "table"
+```
+
 ### Examples
 
 ```cpp
@@ -101,6 +127,19 @@ Functions can return multiple values:
 ```cpp
 function divmod(a, b) {
     return a / b, a % b;
+}
+
+let quotient, remainder = divmod(10, 3);
+// quotient = 3.333..., remainder = 1
+```
+
+`/` is always float division, so use `math.floor()` if you want an integer quotient:
+
+```cpp
+const math = import("math");
+
+function divmod(a, b) {
+    return math.floor(a / b), a % b;
 }
 
 let quotient, remainder = divmod(10, 3);
@@ -460,6 +499,26 @@ let result = obj.method(obj, 10);  // 52
 let result = obj["method"](obj, 10);  // 52
 ```
 
+### Where `:` Is Allowed
+
+`:` is not a general postfix operator. The parser only accepts it when it sees the exact pattern `: identifier (`, and it refuses it when the left-hand side is a call, because `:` would otherwise be ambiguous with the ternary operator:
+
+```cpp
+obj:method();              // OK
+obj.inner:method();        // OK
+obj["k"]:method();         // OK
+
+makeCounter():increment(); // Parse error: left side is a call
+obj:field;                 // Parse error: not followed by '('
+```
+
+Bind the call result to a variable first:
+
+```cpp
+let c = makeCounter();
+c:increment();
+```
+
 ### Creating Object-Like Structures
 
 ```cpp
@@ -537,7 +596,7 @@ let globalVar = "global";
 function outer() {
     let outerVar = "outer";
     
-    function inner() {
+    let function inner() {
         let innerVar = "inner";
         
         // Can access all enclosing scopes
@@ -553,6 +612,32 @@ function outer() {
 outer();
 // print(outerVar);  // Error: not accessible here
 ```
+
+**Important**: a bare `function name() { ... }` declaration is **always global**, no matter how deeply it is nested. Nesting it inside another function does not make it local, it still assigns to the global `name` when `outer()` runs, and it stays reachable after `outer()` returns:
+
+```cpp
+function outer() {
+    function inner() {       // Global, despite the nesting
+        return 1;
+    }
+}
+
+outer();
+print(inner());  // 1, inner escaped into the global namespace
+```
+
+Use `let function` (or `const function`) to get a function local to the enclosing scope:
+
+```cpp
+function outer() {
+    let function inner() {   // Local to outer
+        return 1;
+    }
+    return inner();
+}
+```
+
+The one exception is a `module;` file, where a top-level `function name() { ... }` is compiled as a local, because module files cannot touch globals at all. See [Modules](modules-lang).
 
 ## Best Practices
 

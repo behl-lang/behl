@@ -1,12 +1,14 @@
 #include "frontend/lexer.hpp"
 
+#include "common/ascii.hpp"
 #include "common/vector.hpp"
 #include "gc/gc.hpp"
 #include "state.hpp"
+#include "vm/vm_error.hpp"
 
 #include <algorithm>
 #include <array>
-#include <behl/exceptions.hpp>
+#include <cassert>
 #include <functional>
 #include <ranges>
 #include <stdexcept>
@@ -53,6 +55,22 @@ namespace behl
         return std::nullopt;
     }
 
+    static constexpr bool is_excluded_identifier_char(char32_t c) noexcept
+    {
+        return c == 0x00A0 || (c >= 0x2000 && c <= 0x200D) || c == 0x2028 || c == 0x2029 || (c >= 0x202A && c <= 0x202E)
+            || c == 0x2060 || (c >= 0x2066 && c <= 0x2069) || c == 0x3000 || c == 0xFEFF;
+    }
+
+    static constexpr bool is_identifier_start(char32_t c) noexcept
+    {
+        return is_ascii_alpha(c) || c == U'_' || (c >= 0x80 && !is_excluded_identifier_char(c));
+    }
+
+    static constexpr bool is_identifier_continue(char32_t c) noexcept
+    {
+        return is_identifier_start(c) || is_ascii_digit(c);
+    }
+
     struct LexerState
     {
         std::string_view source;
@@ -60,7 +78,19 @@ namespace behl
         int line = 1;
         int column = 1;
         GCString* chunkname;
+        State* S = nullptr;
     };
+
+    static unsigned char continuation_byte(const LexerState& L, size_t pos)
+    {
+        assert(pos < L.source.size());
+        unsigned char b = static_cast<unsigned char>(L.source[pos]);
+        if ((b & 0xC0) != 0x80)
+        {
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
+        }
+        return b;
+    }
 
     static char32_t decode_codepoint(const LexerState& L, size_t start_pos, size_t& bytes)
     {
@@ -75,41 +105,56 @@ namespace behl
             bytes = 1;
             return static_cast<char32_t>(byte1);
         }
+        else if (byte1 < 0xC2)
+        {
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
+        }
         else if (byte1 < 0xE0)
         {
             if (start_pos + 1 >= L.source.size())
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             bytes = 2;
-            return static_cast<char32_t>((byte1 & 0x1F) << 6 | (static_cast<unsigned char>(L.source[start_pos + 1]) & 0x3F));
+            return static_cast<char32_t>((byte1 & 0x1F) << 6 | (continuation_byte(L, start_pos + 1) & 0x3F));
         }
         else if (byte1 < 0xF0)
         {
             if (start_pos + 2 >= L.source.size())
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
+            }
+            const unsigned char byte2 = continuation_byte(L, start_pos + 1);
+            const unsigned char byte3 = continuation_byte(L, start_pos + 2);
+            const char32_t cp = static_cast<char32_t>((byte1 & 0x0F) << 12 | (byte2 & 0x3F) << 6 | (byte3 & 0x3F));
+            if (cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF))
+            {
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             bytes = 3;
-            return static_cast<char32_t>((byte1 & 0x0F) << 12
-                | (static_cast<unsigned char>(L.source[start_pos + 1]) & 0x3F) << 6
-                | (static_cast<unsigned char>(L.source[start_pos + 2]) & 0x3F));
+            return cp;
         }
-        else if (byte1 < 0xF8)
+        else if (byte1 < 0xF5)
         {
             if (start_pos + 3 >= L.source.size())
             {
-                throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
+            }
+            const unsigned char byte2 = continuation_byte(L, start_pos + 1);
+            const unsigned char byte3 = continuation_byte(L, start_pos + 2);
+            const unsigned char byte4 = continuation_byte(L, start_pos + 3);
+            const char32_t cp = static_cast<char32_t>(
+                (byte1 & 0x07) << 18 | (byte2 & 0x3F) << 12 | (byte3 & 0x3F) << 6 | (byte4 & 0x3F));
+            if (cp < 0x10000 || cp > 0x10FFFF)
+            {
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
             }
             bytes = 4;
-            return static_cast<char32_t>((byte1 & 0x07) << 18
-                | (static_cast<unsigned char>(L.source[start_pos + 1]) & 0x3F) << 12
-                | (static_cast<unsigned char>(L.source[start_pos + 2]) & 0x3F) << 6
-                | (static_cast<unsigned char>(L.source[start_pos + 3]) & 0x3F));
+            return cp;
         }
         else
         {
-            throw SyntaxError("Invalid UTF-8", SourceLocation(L.chunkname, L.line, L.column));
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, L.line, L.column), "Invalid UTF-8");
         }
     }
 
@@ -171,7 +216,7 @@ namespace behl
 
     static void skip_whitespace(LexerState& L)
     {
-        while (std::isspace(static_cast<int>(current_codepoint(L))))
+        while (is_ascii_space(current_codepoint(L)))
         {
             advance_codepoint(L);
         }
@@ -220,7 +265,7 @@ namespace behl
         int start_line = L.line;
         int start_col = L.column;
         size_t start_pos = L.pos;
-        while (std::isalnum(static_cast<int>(current_codepoint(L))) || current_codepoint(L) == '_')
+        while (is_identifier_continue(current_codepoint(L)))
         {
             size_t bytes = 0;
             decode_codepoint(L, L.pos, bytes);
@@ -265,7 +310,7 @@ namespace behl
             if (is_hex)
             {
                 // Hexadecimal digits: 0-9, a-f, A-F
-                if (std::isdigit(static_cast<int>(c)) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))
+                if (is_ascii_hex_digit(c))
                 {
                     size_t bytes = 0;
                     decode_codepoint(L, L.pos, bytes);
@@ -279,7 +324,7 @@ namespace behl
             }
             else
             {
-                if (std::isdigit(static_cast<int>(c)))
+                if (is_ascii_digit(c))
                 {
                     size_t bytes = 0;
                     decode_codepoint(L, L.pos, bytes);
@@ -316,7 +361,7 @@ namespace behl
             char32_t c = current_codepoint(L);
             if (c == U'\0')
             {
-                throw SyntaxError("Unterminated string", SourceLocation(L.chunkname, start_line, start_col));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, start_line, start_col), "Unterminated string");
             }
             if (c == '\\')
             {
@@ -337,7 +382,7 @@ namespace behl
 
         if (current_codepoint(L) != quote)
         {
-            throw SyntaxError("Unterminated string", SourceLocation(L.chunkname, start_line, start_col));
+            raise_syntax_error(L.S, SourceLocation(L.chunkname, start_line, start_col), "Unterminated string");
         }
         advance_codepoint(L);
         return { TokenType::kString, str, start_line, start_col };
@@ -603,7 +648,7 @@ namespace behl
                 type = TokenType::kBNot;
                 break;
             default:
-                throw SyntaxError("Unexpected character", SourceLocation(L.chunkname, start_line, start_col));
+                raise_syntax_error(L.S, SourceLocation(L.chunkname, start_line, start_col), "Unexpected character");
         }
         for (int i = 0; i < advance_count; ++i)
         {
@@ -615,7 +660,7 @@ namespace behl
     AutoVector<Token> tokenize(State* state, std::string_view source, std::string_view chunkname)
     {
         GCString* chunk = gc_new_string(state, chunkname.empty() ? std::string_view("<script>") : chunkname);
-        LexerState L{ source, 0, 1, 1, chunk };
+        LexerState L{ source, 0, 1, 1, chunk, state };
 
         AutoVector<Token> tokens(state);
 
@@ -638,11 +683,11 @@ namespace behl
                 continue;
             }
 
-            if (std::isalpha(static_cast<int>(c)) || c == '_')
+            if (is_identifier_start(c))
             {
                 tokens.push_back(scan_identifier(L));
             }
-            else if (std::isdigit(static_cast<int>(c)) || (c == '.' && std::isdigit(static_cast<int>(peek_codepoint(L)))))
+            else if (is_ascii_digit(c) || (c == '.' && is_ascii_digit(peek_codepoint(L))))
             {
                 tokens.push_back(scan_number(L));
             }

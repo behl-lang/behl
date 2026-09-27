@@ -1,9 +1,13 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include <stdexcept>
 #include <string>
 using namespace behl;
 
-class PCallTest : public ::testing::Test
+class PCallTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S;
@@ -11,6 +15,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         load_stdlib(S);
         set_top(S, 0);
@@ -22,7 +27,7 @@ protected:
     }
 };
 
-TEST_F(PCallTest, SuccessfulCall)
+TEST_P(PCallTest, SuccessfulCall)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -32,8 +37,8 @@ TEST_F(PCallTest, SuccessfulCall)
         return success, result;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 2));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
 
     ASSERT_EQ(get_top(S), 2);
     ASSERT_EQ(type(S, -2), Type::kBoolean);
@@ -42,7 +47,7 @@ TEST_F(PCallTest, SuccessfulCall)
     ASSERT_EQ(to_integer(S, -1), 30);
 }
 
-TEST_F(PCallTest, ErrorHandling)
+TEST_P(PCallTest, ErrorHandling)
 {
     constexpr std::string_view code = R"(
         function failing_func() {
@@ -51,8 +56,8 @@ TEST_F(PCallTest, ErrorHandling)
         success, err = pcall(failing_func);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_EQ(type(S, -1), Type::kBoolean);
@@ -66,7 +71,7 @@ TEST_F(PCallTest, ErrorHandling)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, MultipleReturnValues)
+TEST_P(PCallTest, MultipleReturnValues)
 {
     constexpr std::string_view code = R"(
         function multi_return(a, b, c) {
@@ -75,8 +80,8 @@ TEST_F(PCallTest, MultipleReturnValues)
         success, r1, r2, r3, r4 = pcall(multi_return, 1, 2, 3);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -99,7 +104,7 @@ TEST_F(PCallTest, MultipleReturnValues)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, NoArguments)
+TEST_P(PCallTest, NoArguments)
 {
     constexpr std::string_view code = R"(
         function get_value() {
@@ -108,8 +113,8 @@ TEST_F(PCallTest, NoArguments)
         success, value = pcall(get_value);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -120,7 +125,7 @@ TEST_F(PCallTest, NoArguments)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, RuntimeTypeError)
+TEST_P(PCallTest, RuntimeTypeError)
 {
     constexpr std::string_view code = R"(
         function type_error() {
@@ -130,8 +135,8 @@ TEST_F(PCallTest, RuntimeTypeError)
         success, err = pcall(type_error);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_FALSE(to_boolean(S, -1));
@@ -142,7 +147,7 @@ TEST_F(PCallTest, RuntimeTypeError)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, DivisionByZero)
+TEST_P(PCallTest, DivisionByZero)
 {
     constexpr std::string_view code = R"(
         function div_zero() {
@@ -151,15 +156,15 @@ TEST_F(PCallTest, DivisionByZero)
         success, result = pcall(div_zero);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_EQ(type(S, -1), Type::kBoolean);
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ClosureCall)
+TEST_P(PCallTest, ClosureCall)
 {
     constexpr std::string_view code = R"(
         function make_adder(x) {
@@ -171,8 +176,8 @@ TEST_F(PCallTest, ClosureCall)
         success, result = pcall(add5, 10);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -183,14 +188,14 @@ TEST_F(PCallTest, ClosureCall)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, CFunctionCall)
+TEST_P(PCallTest, CFunctionCall)
 {
     constexpr std::string_view code = R"(
         success, result = pcall(typeof, 42);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -203,7 +208,7 @@ TEST_F(PCallTest, CFunctionCall)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, NestedPCall)
+TEST_P(PCallTest, NestedPCall)
 {
     constexpr std::string_view code = R"(
         function inner() {
@@ -219,8 +224,8 @@ TEST_F(PCallTest, NestedPCall)
         success, result = pcall(outer);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -234,7 +239,7 @@ TEST_F(PCallTest, NestedPCall)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ReturnsNil)
+TEST_P(PCallTest, ReturnsNil)
 {
     constexpr std::string_view code = R"(
         function returns_nil() {
@@ -243,8 +248,8 @@ TEST_F(PCallTest, ReturnsNil)
         success, result = pcall(returns_nil);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -255,7 +260,7 @@ TEST_F(PCallTest, ReturnsNil)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ReturnsNothing)
+TEST_P(PCallTest, ReturnsNothing)
 {
     constexpr std::string_view code = R"(
         function returns_nothing() {
@@ -263,8 +268,8 @@ TEST_F(PCallTest, ReturnsNothing)
         success, result = pcall(returns_nothing);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -275,17 +280,17 @@ TEST_F(PCallTest, ReturnsNothing)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, NonCallableError)
+TEST_P(PCallTest, NonCallableError)
 {
     constexpr std::string_view code = R"(
         success, err = pcall(42);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    EXPECT_ANY_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0));
 }
 
-TEST_F(PCallTest, CallableTable)
+TEST_P(PCallTest, CallableTable)
 {
     constexpr std::string_view code = R"(
         function try_call_table() {
@@ -295,8 +300,8 @@ TEST_F(PCallTest, CallableTable)
         success, err = pcall(try_call_table);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_FALSE(to_boolean(S, -1));
@@ -307,7 +312,7 @@ TEST_F(PCallTest, CallableTable)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, RecursiveError)
+TEST_P(PCallTest, RecursiveError)
 {
     constexpr std::string_view code = R"(
         function recurse(n) {
@@ -319,8 +324,8 @@ TEST_F(PCallTest, RecursiveError)
         success, err = pcall(recurse, 5);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_FALSE(to_boolean(S, -1));
@@ -333,7 +338,7 @@ TEST_F(PCallTest, RecursiveError)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ErrorWithCustomMessage)
+TEST_P(PCallTest, ErrorWithCustomMessage)
 {
     constexpr std::string_view code = R"(
         function validate(x) {
@@ -346,8 +351,8 @@ TEST_F(PCallTest, ErrorWithCustomMessage)
         s2, r2 = pcall(validate, -3);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "s1");
     ASSERT_TRUE(to_boolean(S, -1));
@@ -367,7 +372,7 @@ TEST_F(PCallTest, ErrorWithCustomMessage)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, ErrorWithFormattedMessage)
+TEST_P(PCallTest, ErrorWithFormattedMessage)
 {
     constexpr std::string_view code = R"(
         function divide(a, b) {
@@ -379,8 +384,8 @@ TEST_F(PCallTest, ErrorWithFormattedMessage)
         success, result = pcall(divide, 10, 0);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     get_global(S, "success");
     ASSERT_FALSE(to_boolean(S, -1));
@@ -394,7 +399,7 @@ TEST_F(PCallTest, ErrorWithFormattedMessage)
     pop(S, 1);
 }
 
-TEST_F(PCallTest, MultipleDifferentErrors)
+TEST_P(PCallTest, MultipleDifferentErrors)
 {
     constexpr std::string_view code = R"(
         function err1() { error("error type 1"); }
@@ -406,8 +411,8 @@ TEST_F(PCallTest, MultipleDifferentErrors)
         s3, e3 = pcall(err3);
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     for (int i = 1; i <= 3; ++i)
     {
@@ -426,7 +431,7 @@ TEST_F(PCallTest, MultipleDifferentErrors)
     }
 }
 
-TEST_F(PCallTest, ErrorDoesntAffectState)
+TEST_P(PCallTest, ErrorDoesntAffectState)
 {
     constexpr std::string_view code = R"(
         let counter = 0;
@@ -446,8 +451,8 @@ TEST_F(PCallTest, ErrorDoesntAffectState)
         return counter;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     ASSERT_EQ(to_integer(S, -1), 3);
 
@@ -471,3 +476,210 @@ TEST_F(PCallTest, ErrorDoesntAffectState)
     ASSERT_EQ(to_integer(S, -1), 3);
     pop(S, 1);
 }
+
+TEST_P(PCallTest, ErrorsThrownInsideMetamethodsAreCaughtAndStateStaysUsable)
+{
+    constexpr std::string_view code = R"(
+        let mt = {
+            __add = function(a, b) { error("in add") },
+            __lt = function(a, b) { error("in lt") },
+            __len = function(a) { error("in len") },
+            __call = function(a) { error("in call") }
+        }
+        let o = setmetatable({}, mt)
+
+        let ok1, e1 = pcall(function() { return o + 1 })
+        let ok2, e2 = pcall(function() { return o < o })
+        let ok3, e3 = pcall(function() { return #o })
+        let ok4, e4 = pcall(function() { return o() })
+
+        let sum = 0
+        for (let i = 0; i < 10; i = i + 1) { sum = sum + i }
+        let t = {x = 5}
+
+        return ok1, e1, ok2, e2, ok3, e3, ok4, e4, sum, t.x
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 10));
+    ASSERT_EQ(get_top(S), 10);
+
+    const char* expected[] = { "in add", "in lt", "in len", "in call" };
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_FALSE(to_boolean(S, i * 2)) << expected[i];
+        ASSERT_EQ(type(S, i * 2 + 1), Type::kString) << expected[i];
+        EXPECT_NE(to_string(S, i * 2 + 1).find(expected[i]), std::string_view::npos) << to_string(S, i * 2 + 1);
+    }
+    EXPECT_EQ(to_integer(S, 8), 45);
+    EXPECT_EQ(to_integer(S, 9), 5);
+
+    set_top(S, 0);
+    ASSERT_TRUE(behl_test::load_ok(S, "let a = {1, 2, 3}; return #a + 1"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    ASSERT_EQ(get_top(S), 1);
+    EXPECT_EQ(to_integer(S, -1), 4);
+}
+
+TEST_P(PCallTest, ErrorWithNilIsCaughtAsTheStringNil)
+{
+    constexpr std::string_view code = R"(
+        let ok, err = pcall(function() { error(nil) })
+        return ok, typeof(err), err
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_FALSE(to_boolean(S, -3));
+    EXPECT_EQ(to_string(S, -2), "nil");
+    EXPECT_EQ(type(S, -1), Type::kNil);
+}
+
+TEST_P(PCallTest, ErrorKeepsTableIdentity)
+{
+    constexpr std::string_view code = R"(
+        let t = {code = 42}
+        let ok, e = pcall(function() { error(t) })
+        return ok, e == t, e.code
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_FALSE(to_boolean(S, -3));
+    EXPECT_TRUE(to_boolean(S, -2));
+    EXPECT_EQ(to_integer(S, -1), 42);
+}
+
+TEST_P(PCallTest, ErrorPassesStringThroughUnchanged)
+{
+    constexpr std::string_view code = R"(
+        let msg = "boom"
+        let ok, e = pcall(function() { error(msg) })
+        return ok, e == msg, e
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_FALSE(to_boolean(S, -3));
+    EXPECT_TRUE(to_boolean(S, -2));
+    EXPECT_EQ(to_string(S, -1), "boom");
+}
+
+TEST_P(PCallTest, ErrorWithoutArgumentRaisesNil)
+{
+    constexpr std::string_view code = R"(
+        let ok, e = pcall(function() { error() })
+        return ok, typeof(e)
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_FALSE(to_boolean(S, -2));
+    EXPECT_EQ(to_string(S, -1), "nil");
+}
+
+TEST_P(PCallTest, ErrorStringReachesHostUnchanged)
+{
+    ASSERT_TRUE(behl_test::load_ok(S, "error(\"boom\")"));
+    EXPECT_EQ(call(S, 0, 0), kErrorRuntime);
+    ASSERT_EQ(type(S, -1), Type::kString);
+    EXPECT_EQ(to_string(S, -1), "boom");
+}
+
+TEST_P(PCallTest, ErrorValueSurvivesCollectionInDeferDuringUnwinding)
+{
+    constexpr std::string_view code = R"(
+        const gc = import("gc")
+        function fail() {
+            defer {
+                for (let i = 0; i < 3000; i = i + 1) {
+                    let junk = {i, i + 1, "x" + tostring(i)}
+                }
+                gc.collect()
+            }
+            error({marker = 12345, name = "boom" + tostring(7)})
+        }
+        let ok, e = pcall(fail)
+        gc.collect()
+        return ok, e.marker, e.name
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_FALSE(to_boolean(S, -3));
+    EXPECT_EQ(to_integer(S, -2), 12345);
+    EXPECT_EQ(to_string(S, -1), "boom7");
+}
+
+TEST_P(PCallTest, CallReturnsResultCount)
+{
+    ASSERT_TRUE(behl_test::load_ok(S, "return 1, 2, 3"));
+    EXPECT_EQ(call(S, 0, kMultRet), 3);
+    EXPECT_EQ(get_top(S), 3);
+    set_top(S, 0);
+
+    ASSERT_TRUE(behl_test::load_ok(S, "return 1, 2, 3"));
+    EXPECT_EQ(call(S, 0, 2), 2);
+    EXPECT_EQ(get_top(S), 2);
+}
+
+TEST_P(PCallTest, CallReturnsRuntimeErrorWithErrorValueOnStack)
+{
+    ASSERT_TRUE(behl_test::load_ok(S, "error({code = 5})"));
+    ASSERT_EQ(call(S, 0, 0), kErrorRuntime);
+    ASSERT_EQ(get_top(S), 1);
+    ASSERT_EQ(type(S, -1), Type::kTable);
+    table_getfield(S, -1, "code");
+    EXPECT_EQ(to_integer(S, -1), 5);
+}
+
+TEST_P(PCallTest, LoadReturnsSyntaxErrorWithMessageOnStack)
+{
+    ASSERT_EQ(load_string(S, "let = ;"), kErrorSyntax);
+    ASSERT_EQ(get_top(S), 1);
+    ASSERT_EQ(type(S, -1), Type::kString);
+    EXPECT_NE(std::string(to_string(S, -1)).find("Error"), std::string::npos);
+}
+
+TEST_P(PCallTest, ErrorValueFromCFunctionReachesPcall)
+{
+    register_function(S, "raise_table", [](State* L) -> int {
+        table_new(L);
+        push_integer(L, 99);
+        table_setfield(L, -2, "id");
+        error_value(L);
+    });
+
+    constexpr std::string_view code = R"(
+        let ok, e = pcall(raise_table)
+        return ok, typeof(e), e.id
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_FALSE(to_boolean(S, -3));
+    EXPECT_EQ(to_string(S, -2), "table");
+    EXPECT_EQ(to_integer(S, -1), 99);
+}
+
+TEST_P(PCallTest, ForeignExceptionPassesThroughCallAndPcallStringifiesIt)
+{
+    register_function(S, "host_throw", [](State*) -> int { throw std::runtime_error("host boom"); });
+
+    ASSERT_TRUE(behl_test::load_ok(S, "host_throw()"));
+    EXPECT_THROW(static_cast<void>(call(S, 0, 0)), std::runtime_error);
+    EXPECT_EQ(get_top(S), 0);
+
+    constexpr std::string_view code = R"(
+        let ok, e = pcall(host_throw)
+        return ok, e
+    )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_FALSE(to_boolean(S, -2));
+    EXPECT_EQ(to_string(S, -1), "host boom");
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, PCallTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

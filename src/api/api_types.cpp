@@ -1,13 +1,15 @@
 #include "api/api_internal.hpp"
 #include "behl.hpp"
+#include "common/arithmetic.hpp"
 #include "common/format.hpp"
 #include "gc/gc.hpp"
 #include "gc/gco_string.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
 #include "vm/vm.hpp"
+#include "vm/vm_debug.hpp"
+#include "vm/vm_error.hpp"
 
-#include <behl/exceptions.hpp>
 #include <cassert>
 #include <cmath>
 
@@ -56,7 +58,11 @@ namespace behl
 
         if (v.is_fp())
         {
-            return static_cast<Integer>(v.get_fp());
+            Integer n = 0;
+            if (arithmetic::try_from_fp(v.get_fp(), n))
+            {
+                return n;
+            }
         }
 
         return 0;
@@ -125,11 +131,24 @@ namespace behl
     [[noreturn]] void error(State* S, std::string_view msg)
     {
         assert(S != nullptr && "State can not be null");
+        assert(!S->call_stack.empty() && "error must be called from within a call");
 
-        std::string trace = build_stacktrace_internal(S);
-        std::string full_message = behl::format("{}\n{}", msg, trace);
+        format_buffer buffer;
+        append_error_prefix(buffer, SourceLocation{}, "RuntimeError");
+        buffer.append(msg);
+        buffer += '\n';
+        append_stacktrace(buffer, S);
+        throw Exception(Value(gc_new_string(S, buffer.view())));
+    }
 
-        throw RuntimeError(full_message);
+    [[noreturn]] void error_value(State* S)
+    {
+        assert(S != nullptr && "State can not be null");
+
+        assert(!S->call_stack.empty() && "error_value must be called from within a call");
+
+        const Value value = get_top(S) > 0 ? S->stack.back() : Value{};
+        throw Exception(value);
     }
 
     static std::string_view type_to_cstr(Type t)
@@ -214,14 +233,12 @@ namespace behl
         return pos;
     }
 
-    static TypeError make_type_error(State* S, int32_t idx, std::string_view expected)
+    [[noreturn]] static void raise_bad_argument(State* S, int32_t idx, std::string_view expected)
     {
         assert(S != nullptr && "State can not be null");
 
-        const auto arg_idx = one_based_arg_index(S, idx);
-        const auto received_type = value_typename(S, idx);
-        const auto msg = behl::format("bad argument #{} (expected {}, got {})", arg_idx, expected, received_type);
-        return TypeError(msg);
+        raise_type_error(S, SourceLocation{}, "bad argument #{} (expected {}, got {})", one_based_arg_index(S, idx), expected,
+            value_typename(S, idx));
     }
 
     void check_type(State* S, int32_t idx, Type t)
@@ -230,7 +247,7 @@ namespace behl
 
         if (auto val_type = type(S, idx); val_type != t)
         {
-            throw make_type_error(S, idx, Value::get_type_string(t));
+            raise_bad_argument(S, idx, Value::get_type_string(t));
         }
     }
 
@@ -241,7 +258,7 @@ namespace behl
         ptrdiff_t r_idx = resolve_index(S, idx);
         if (r_idx < 0 || r_idx >= static_cast<ptrdiff_t>(S->stack.size()))
         {
-            throw make_type_error(S, idx, "integer");
+            raise_bad_argument(S, idx, "integer");
         }
 
         const Value& v = S->stack[static_cast<size_t>(r_idx)];
@@ -252,14 +269,15 @@ namespace behl
 
         if (v.is_fp())
         {
-            FP d = v.get_fp();
-            if (std::floor(d) == d)
+            const FP d = v.get_fp();
+            Integer n = 0;
+            if (std::floor(d) == d && arithmetic::try_from_fp(d, n))
             {
-                return static_cast<Integer>(d);
+                return n;
             }
         }
 
-        throw make_type_error(S, idx, "integer");
+        raise_bad_argument(S, idx, "integer");
     }
 
     FP check_number(State* S, int32_t idx)
@@ -269,7 +287,7 @@ namespace behl
         ptrdiff_t r_idx = resolve_index(S, idx);
         if (r_idx < 0 || r_idx >= static_cast<ptrdiff_t>(S->stack.size()))
         {
-            throw make_type_error(S, idx, "number");
+            raise_bad_argument(S, idx, "number");
         }
 
         const Value& v = S->stack[static_cast<size_t>(r_idx)];
@@ -283,7 +301,7 @@ namespace behl
             return static_cast<FP>(v.get_integer());
         }
 
-        throw make_type_error(S, idx, "number");
+        raise_bad_argument(S, idx, "number");
     }
 
     std::string_view check_string(State* S, int32_t idx)
@@ -293,7 +311,7 @@ namespace behl
         ptrdiff_t r_idx = resolve_index(S, idx);
         if (r_idx < 0 || r_idx >= static_cast<ptrdiff_t>(S->stack.size()))
         {
-            throw make_type_error(S, idx, "string");
+            raise_bad_argument(S, idx, "string");
         }
 
         const Value& v = S->stack[static_cast<size_t>(r_idx)];
@@ -303,7 +321,7 @@ namespace behl
             return str_data->view();
         }
 
-        throw make_type_error(S, idx, "string");
+        raise_bad_argument(S, idx, "string");
     }
 
     bool check_boolean(State* S, int32_t idx)
@@ -313,7 +331,7 @@ namespace behl
         ptrdiff_t r_idx = resolve_index(S, idx);
         if (r_idx < 0 || r_idx >= static_cast<ptrdiff_t>(S->stack.size()))
         {
-            throw make_type_error(S, idx, "boolean");
+            raise_bad_argument(S, idx, "boolean");
         }
 
         const Value& v = S->stack[static_cast<size_t>(r_idx)];
@@ -322,7 +340,7 @@ namespace behl
             return v.get_bool();
         }
 
-        throw make_type_error(S, idx, "boolean");
+        raise_bad_argument(S, idx, "boolean");
     }
 
 } // namespace behl

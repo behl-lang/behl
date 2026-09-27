@@ -157,7 +157,7 @@ namespace behl
         // kOpGetFieldS - R(A) = R(B)[KS(C)]
         { OpCode::kOpGetFieldS, OpMode::kWrite, OpMode::kRead, OpMode::kNone, false, false, false, "GETFIELDS" },
         // kOpGetGlobal - R(A) = _G[KS(const_index)]
-        { OpCode::kOpGetGlobal, OpMode::kWrite, OpMode::kNone, OpMode::kNone, true, false, false, "GETGLOBAL", true },
+        { OpCode::kOpGetGlobal, OpMode::kWrite, OpMode::kNone, OpMode::kNone, true, false, false, "GETGLOBAL" },
         // kOpGetUpval - R(A) = upvalue[B]
         { OpCode::kOpGetUpval, OpMode::kWrite, OpMode::kNone, OpMode::kNone, true, false, false, "GETUPVAL", true },
         // kOpSetField - R(A)[R(B)] = R(C)
@@ -224,6 +224,7 @@ namespace behl
         { OpCode::kOpMMBxor, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMBXOR" },
         { OpCode::kOpMMShl, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHL" },
         { OpCode::kOpMMShr, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHR" },
+        { OpCode::kOpClose, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, false, false, "CLOSE", true },
     } };
 
     // Helper function to get metadata for an opcode

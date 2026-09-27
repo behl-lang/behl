@@ -18,7 +18,12 @@ Built-in modules and core functions available in Behl.
 The Behl standard library provides core functionality through global functions and modules. When `load_stdlib(S)` is called, it loads:
 
 - **Core Functions** - Global functions like `print()`, `typeof()`, `import()`
-- **Standard Modules** - `math`, `string`, `table`, `os`, `gc`, `jit`, `debug`
+- **Standard Modules** - `math`, `string`, `table`, `buffer`, `os`, `gc`, `jit`, `debug`
+
+Two further modules ship with Behl but are **not** loaded by `load_stdlib`,
+because they are security-sensitive: `fs` and `process`. An embedder opts in
+per state with `behl::load_lib_fs(S)` and `behl::load_lib_process(S)`. The CLI
+loads both.
 
 ### Loading the Standard Library
 
@@ -39,7 +44,7 @@ const string = import("string");
 const table = import("table");
 
 // Then use them
-print(math.PI);
+print(math.pi);
 let upper = string.upper("hello");
 table.insert(arr, value);
 ```
@@ -48,10 +53,15 @@ table.insert(arr, value);
 - `math` - Mathematical functions and constants
 - `string` - String manipulation utilities
 - `table` - Table operations
+- `buffer` - Mutable byte buffers
 - `os` - Operating system functions
 - `gc` - Garbage collector control
 - `jit` - JIT compiler control
 - `debug` - Debugging utilities
+
+**Opt-in modules** (not loaded by `load_stdlib`):
+- `fs` - Filesystem operations
+- `process` - Process spawning and management
 
 See [Module System](modules) for details.
 
@@ -66,10 +76,15 @@ See [Module System](modules) for details.
 - [Math Module](stdlib/math) - Mathematical functions and constants
 - [String Module](stdlib/string) - String manipulation
 - [Table Module](stdlib/table) - Table utilities
+- [Buffer Module](stdlib/buffer) - Byte buffers, slices, little-endian typed access
 - [OS Module](stdlib/os) - Operating system interface
 - [GC Module](stdlib/gc) - Garbage collector control
 - [JIT Module](stdlib/jit) - JIT compiler control
 - [Debug Module](stdlib/debug) - Debugging utilities
+
+### Opt-in Modules
+- [FS Module](stdlib/fs) - Filesystem operations, requires `load_lib_fs`
+- [Process Module](stdlib/process) - Process spawning, requires `load_lib_process`
 
 ---
 
@@ -86,7 +101,7 @@ const string = import("string");
 const table = import("table");
 
 // Use imported modules
-let angle = math.PI / 4;
+let angle = math.pi / 4;
 let upper = string.upper("hello");
 let sine = math.sin(angle);
 let reversed = string.reverse(upper);

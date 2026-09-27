@@ -205,7 +205,8 @@ Wait for the process to complete and return its exit code. This call blocks.
 
 **Returns:**
 - Exit code (integer) - The exit code returned by the process (meaning is application-specific, but by convention `0` typically indicates success)
-- `-1` if handle is invalid or wait failed
+- `-1` if the handle is valid but the underlying wait call fails
+- `false, error_message` if the handle is invalid
 
 **Exit Code Notes:**
 - The meaning of exit codes is defined by the application itself
@@ -411,7 +412,7 @@ let proc = process.spawn("node", {"script.js"}, {
 
 ### Inheriting and Adding Variables
 
-To inherit the parent environment and add/override specific variables, you would need to explicitly copy parent variables (behl doesn't currently provide direct access to parent environment, so you'd set all needed variables):
+To inherit the parent environment and add/override specific variables, you would need to explicitly copy parent variables (Behl doesn't currently provide direct access to parent environment, so you'd set all needed variables):
 
 ```javascript
 // Set all needed environment variables explicitly

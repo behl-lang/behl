@@ -136,6 +136,11 @@ namespace behl
         emit_ls(0x39400000u, 0, rn(dst), src);
     }
 
+    void A64Emitter::strb(A64Reg src, A64Mem dst)
+    {
+        emit_ls(0x39000000u, 0, rn(src), dst);
+    }
+
     void A64Emitter::ldr_d(A64Vec dst, A64Mem src)
     {
         emit_ls(0xFD400000u, 3, vn(dst), src);
@@ -328,6 +333,16 @@ namespace behl
     void A64Emitter::call(uintptr_t target)
     {
         nodes_.push_back(PatchNode{ static_cast<uint32_t>(buffer_.size()), 0, target, NodeType::kCall, 0, 0 });
+    }
+
+    void A64Emitter::br(A64Reg target)
+    {
+        emit(0xD61F0000u | (uint32_t{ rn(target) } << 5));
+    }
+
+    void A64Emitter::blr(A64Reg target)
+    {
+        emit(0xD63F0000u | (uint32_t{ rn(target) } << 5));
     }
 
     void A64Emitter::ret()

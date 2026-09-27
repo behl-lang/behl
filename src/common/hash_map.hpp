@@ -1,7 +1,7 @@
 #pragma once
 
 #include "memory.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "vm/value.hpp"
 
 #include <bit>
@@ -50,10 +50,11 @@ namespace behl
         BEHL_NO_UNIQUE_ADDRESS Eq eq_{};
 
         // Helper to extract 7-bit hash from full hash
-        static constexpr int8_t h2(size_t hash)
+        template<typename H>
+        static constexpr int8_t h2(H hash)
         {
-            // Use appropriate shift based on size_t width
-            constexpr int shift = sizeof(size_t) == 8 ? 57 : 25;
+            // Use appropriate shift based on the hash function's result width
+            constexpr int shift = static_cast<int>(sizeof(H) * 8 - 7);
             return static_cast<int8_t>((hash >> shift) & 0x7F);
         }
 
@@ -167,6 +168,39 @@ namespace behl
 
         HashMap() = default;
 
+        HashMap(HashMap&& other) noexcept
+            : ctrl_(other.ctrl_)
+            , slots_(other.slots_)
+            , size_(other.size_)
+            , capacity_(other.capacity_)
+            , tombstones_(other.tombstones_)
+        {
+            other.ctrl_ = nullptr;
+            other.slots_ = nullptr;
+            other.size_ = 0;
+            other.capacity_ = 0;
+            other.tombstones_ = 0;
+        }
+
+        HashMap& operator=(HashMap&& other) noexcept
+        {
+            if (this != &other)
+            {
+                ctrl_ = other.ctrl_;
+                slots_ = other.slots_;
+                size_ = other.size_;
+                capacity_ = other.capacity_;
+                tombstones_ = other.tombstones_;
+
+                other.ctrl_ = nullptr;
+                other.slots_ = nullptr;
+                other.size_ = 0;
+                other.capacity_ = 0;
+                other.tombstones_ = 0;
+            }
+            return *this;
+        }
+
 #ifndef NDEBUG
         ~HashMap()
         {
@@ -187,10 +221,22 @@ namespace behl
                 size_t actual_capacity = std::bit_ceil(std::max(initial_capacity, kMinCapacity));
                 assert(actual_capacity > 0 && "Capacity overflow in BasicMap initialization");
 
+                int8_t* ctrl = mem_alloc_array<int8_t>(state, actual_capacity);
+                KeyValue* slots = nullptr;
+                try
+                {
+                    slots = mem_alloc_array<KeyValue>(state, actual_capacity);
+                }
+                catch (...)
+                {
+                    mem_free_array<int8_t>(state, ctrl, actual_capacity);
+                    throw;
+                }
+                assert(ctrl && slots && "Memory allocation failed for BasicMap");
+
                 capacity_ = actual_capacity;
-                ctrl_ = mem_alloc_array<int8_t>(state, capacity_);
-                slots_ = mem_alloc_array<KeyValue>(state, capacity_);
-                assert(ctrl_ && slots_ && "Memory allocation failed for BasicMap");
+                ctrl_ = ctrl;
+                slots_ = slots;
 
                 // Initialize all control bytes as empty
                 std::memset(ctrl_, kEmpty, capacity_);
@@ -276,11 +322,17 @@ namespace behl
             // Check if we need to rehash
             if (needs_rehash())
             {
-                size_t new_capacity = capacity_ == 0 ? kMinCapacity : capacity_ * 2;
-                rehash(state, new_capacity);
+                if (KeyValue* existing = find_internal_impl(*this, key))
+                {
+                    existing->second = std::forward<ValueType>(value);
+                    return iterator(ctrl_ + (existing - slots_), ctrl_ + capacity_, existing);
+                }
+
+                return rehash_and_insert(state, capacity_ == 0 ? kMinCapacity : capacity_ * 2, std::forward<KeyType>(key),
+                    std::forward<ValueType>(value));
             }
 
-            size_t hash = hasher_(key);
+            const auto hash = hasher_(key);
             int8_t h2_val = h2(hash);
             size_t mask = capacity_ - 1;
             size_t index = hash & mask;
@@ -327,8 +379,7 @@ namespace behl
 
             // Table is full - shouldn't happen with load factor management
             // Force rehash and retry
-            rehash(state, capacity_ * 2);
-            return insert_or_assign(state, std::forward<KeyType>(key), std::forward<ValueType>(value));
+            return rehash_and_insert(state, capacity_ * 2, std::forward<KeyType>(key), std::forward<ValueType>(value));
         }
 
         // Insert a new key-value pair (does not update if key exists)
@@ -357,7 +408,7 @@ namespace behl
                 return;
             }
 
-            size_t hash = hasher_(key);
+            const auto hash = hasher_(key);
             int8_t h2_val = h2(hash);
             size_t mask = capacity_ - 1;
             size_t index = hash & mask;
@@ -436,50 +487,107 @@ namespace behl
             size_t old_capacity = capacity_;
 
             // Allocate new table
-            ctrl_ = mem_alloc_array<int8_t>(state, new_capacity);
-            slots_ = mem_alloc_array<KeyValue>(state, new_capacity);
-            assert(ctrl_ && slots_ && "Memory allocation failed during BasicMap rehash");
+            int8_t* new_ctrl = mem_alloc_array<int8_t>(state, new_capacity);
+            KeyValue* new_slots = nullptr;
+            try
+            {
+                new_slots = mem_alloc_array<KeyValue>(state, new_capacity);
+            }
+            catch (...)
+            {
+                mem_free_array<int8_t>(state, new_ctrl, new_capacity);
+                throw;
+            }
+            assert(new_ctrl && new_slots && "Memory allocation failed during BasicMap rehash");
 
+            ctrl_ = new_ctrl;
+            slots_ = new_slots;
             std::memset(ctrl_, kEmpty, new_capacity);
             capacity_ = new_capacity;
             size_ = 0;
             tombstones_ = 0; // tombstones don't carry across rehash
 
             // Reinsert all entries
-            if (old_ctrl)
+            migrate(state, old_ctrl, old_slots, old_capacity);
+        }
+
+        template<typename KeyType, typename ValueType>
+        iterator rehash_and_insert(State* state, size_t new_capacity, KeyType&& key, ValueType&& value)
+        {
+            assert(new_capacity > 0 && "New capacity must be greater than zero for rehashing");
+
+            int8_t* old_ctrl = ctrl_;
+            KeyValue* old_slots = slots_;
+            size_t old_capacity = capacity_;
+
+            int8_t* new_ctrl = mem_alloc_array<int8_t>(state, new_capacity);
+            KeyValue* new_slots = nullptr;
+            try
             {
-                for (size_t i = 0; i < old_capacity; ++i)
-                {
-                    if (old_ctrl[i] != kEmpty && old_ctrl[i] != kDeleted)
-                    {
-                        // Move the key-value pair to new table
-                        const K& key = old_slots[i].first;
-                        size_t hash = hasher_(key);
-                        int8_t h2_val = h2(hash);
-                        size_t mask = capacity_ - 1;
-                        size_t index = hash & mask;
-
-                        // Linear probe for empty slot
-                        while (ctrl_[index] != kEmpty)
-                        {
-                            index = (index + 1) & mask;
-                        }
-
-                        ctrl_[index] = h2_val;
-                        // Move construct into new location
-                        std::construct_at(&slots_[index].first, std::move(old_slots[i].first));
-                        std::construct_at(&slots_[index].second, std::move(old_slots[i].second));
-                        size_++;
-
-                        // Destroy old elements
-                        std::destroy_at(&old_slots[i].first);
-                        std::destroy_at(&old_slots[i].second);
-                    }
-                }
-
-                mem_free_array<int8_t>(state, old_ctrl, old_capacity);
-                mem_free_array<KeyValue>(state, old_slots, old_capacity);
+                new_slots = mem_alloc_array<KeyValue>(state, new_capacity);
             }
+            catch (...)
+            {
+                mem_free_array<int8_t>(state, new_ctrl, new_capacity);
+                throw;
+            }
+            assert(new_ctrl && new_slots && "Memory allocation failed during BasicMap rehash");
+
+            ctrl_ = new_ctrl;
+            slots_ = new_slots;
+            std::memset(ctrl_, kEmpty, new_capacity);
+            capacity_ = new_capacity;
+            size_ = 0;
+            tombstones_ = 0;
+
+            const size_t inserted = place(std::forward<KeyType>(key), std::forward<ValueType>(value));
+
+            migrate(state, old_ctrl, old_slots, old_capacity);
+
+            return iterator(ctrl_ + inserted, ctrl_ + capacity_, slots_ + inserted);
+        }
+
+        void migrate(State* state, int8_t* old_ctrl, KeyValue* old_slots, size_t old_capacity)
+        {
+            if (!old_ctrl)
+            {
+                return;
+            }
+
+            for (size_t i = 0; i < old_capacity; ++i)
+            {
+                if (old_ctrl[i] != kEmpty && old_ctrl[i] != kDeleted)
+                {
+                    place(std::move(old_slots[i].first), std::move(old_slots[i].second));
+
+                    std::destroy_at(&old_slots[i].first);
+                    std::destroy_at(&old_slots[i].second);
+                }
+            }
+
+            mem_free_array<int8_t>(state, old_ctrl, old_capacity);
+            mem_free_array<KeyValue>(state, old_slots, old_capacity);
+        }
+
+        template<typename KeyType, typename ValueType>
+        size_t place(KeyType&& key, ValueType&& value)
+        {
+            const auto hash = hasher_(key);
+            int8_t h2_val = h2(hash);
+            size_t mask = capacity_ - 1;
+            size_t index = hash & mask;
+
+            while (ctrl_[index] != kEmpty)
+            {
+                index = (index + 1) & mask;
+            }
+
+            ctrl_[index] = h2_val;
+            std::construct_at(&slots_[index].first, std::forward<KeyType>(key));
+            std::construct_at(&slots_[index].second, std::forward<ValueType>(value));
+            size_++;
+
+            return index;
         }
 
     private:
@@ -493,7 +601,7 @@ namespace behl
                 return nullptr;
             }
 
-            size_t hash = self.hasher_(key);
+            const auto hash = self.hasher_(key);
             int8_t h2_val = h2(hash);
             size_t mask = self.capacity_ - 1;
             size_t index = hash & mask;
