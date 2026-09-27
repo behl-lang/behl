@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <new>
 #include <string>
 #include <system_error>
 
@@ -235,7 +236,8 @@ namespace behl
         }
 
         auto* handle_ptr = static_cast<FileHandle*>(userdata_new(S, sizeof(FileHandle), kFileHandleUID));
-        std::construct_at(handle_ptr, std::move(stream), (open_mode & std::ios::in) != 0, (open_mode & std::ios::out) != 0);
+        ::new (static_cast<void*>(handle_ptr))
+            FileHandle{ std::move(stream), (open_mode & std::ios::in) != 0, (open_mode & std::ios::out) != 0 };
 
         // Get or create file metatable
         if (metatable_new(S, "fs.File"))

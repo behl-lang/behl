@@ -38,6 +38,7 @@ x = {1, 2, 3};     // now x holds a table
 | `function` | Callable function | Functions and closures |
 | `table` | Associative array | `{1, 2, 3}` |
 | `userdata` | C++ objects | Managed from C++ API |
+| `buffer` | Mutable byte array | `buffer.create(16)` |
 
 ## Type Query
 
@@ -73,6 +74,7 @@ print(typeid({}));     // 86
 | `string` | 69 | `"string"` |
 | `table` | 86 | `"table"` |
 | `userdata` | 89 | `"userdata"` |
+| `buffer` | 74 | `"buffer"` |
 | closure | 199 | `"function"` |
 | C function | 136 | `"function"` |
 
@@ -388,6 +390,60 @@ See [Userdata](../embedding/userdata) for details on creating and managing userd
 - Network sockets
 - Complex data structures (trees, graphs)
 - Native library bindings
+
+## Buffers
+
+A buffer is a mutable, fixed-length array of bytes. Buffers are created by the [buffer module](../stdlib/buffer) or from C++ (see [API Reference](../embedding/api-reference#buffers)).
+
+```cpp
+const buffer = import("buffer");
+
+let b = buffer.create(4);
+print(typeof(b));  // "buffer"
+print(#b);         // 4
+print(b[0]);       // 0 (new buffers are zero-filled)
+```
+
+### Characteristics
+
+- **Mutable**: bytes are changed in place, unlike strings
+- **Reference semantics**: `==` compares identity, two buffers with the same bytes are not equal
+- **Table keys**: a buffer can be used as a table key (by identity)
+- **Printing**: `tostring(b)` gives `buffer:0x...`
+- **Garbage collected**: freed when no longer referenced
+- **Slices**: `buffer.slice` creates a buffer that shares bytes with another one, see [Slices](../stdlib/buffer#slices)
+
+### Indexing
+
+`b[i]` reads or writes one byte. Indices are 0-based and run from `0` to `#b - 1`.
+
+- A read returns an `integer` from `0` to `255`.
+- A write stores the low 8 bits of the value, so `256` stores `0` and `-1` stores `255`.
+- Integral floats are accepted as index and as value, `b[2.0] = 7.0` is the same as `b[2] = 7`.
+
+```cpp
+const buffer = import("buffer");
+
+let b = buffer.create(3);
+b[0] = 65;
+b[1] = 256;
+b[2.0] = -1;
+print(b[0], b[1], b[2]);  // 65  0  255
+print(#b);                // 3
+```
+
+`#b` is the length in bytes.
+
+### Errors
+
+| Operation | Error |
+|-----------|-------|
+| `b[3]` on a 3-byte buffer, or `b[-1]` | `RuntimeError: buffer index 3 out of range (length 3)` |
+| `b[1.5]` or `b[0] = 1.5` | `TypeError: number has no integer representation` |
+| `b["x"]` or `b.x` | `TypeError: attempt to index a buffer with a 'string' value` |
+| `b[0] = "x"` | `TypeError: attempt to store a 'string' value in a buffer` |
+
+For bulk copies, strings and typed little-endian values (`u16`, `i32`, `f64`, ...) see the [buffer module](../stdlib/buffer).
 
 ## Type Conversions
 

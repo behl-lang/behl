@@ -81,7 +81,12 @@ namespace behl
 
         check_type(S, idx, Type::kBuffer);
 
-        return buffer_at(S, idx)->bytes();
+        GCBuffer* buffer = buffer_at(S, idx);
+        if (buffer == nullptr)
+        {
+            return {};
+        }
+        return buffer->bytes();
     }
 
 } // namespace behl

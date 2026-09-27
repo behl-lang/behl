@@ -168,24 +168,39 @@ namespace behl
             S->gc.gc_pool_hits++;
 
             new_obj = static_cast<GCTable*>(S->gc.gc_table_pool.pop_front());
+
+            new_obj->array.reserve(S, initial_array_capacity);
+            new_obj->hash.reserve(S, initial_hash_capacity);
+
             S->gc.gc_all_objects.append(new_obj);
 
             assert(new_obj->header.type == GCType::kTable);
             new_obj->header.color = GCColor::kBlack;
 
             new_obj->metatable = nullptr;
-            new_obj->array.reserve(S, initial_array_capacity);
-            new_obj->hash.reserve(S, initial_hash_capacity);
         }
         else
         {
             S->gc.gc_pool_misses++;
 
-            new_obj = gc_allocate_object<GCTable>(S);
+            decltype(GCTable::array) array;
+            decltype(GCTable::hash) hash;
+            array.init(S, initial_array_capacity);
+            try
+            {
+                hash.init(S, initial_hash_capacity);
+                new_obj = gc_allocate_object<GCTable>(S);
+            }
+            catch (...)
+            {
+                hash.destroy(S);
+                array.destroy(S);
+                throw;
+            }
 
             new_obj->metatable = nullptr;
-            new_obj->array.init(S, initial_array_capacity);
-            new_obj->hash.init(S, initial_hash_capacity);
+            new_obj->array = std::move(array);
+            new_obj->hash = std::move(hash);
         }
 
         assert(new_obj != nullptr);
@@ -272,7 +287,10 @@ namespace behl
                 size_t offset = 0;
                 for (auto& s : str)
                 {
-                    std::memcpy(new_obj->data() + offset, s.data(), s.size());
+                    if (!s.empty())
+                    {
+                        std::memcpy(new_obj->data() + offset, s.data(), s.size());
+                    }
                     offset += s.size();
                 }
 
@@ -296,31 +314,48 @@ namespace behl
 
         S->gc.gc_pool_misses++;
 
-        new_obj = gc_allocate_object<GCString>(S);
+        char* heap_data = nullptr;
+        if (total_size_required > GCString::kSSOCapacity)
+        {
+            heap_data = static_cast<char*>(mem_alloc(S, total_size_required));
 
-        if (total_size_required <= GCString::kSSOCapacity)
+            size_t offset = 0;
+            for (auto& s : str)
+            {
+                if (!s.empty())
+                {
+                    std::memcpy(heap_data + offset, s.data(), s.size());
+                }
+                offset += s.size();
+            }
+        }
+
+        try
+        {
+            new_obj = gc_allocate_object<GCString>(S);
+        }
+        catch (...)
+        {
+            mem_free(S, heap_data, total_size_required);
+            throw;
+        }
+
+        if (heap_data == nullptr)
         {
             // Small string - use SSO
             size_t offset = 0;
             for (auto& s : str)
             {
-                std::memcpy(new_obj->storage.sso.buffer + offset, s.data(), s.size());
+                if (!s.empty())
+                {
+                    std::memcpy(new_obj->storage.sso.buffer + offset, s.data(), s.size());
+                }
                 offset += s.size();
             }
             new_obj->storage.sso.len = static_cast<uint8_t>(total_size_required);
         }
         else
         {
-            // Large string - use heap
-            char* heap_data = static_cast<char*>(mem_alloc(S, total_size_required));
-
-            size_t offset = 0;
-            for (auto& s : str)
-            {
-                std::memcpy(heap_data + offset, s.data(), s.size());
-                offset += s.size();
-            }
-
             new_obj->header.add_flag(GCOFlags::kHeapString);
             new_obj->storage.heap.ptr = heap_data;
             new_obj->storage.heap.len = total_size_required;
@@ -345,18 +380,22 @@ namespace behl
 
     UserdataData* gc_new_userdata(State* S, size_t size)
     {
-        auto* new_obj = gc_allocate_object<UserdataData>(S);
+        void* data = size > 0 ? mem_alloc(S, size) : nullptr;
+
+        UserdataData* new_obj = nullptr;
+        try
+        {
+            new_obj = gc_allocate_object<UserdataData>(S);
+        }
+        catch (...)
+        {
+            mem_free(S, data, size);
+            throw;
+        }
+
         new_obj->size = size;
         new_obj->metatable = nullptr;
-
-        if (size > 0)
-        {
-            new_obj->data = mem_alloc(S, size);
-        }
-        else
-        {
-            new_obj->data = nullptr;
-        }
+        new_obj->data = data;
 
         gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 
@@ -365,19 +404,28 @@ namespace behl
 
     GCBuffer* gc_new_buffer(State* S, SysInt len)
     {
-        auto* new_obj = gc_allocate_object<GCBuffer>(S);
-        new_obj->owner = new_obj;
-        new_obj->data = nullptr;
-        new_obj->offset = 0;
-        new_obj->len = 0;
-
+        std::byte* data = nullptr;
         if (len > 0)
         {
-            auto* data = static_cast<std::byte*>(mem_alloc(S, len));
+            data = static_cast<std::byte*>(mem_alloc(S, len));
             std::memset(data, 0, len);
-            new_obj->data = data;
-            new_obj->len = len;
         }
+
+        GCBuffer* new_obj = nullptr;
+        try
+        {
+            new_obj = gc_allocate_object<GCBuffer>(S);
+        }
+        catch (...)
+        {
+            mem_free(S, data, len);
+            throw;
+        }
+
+        new_obj->owner = new_obj;
+        new_obj->data = data;
+        new_obj->offset = 0;
+        new_obj->len = len;
 
         gc_log("Created GC Object: {}", gc_object_to_string(new_obj));
 

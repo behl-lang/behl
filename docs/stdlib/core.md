@@ -50,7 +50,7 @@ print(typeof({}));        // "table"
 print(typeof(print));     // "function"
 ```
 
-**Returns:** `"nil"`, `"boolean"`, `"integer"`, `"number"`, `"string"`, `"table"`, `"function"`, or `"userdata"`
+**Returns:** `"nil"`, `"boolean"`, `"integer"`, `"number"`, `"string"`, `"table"`, `"function"`, `"userdata"`, or `"buffer"`
 
 ---
 

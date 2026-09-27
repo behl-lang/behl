@@ -144,6 +144,28 @@ namespace behl
         emit_modrm_mem(reg_low(src), dst);
     }
 
+    void X86Emitter::mov8(Mem dst, GpReg src)
+    {
+        if (mode64_)
+        {
+            emit_rex(false, reg_ext(src), mem_index_ext(dst), reg_ext(dst.base));
+        }
+        else
+        {
+            assert(static_cast<uint8_t>(src) < 4 && "byte register unavailable in 32 bit mode");
+        }
+        emit8(0x88);
+        emit_modrm_mem(reg_low(src), dst);
+    }
+
+    void X86Emitter::movzx8(GpReg dst, Mem src)
+    {
+        emit_rex_opt(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x0F);
+        emit8(0xB6);
+        emit_modrm_mem(reg_low(dst), src);
+    }
+
     void X86Emitter::movups(XmmReg dst, Mem src)
     {
         emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));

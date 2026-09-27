@@ -100,6 +100,7 @@ namespace behl
         void ldrw(A64Reg dst, A64Mem src);
         void strw(A64Reg src, A64Mem dst);
         void ldrb(A64Reg dst, A64Mem src);
+        void strb(A64Reg src, A64Mem dst);
         void ldr_d(A64Vec dst, A64Mem src);
         void str_d(A64Vec src, A64Mem dst);
         void ldr_q(A64Vec dst, A64Mem src);

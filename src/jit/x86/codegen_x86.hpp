@@ -89,6 +89,7 @@ namespace behl
         void emit_return_self_site(const CgOp& op);
         void emit_return_dispatch(const CgOp& op);
         void emit_table_int(const CgOp& op);
+        void emit_buffer_int(const CgOp& op);
         void emit_branch_i64_imm(const CgOp& op);
         void emit_const_f64(const CgOp& op);
         void alloc_i64(uint32_t var);

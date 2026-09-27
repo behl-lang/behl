@@ -136,6 +136,11 @@ namespace behl
         emit_ls(0x39400000u, 0, rn(dst), src);
     }
 
+    void A64Emitter::strb(A64Reg src, A64Mem dst)
+    {
+        emit_ls(0x39000000u, 0, rn(src), dst);
+    }
+
     void A64Emitter::ldr_d(A64Vec dst, A64Mem src)
     {
         emit_ls(0xFD400000u, 3, vn(dst), src);

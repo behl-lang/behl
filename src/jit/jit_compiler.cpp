@@ -384,6 +384,7 @@ namespace behl
                 kUnmF64,
                 kCmpRegs,
                 kCmpK,
+                kBufferInt,
             };
 
             struct ColdBlock
@@ -669,44 +670,62 @@ namespace behl
                 op.pcn = pcn;
             }
 
-            bool table_int_access(const Instruction& ins, uint32_t pcn)
+            struct IntAccess
+            {
+                bool is_get{};
+                bool imm_key{};
+                int32_t container_slot{};
+                int32_t value_slot{};
+                int64_t key{};
+            };
+
+            static IntAccess decode_int_access(const Instruction& ins)
             {
                 const OpCode opc = ins.op();
-                const bool is_get = opc == OpCode::kOpGetField || opc == OpCode::kOpGetFieldI;
-                const bool imm_key = opc == OpCode::kOpGetFieldI || opc == OpCode::kOpSetFieldI;
+                IntAccess access{};
+                access.is_get = opc == OpCode::kOpGetField || opc == OpCode::kOpGetFieldI;
+                access.imm_key = opc == OpCode::kOpGetFieldI || opc == OpCode::kOpSetFieldI;
+                access.container_slot = access.is_get ? ins.b() : ins.a();
+                if (access.is_get)
+                {
+                    access.value_slot = ins.a();
+                    access.key = access.imm_key ? ins.small_const_index() : ins.c();
+                }
+                else
+                {
+                    access.value_slot = access.imm_key ? ins.b() : ins.c();
+                    access.key = access.imm_key ? ins.small_const_index() : ins.b();
+                }
+                return access;
+            }
+
+            void int_access_op(const IntAccess& access, Type container, CgOpKind kind, uint32_t on_fail)
+            {
+                guard_tag(access.container_slot, container, on_fail);
+                if (!access.imm_key)
+                {
+                    guard_tag(static_cast<int32_t>(access.key), Type::kInteger, on_fail);
+                }
+
+                CgOp& op = push(kind);
+                op.slot = access.value_slot;
+                op.var = static_cast<uint32_t>(access.container_slot);
+                op.flag = access.imm_key;
+                op.imm = access.key;
+                op.label = on_fail;
+            }
+
+            bool table_int_access(const Instruction& ins, uint32_t pcn)
+            {
                 if (!valid_pc(pcn))
                 {
                     return false;
                 }
 
-                ColdBlock cb{ new_label(), (*labels_)[pcn], plain_helper(opc), ins.raw, pcn, ColdKind::kHelperOnly, 0 };
+                ColdBlock cb{ new_label(), (*labels_)[pcn], plain_helper(ins.op()), ins.raw, pcn, ColdKind::kBufferInt, 0 };
 
-                const int32_t table_slot = is_get ? ins.b() : ins.a();
-                int32_t value_slot = 0;
-                int64_t key = 0;
-                if (is_get)
-                {
-                    value_slot = ins.a();
-                    key = imm_key ? ins.small_const_index() : ins.c();
-                }
-                else
-                {
-                    value_slot = imm_key ? ins.b() : ins.c();
-                    key = imm_key ? ins.small_const_index() : ins.b();
-                }
-
-                guard_tag(table_slot, Type::kTable, cb.entry);
-                if (!imm_key)
-                {
-                    guard_tag(static_cast<int32_t>(key), Type::kInteger, cb.entry);
-                }
-
-                CgOp& op = push(is_get ? CgOpKind::kTableGetInt : CgOpKind::kTableSetInt);
-                op.slot = value_slot;
-                op.var = static_cast<uint32_t>(table_slot);
-                op.flag = imm_key;
-                op.imm = key;
-                op.label = cb.entry;
+                const IntAccess access = decode_int_access(ins);
+                int_access_op(access, Type::kTable, access.is_get ? CgOpKind::kTableGetInt : CgOpKind::kTableSetInt, cb.entry);
 
                 jump(cb.resume);
                 cold_blocks_.push_back(cb);
@@ -2010,6 +2029,21 @@ namespace behl
                         push(CgOpKind::kSyncFrame);
                         jump(cb.resume);
                         break;
+
+                    case ColdKind::kBufferInt:
+                    {
+                        const uint32_t help = new_label();
+                        const IntAccess access = decode_int_access(cins);
+                        int_access_op(
+                            access, Type::kBuffer, access.is_get ? CgOpKind::kBufferGetInt : CgOpKind::kBufferSetInt, help);
+                        jump(cb.resume);
+
+                        bind(help, true);
+                        helper_call(cb.fn, cb.raw, cb.pcn);
+                        push(CgOpKind::kSyncFrame);
+                        jump(cb.resume);
+                        break;
+                    }
 
                     case ColdKind::kAddSubK:
                     {

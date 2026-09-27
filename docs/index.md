@@ -172,6 +172,7 @@ Standard library and embedding:
 - [Math Module](stdlib/math) - Mathematical operations
 - [String Module](stdlib/string) - String manipulation
 - [Table Module](stdlib/table) - Table utilities
+- [Buffer Module](stdlib/buffer) - Byte buffers
 - [OS Module](stdlib/os) - Operating system interface
 - [Debug Module](stdlib/debug) - Debugging utilities
 - [GC Module](stdlib/gc) - Garbage collector control

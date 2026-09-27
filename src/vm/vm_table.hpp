@@ -17,6 +17,8 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <optional>
 
 namespace behl
@@ -24,10 +26,12 @@ namespace behl
     BEHL_INLINE
     std::optional<size_t> key_as_positive_index(const Value& key)
     {
+        constexpr auto kMaxIndex = static_cast<uint64_t>(std::numeric_limits<size_t>::max());
+
         if (key.is_integer())
         {
             const Integer k = key.get_integer();
-            if (k >= 0)
+            if (k >= 0 && static_cast<uint64_t>(k) <= kMaxIndex)
             {
                 return static_cast<size_t>(k);
             }
@@ -39,7 +43,7 @@ namespace behl
         {
             const FP d = key.get_fp();
             Integer k = 0;
-            if (std::floor(d) == d && d >= 0 && arithmetic::try_from_fp(d, k))
+            if (std::floor(d) == d && d >= 0 && arithmetic::try_from_fp(d, k) && static_cast<uint64_t>(k) <= kMaxIndex)
             {
                 return static_cast<size_t>(k);
             }

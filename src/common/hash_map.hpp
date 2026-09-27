@@ -168,6 +168,39 @@ namespace behl
 
         HashMap() = default;
 
+        HashMap(HashMap&& other) noexcept
+            : ctrl_(other.ctrl_)
+            , slots_(other.slots_)
+            , size_(other.size_)
+            , capacity_(other.capacity_)
+            , tombstones_(other.tombstones_)
+        {
+            other.ctrl_ = nullptr;
+            other.slots_ = nullptr;
+            other.size_ = 0;
+            other.capacity_ = 0;
+            other.tombstones_ = 0;
+        }
+
+        HashMap& operator=(HashMap&& other) noexcept
+        {
+            if (this != &other)
+            {
+                ctrl_ = other.ctrl_;
+                slots_ = other.slots_;
+                size_ = other.size_;
+                capacity_ = other.capacity_;
+                tombstones_ = other.tombstones_;
+
+                other.ctrl_ = nullptr;
+                other.slots_ = nullptr;
+                other.size_ = 0;
+                other.capacity_ = 0;
+                other.tombstones_ = 0;
+            }
+            return *this;
+        }
+
 #ifndef NDEBUG
         ~HashMap()
         {
@@ -188,10 +221,22 @@ namespace behl
                 size_t actual_capacity = std::bit_ceil(std::max(initial_capacity, kMinCapacity));
                 assert(actual_capacity > 0 && "Capacity overflow in BasicMap initialization");
 
+                int8_t* ctrl = mem_alloc_array<int8_t>(state, actual_capacity);
+                KeyValue* slots = nullptr;
+                try
+                {
+                    slots = mem_alloc_array<KeyValue>(state, actual_capacity);
+                }
+                catch (...)
+                {
+                    mem_free_array<int8_t>(state, ctrl, actual_capacity);
+                    throw;
+                }
+                assert(ctrl && slots && "Memory allocation failed for BasicMap");
+
                 capacity_ = actual_capacity;
-                ctrl_ = mem_alloc_array<int8_t>(state, capacity_);
-                slots_ = mem_alloc_array<KeyValue>(state, capacity_);
-                assert(ctrl_ && slots_ && "Memory allocation failed for BasicMap");
+                ctrl_ = ctrl;
+                slots_ = slots;
 
                 // Initialize all control bytes as empty
                 std::memset(ctrl_, kEmpty, capacity_);
@@ -442,10 +487,21 @@ namespace behl
             size_t old_capacity = capacity_;
 
             // Allocate new table
-            ctrl_ = mem_alloc_array<int8_t>(state, new_capacity);
-            slots_ = mem_alloc_array<KeyValue>(state, new_capacity);
-            assert(ctrl_ && slots_ && "Memory allocation failed during BasicMap rehash");
+            int8_t* new_ctrl = mem_alloc_array<int8_t>(state, new_capacity);
+            KeyValue* new_slots = nullptr;
+            try
+            {
+                new_slots = mem_alloc_array<KeyValue>(state, new_capacity);
+            }
+            catch (...)
+            {
+                mem_free_array<int8_t>(state, new_ctrl, new_capacity);
+                throw;
+            }
+            assert(new_ctrl && new_slots && "Memory allocation failed during BasicMap rehash");
 
+            ctrl_ = new_ctrl;
+            slots_ = new_slots;
             std::memset(ctrl_, kEmpty, new_capacity);
             capacity_ = new_capacity;
             size_ = 0;
@@ -464,10 +520,21 @@ namespace behl
             KeyValue* old_slots = slots_;
             size_t old_capacity = capacity_;
 
-            ctrl_ = mem_alloc_array<int8_t>(state, new_capacity);
-            slots_ = mem_alloc_array<KeyValue>(state, new_capacity);
-            assert(ctrl_ && slots_ && "Memory allocation failed during BasicMap rehash");
+            int8_t* new_ctrl = mem_alloc_array<int8_t>(state, new_capacity);
+            KeyValue* new_slots = nullptr;
+            try
+            {
+                new_slots = mem_alloc_array<KeyValue>(state, new_capacity);
+            }
+            catch (...)
+            {
+                mem_free_array<int8_t>(state, new_ctrl, new_capacity);
+                throw;
+            }
+            assert(new_ctrl && new_slots && "Memory allocation failed during BasicMap rehash");
 
+            ctrl_ = new_ctrl;
+            slots_ = new_slots;
             std::memset(ctrl_, kEmpty, new_capacity);
             capacity_ = new_capacity;
             size_ = 0;

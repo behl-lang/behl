@@ -43,7 +43,12 @@ namespace behl
 
         std::span<std::byte> bytes() noexcept
         {
-            return { owner->data + offset, size() };
+            const SysInt count = size();
+            if (count == 0)
+            {
+                return {};
+            }
+            return { owner->data + offset, count };
         }
     };
 

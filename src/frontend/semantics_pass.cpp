@@ -216,18 +216,22 @@ namespace behl
             }
         }
 
+        AstNode* lowered = nullptr;
         if (is_local(state, var_name))
         {
-            return state.holder.make<AstAssignLocal>(var_ident->name, assign->first_expr);
+            lowered = state.holder.make<AstAssignLocal>(var_ident->name, assign->first_expr);
         }
         else if (is_upvalue(state, var_name))
         {
-            return state.holder.make<AstAssignUpvalue>(var_ident->name, assign->first_expr);
+            lowered = state.holder.make<AstAssignUpvalue>(var_ident->name, assign->first_expr);
         }
         else
         {
-            return state.holder.make<AstAssignGlobal>(var_ident->name, assign->first_expr);
+            lowered = state.holder.make<AstAssignGlobal>(var_ident->name, assign->first_expr);
         }
+        lowered->line = assign->line;
+        lowered->column = assign->column;
+        return lowered;
     }
 
     AstNode* transform_compound_assign(SemanticsState& state, AstCompoundAssign* compound)
@@ -270,6 +274,7 @@ namespace behl
         auto* var_ident = inc->target->try_as<AstIdent>();
         if (!var_ident)
         {
+            transform_target(state, inc->target);
             return inc;
         }
 
@@ -303,6 +308,7 @@ namespace behl
         auto* var_ident = dec->target->try_as<AstIdent>();
         if (!var_ident)
         {
+            transform_target(state, dec->target);
             return dec;
         }
 

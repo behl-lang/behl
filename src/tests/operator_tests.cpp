@@ -355,5 +355,243 @@ TEST_P(OperatorTest, LogicalOperatorsAllCombinations)
     EXPECT_EQ(behl::to_string(S, -1), "");
 }
 
+class CompoundTargetTest : public ::testing::TestWithParam<bool>
+{
+protected:
+    behl::State* S = nullptr;
+
+    void SetUp() override
+    {
+        S = behl::new_state();
+        S->jit_enabled = GetParam();
+        behl::load_stdlib(S);
+    }
+
+    void TearDown() override
+    {
+        behl::close(S);
+    }
+};
+
+TEST_P(CompoundTargetTest, FieldWithEveryCompoundOperator)
+{
+    constexpr std::string_view code = R"(
+        let t = { a = 10, b = 10, c = 10, d = 10, e = 10 }
+        t.a += 3
+        t.b -= 3
+        t.c *= 3
+        t.d /= 4
+        t.e %= 3
+        return t.a, t.b, t.c, t.d, t.e
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
+    EXPECT_EQ(behl::to_integer(S, -5), 13);
+    EXPECT_EQ(behl::to_integer(S, -4), 7);
+    EXPECT_EQ(behl::to_integer(S, -3), 30);
+    EXPECT_EQ(behl::to_number(S, -2), 2.5);
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(CompoundTargetTest, IndexWithConstantStringAndRegisterKeys)
+{
+    constexpr std::string_view code = R"(
+        let t = { 1, 2, 3 }
+        t["name"] = 1
+        t[1000] = 7
+        let k = 2
+        t[0] += 10
+        t[k] *= 5
+        t["name"] += 1
+        t[1000] -= 2
+        return t[0], t[2], t.name, t[1000]
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
+    EXPECT_EQ(behl::to_integer(S, -4), 11);
+    EXPECT_EQ(behl::to_integer(S, -3), 15);
+    EXPECT_EQ(behl::to_integer(S, -2), 2);
+    EXPECT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_P(CompoundTargetTest, NestedMemberChain)
+{
+    constexpr std::string_view code = R"(
+        let a = { b = { c = 2 } }
+        a.b.c *= 3
+        a.b["c"] += 1
+        a["b"].c -= 2
+        return a.b.c
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 5);
+}
+
+TEST_P(CompoundTargetTest, IncrementAndDecrementOnFields)
+{
+    constexpr std::string_view code = R"(
+        let t = { n = 0, 5, 5 }
+        let a = { b = { c = 1 } }
+        let k = 1
+        t.n++
+        t.n++
+        t[0]--
+        t[k]++
+        a.b.c++
+        a.b.c--
+        a.b.c--
+        return t.n, t[0], t[1], a.b.c
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
+    EXPECT_EQ(behl::to_integer(S, -4), 2);
+    EXPECT_EQ(behl::to_integer(S, -3), 4);
+    EXPECT_EQ(behl::to_integer(S, -2), 6);
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(CompoundTargetTest, TableAndKeyExpressionsAreEvaluatedOnce)
+{
+    constexpr std::string_view code = R"(
+        let t = { x = 1 }
+        let table_calls = 0
+        let key_calls = 0
+        function get() { table_calls = table_calls + 1; return t }
+        function key() { key_calls = key_calls + 1; return "x" }
+        get().x += 1
+        t[key()] += 1
+        get()[key()]++
+        get()[key()] *= 10
+        return t.x, table_calls, key_calls
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 40);
+    EXPECT_EQ(behl::to_integer(S, -2), 3);
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_P(CompoundTargetTest, OldValueIsReadBeforeRightHandSide)
+{
+    constexpr std::string_view code = R"(
+        let t = { x = 1, y = 3 }
+        function bump() { t.x = 100; return 5 }
+        t.x += bump()
+        t.y += t.y
+        return t.x, t.y
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 6);
+    EXPECT_EQ(behl::to_integer(S, -1), 6);
+}
+
+TEST_P(CompoundTargetTest, StringConcatenationOnField)
+{
+    constexpr std::string_view code = R"(
+        let t = { s = "a" }
+        t.s += "b"
+        t["s"] += "c"
+        return t.s
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "abc");
+}
+
+TEST_P(CompoundTargetTest, MetamethodsSeeOneReadAndOneWrite)
+{
+    constexpr std::string_view code = R"(
+        let store = { x = 10 }
+        let reads = 0
+        let writes = 0
+        let p = setmetatable({}, {
+            __index = function(self, k) { reads = reads + 1; return store[k] },
+            __newindex = function(self, k, v) { writes = writes + 1; store[k] = v }
+        })
+        p.x += 5
+        p.x++
+        return store.x, reads, writes
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 16);
+    EXPECT_EQ(behl::to_integer(S, -2), 2);
+    EXPECT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_P(CompoundTargetTest, BufferElements)
+{
+    constexpr std::string_view code = R"(
+        const buffer = import("buffer")
+        let b = buffer.create(4)
+        b[0] += 5
+        b[1]++
+        b[2]--
+        b[3] = 250
+        b[3] += 10
+        return b[0], b[1], b[2], b[3]
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
+    EXPECT_EQ(behl::to_integer(S, -4), 5);
+    EXPECT_EQ(behl::to_integer(S, -3), 1);
+    EXPECT_EQ(behl::to_integer(S, -2), 255);
+    EXPECT_EQ(behl::to_integer(S, -1), 4);
+}
+
+TEST_P(CompoundTargetTest, FieldOfUpvalueTableInClosure)
+{
+    constexpr std::string_view code = R"(
+        let t = { n = 0 }
+        function f() { t.n += 2; t.n++ }
+        f()
+        f()
+        return t.n
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 6);
+}
+
+TEST_P(CompoundTargetTest, FieldCompoundInHotLoop)
+{
+    constexpr std::string_view code = R"(
+        let t = { sum = 0, count = 0 }
+        let arr = { 0 }
+        for (let i = 0; i < 2000; i = i + 1) {
+            t.sum += i
+            t.count++
+            arr[0] -= 1
+        }
+        return t.sum, t.count, arr[0]
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 1999000);
+    EXPECT_EQ(behl::to_integer(S, -2), 2000);
+    EXPECT_EQ(behl::to_integer(S, -1), -2000);
+}
+
+TEST_P(CompoundTargetTest, ErrorsOnInvalidFieldTargets)
+{
+    ASSERT_TRUE(behl_test::load_ok(S, "let t = {}\nt.missing += 1\n", false));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 0));
+    const std::string nil_err = behl_test::error_text(S);
+    EXPECT_NE(nil_err.find("attempt to perform arithmetic"), std::string::npos) << nil_err;
+    EXPECT_NE(nil_err.find("<string>(2,"), std::string::npos) << nil_err;
+    behl::set_top(S, 0);
+
+    ASSERT_TRUE(behl_test::load_ok(S, "let n = 5\nn.x++\n", false));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 0));
+    const std::string index_err = behl_test::error_text(S);
+    EXPECT_NE(index_err.find("attempt to index a non-table value"), std::string::npos) << index_err;
+    EXPECT_NE(index_err.find("<string>(2,"), std::string::npos) << index_err;
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, CompoundTargetTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
+
 INSTANTIATE_TEST_SUITE_P(Mode, OperatorTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

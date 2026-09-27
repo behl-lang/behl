@@ -53,7 +53,7 @@ behl::State* S = behl::new_state();
 
 ### Loading the Standard Library
 
-Load the standard libraries (core, table, gc, jit, debug, math, os, string):
+Load the standard libraries (core, table, gc, jit, debug, math, os, string, buffer):
 
 ```cpp
 behl::load_stdlib(S);

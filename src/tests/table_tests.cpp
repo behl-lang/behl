@@ -1,3 +1,4 @@
+#include "gc/gco_table.hpp"
 #include "state.hpp"
 #include "test_helpers.hpp"
 
@@ -911,6 +912,76 @@ TEST_P(TableTest, UnpackAcceptsIntegralFloatBounds)
     EXPECT_EQ(behl::to_integer(S, -3), 20);
     EXPECT_EQ(behl::to_integer(S, -2), 30);
     EXPECT_EQ(behl::to_integer(S, -1), 2);
+}
+
+TEST_P(TableTest, ApiIntegerKeysBeyondThirtyTwoBitsDoNotAliasArraySlots)
+{
+    constexpr behl::Integer kBigKeys[] = { behl::Integer{ 1 } << 32, (behl::Integer{ 1 } << 32) + 1, behl::Integer{ 1 } << 40,
+        behl::Integer{ 1 } << 62 };
+
+    behl::table_new(S);
+    behl::push_integer(S, 0);
+    behl::push_string(S, "slot0");
+    behl::table_rawset(S, 0);
+    behl::push_integer(S, 1);
+    behl::push_string(S, "slot1");
+    behl::table_set(S, 0);
+
+    for (const behl::Integer key : kBigKeys)
+    {
+        behl::push_integer(S, key);
+        behl::push_integer(S, key);
+        behl::table_rawset(S, 0);
+    }
+    behl::push_integer(S, behl::Integer{ 1 } << 50);
+    behl::push_string(S, "via set");
+    behl::table_set(S, 0);
+
+    for (const behl::Integer key : kBigKeys)
+    {
+        behl::push_integer(S, key);
+        behl::table_rawget(S, 0);
+        EXPECT_EQ(behl::to_integer(S, -1), key);
+        behl::pop(S, 1);
+
+        behl::push_integer(S, key);
+        behl::table_get(S, 0);
+        EXPECT_EQ(behl::to_integer(S, -1), key);
+        behl::pop(S, 1);
+    }
+
+    behl::push_integer(S, behl::Integer{ 1 } << 50);
+    behl::table_rawget(S, 0);
+    EXPECT_EQ(behl::to_string(S, -1), "via set");
+    behl::pop(S, 1);
+
+    behl::push_integer(S, 0);
+    behl::table_rawget(S, 0);
+    EXPECT_EQ(behl::to_string(S, -1), "slot0");
+    behl::pop(S, 1);
+    behl::push_integer(S, 1);
+    behl::table_get(S, 0);
+    EXPECT_EQ(behl::to_string(S, -1), "slot1");
+    behl::pop(S, 1);
+
+    EXPECT_LT(S->stack[0].get_table()->array.size(), 16u);
+}
+
+TEST_P(TableTest, ScriptIntegerKeysBeyondThirtyTwoBitsDoNotAliasArraySlots)
+{
+    constexpr std::string_view code = R"(
+        let t = { "zero", "one" }
+        t[4294967296] = "two32"
+        t[4294967297] = "two32+1"
+        t[4294967296.0] = "two32 float"
+        return t[0], t[1], t[4294967296], t[4294967297]
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
+    EXPECT_EQ(behl::to_string(S, -4), "zero");
+    EXPECT_EQ(behl::to_string(S, -3), "one");
+    EXPECT_EQ(behl::to_string(S, -2), "two32 float");
+    EXPECT_EQ(behl::to_string(S, -1), "two32+1");
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, TableTest, ::testing::Bool(),

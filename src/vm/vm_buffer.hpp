@@ -45,7 +45,7 @@ namespace behl
         }
 
         const SysInt size = buffer->size();
-        if (index < 0 || static_cast<SysInt>(index) >= size)
+        if (index < 0 || static_cast<uint64_t>(index) >= size)
         {
             raise_runtime_error(S, get_current_location(frame), "buffer index {} out of range (length {})", index, size);
         }

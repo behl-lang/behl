@@ -64,7 +64,7 @@ The `import()` function resolves module paths using a specific search strategy:
 
 ### 1. Built-in Modules
 
-A registered module name is returned before any file is looked at. Built-in names such as `math`, `string`, `table`, `os`, `fs`, `process`, `gc`, `jit` and `debug` therefore cannot be overridden by a file of the same name, and a local `math.behl` sitting next to the importer is ignored:
+A registered module name is returned before any file is looked at. Built-in names such as `math`, `string`, `table`, `buffer`, `os`, `fs`, `process`, `gc`, `jit` and `debug` therefore cannot be overridden by a file of the same name, and a local `math.behl` sitting next to the importer is ignored:
 
 ```cpp
 const math = import("math");            // always the standard library module
@@ -138,7 +138,7 @@ module;
 - **No global scope access** - Cannot read/write global variables
 - **Local by default** - Functions and variables are private unless exported
 - **Must export explicitly** - Use `export` keyword (returns are automatically added)
-- **Must import all modules** - Standard library modules (math, string, table, os, gc, jit, debug) must be imported with `import("math")`
+- **Must import all modules** - Standard library modules (math, string, table, buffer, os, gc, jit, debug) must be imported with `import("math")`
 - **Only builtins accessible** - Core functions like `print`, `typeof`, `tostring`, `tonumber`, `import`, `error`, `pcall`, etc. are available without import
 
 ### Script Mode vs Module Mode

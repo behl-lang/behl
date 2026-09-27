@@ -2,6 +2,7 @@
 
 #if BEHL_JIT_X86
 
+#    include "gc/gco_buffer.hpp"
 #    include "gc/gco_closure.hpp"
 #    include "gc/gco_proto.hpp"
 #    include "gc/gco_table.hpp"
@@ -1208,6 +1209,73 @@ namespace behl
             {
                 e_.movups(kVal, slot_tag(op.slot));
                 e_.movups(elem, kVal);
+            }
+        }
+    }
+
+    void CodegenX86::emit_buffer_int(const CgOp& op)
+    {
+        if constexpr (!kMode64)
+        {
+            e_.jmp(label(op.label));
+            reachable_ = false;
+            return;
+        }
+        else
+        {
+            constexpr GpReg kBuf = GpReg::r11;
+            constexpr GpReg kIdx = GpReg::r8;
+            constexpr auto kOwner = static_cast<int32_t>(offsetof(GCBuffer, owner));
+            constexpr auto kData = static_cast<int32_t>(offsetof(GCBuffer, data));
+            constexpr auto kOffset = static_cast<int32_t>(offsetof(GCBuffer, offset));
+            constexpr auto kLen = static_cast<int32_t>(offsetof(GCBuffer, len));
+
+            const bool is_get = op.kind == CgOpKind::kBufferGetInt;
+            const Label slow = label(op.label);
+            const int32_t buffer_slot = static_cast<int32_t>(op.var);
+
+            ensure_base();
+            if (!is_get)
+            {
+                e_.cmp8(slot_tag(op.slot), static_cast<uint8_t>(Type::kInteger));
+                e_.jcc(Cond::ne, slow);
+            }
+
+            e_.mov(kBuf, slot_payload(buffer_slot));
+            if (op.flag)
+            {
+                e_.cmp(mem(kBuf, kLen), static_cast<int32_t>(op.imm));
+                e_.jcc(Cond::be, slow);
+                e_.mov(kIdx, mem(kBuf, kOffset));
+                if (op.imm != 0)
+                {
+                    e_.add(kIdx, static_cast<int32_t>(op.imm));
+                }
+            }
+            else
+            {
+                e_.mov(kIdx, slot_payload(static_cast<int32_t>(op.imm)));
+                e_.cmp(kIdx, mem(kBuf, kLen));
+                e_.jcc(Cond::ae, slow);
+                e_.add(kIdx, mem(kBuf, kOffset));
+            }
+
+            e_.mov(kBuf, mem(kBuf, kOwner));
+            e_.cmp(kIdx, mem(kBuf, kLen));
+            e_.jcc(Cond::ae, slow);
+            e_.mov(kBuf, mem(kBuf, kData));
+
+            if (is_get)
+            {
+                e_.movzx8(kIdx, mem(kBuf, kIdx, 1));
+                e_.mov(slot_payload(op.slot), kIdx);
+                e_.mov32(slot_tag(op.slot), static_cast<uint32_t>(Type::kInteger));
+            }
+            else
+            {
+                e_.lea(kBuf, mem(kBuf, kIdx, 1));
+                e_.mov(kIdx, slot_payload(op.slot));
+                e_.mov8(mem(kBuf), kIdx);
             }
         }
     }
@@ -2509,6 +2577,19 @@ namespace behl
                     }
                 }
                 emit_table_int(op);
+                break;
+
+            case CgOpKind::kBufferGetInt:
+            case CgOpKind::kBufferSetInt:
+                if (cache_enabled_)
+                {
+                    cache_flush_dirty();
+                    if (op.kind == CgOpKind::kBufferGetInt)
+                    {
+                        cache_drop_slot(op.slot);
+                    }
+                }
+                emit_buffer_int(op);
                 break;
 
             case CgOpKind::kHelperCall:

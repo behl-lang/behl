@@ -644,7 +644,7 @@ namespace behl
                 }
             }
 
-            expr->accept(*this);
+            compile_node(expr);
             Reg reg = static_cast<Reg>(C.freereg - 1);
             return { reg, true };
         }
@@ -690,7 +690,7 @@ namespace behl
                 return { reg, true };
             }
 
-            expr->accept(*this);
+            compile_node(expr);
             Reg reg = static_cast<Reg>(C.freereg - 1);
             return { reg, true };
         }
@@ -701,7 +701,7 @@ namespace behl
             const Reg func_reg = alloc_reg(C);
             const Reg self_reg = alloc_reg(C);
 
-            node.first_arg->accept(*this);
+            compile_node(node.first_arg);
             const auto receiver = static_cast<Reg>(C.freereg - 1);
             if (receiver != self_reg)
             {
@@ -742,7 +742,7 @@ namespace behl
                 || cond->try_as<AstMember>() || cond->try_as<AstFuncCall>();
             compile_for_jump = handles_jump;
             jump_patch_location = handles_jump ? &patch : nullptr;
-            cond->accept(*this);
+            compile_node(cond);
             compile_for_jump = false;
             jump_patch_location = nullptr;
 
@@ -755,6 +755,23 @@ namespace behl
                 free_reg(C, reg);
             }
         }
+
+        void compile_node(const AstNode* node)
+        {
+            const auto saved_line = C.lastline;
+            const auto saved_column = C.lastcolumn;
+            if (node->line > 0)
+            {
+                C.lastline = node->line;
+                C.lastcolumn = node->column;
+            }
+            node->accept(*this);
+            C.lastline = saved_line;
+            C.lastcolumn = saved_column;
+        }
+
+        void emit_arith_with_fallback(TokenType op, Reg dst, Reg lhs, Reg rhs);
+        void compile_field_update(const AstNode& target, TokenType op, const AstNode* rhs);
 
         void visit(const AstNil&) override;
         void visit(const AstBool&) override;
@@ -831,9 +848,6 @@ namespace behl
 
     void VisitorAdapter::visit(const AstInt& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
         const auto reg = get_target_reg();
         // Use immediate encoding for small integers (-256 to 255)
         if (node.value >= -256 && node.value <= 255)
@@ -856,9 +870,6 @@ namespace behl
 
     void VisitorAdapter::visit(const AstString& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
         const auto reg = get_target_reg();
 
         const auto k = add_string_constant(C, node.view());
@@ -913,11 +924,6 @@ namespace behl
     void VisitorAdapter::visit(const AstBinOp& node)
     {
         // Save the line/column of the binary operation itself before visiting children
-        const int32_t binop_line = node.line;
-        const int32_t binop_column = node.column;
-
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
 
         size_t* const jump_patch = take_jump_patch();
 
@@ -925,7 +931,7 @@ namespace behl
         {
             Reg result_reg = get_target_reg();
 
-            node.left->accept(*this);
+            compile_node(node.left);
             Reg left_reg = static_cast<Reg>(C.freereg - 1);
 
             if (left_reg != result_reg)
@@ -940,7 +946,7 @@ namespace behl
             free_reg(C, left_reg);
 
             target_reg = result_reg;
-            node.right->accept(*this);
+            compile_node(node.right);
 
             C.current_proto->code[jmp_pos] = make_op_jmp(static_cast<int32_t>(C.current_proto->code.size() - jmp_pos - 1));
 
@@ -959,7 +965,7 @@ namespace behl
         {
             Reg result_reg = get_target_reg();
 
-            node.left->accept(*this);
+            compile_node(node.left);
             Reg left_reg = static_cast<Reg>(C.freereg - 1);
 
             if (left_reg != result_reg)
@@ -974,7 +980,7 @@ namespace behl
             free_reg(C, left_reg);
 
             target_reg = result_reg;
-            node.right->accept(*this);
+            compile_node(node.right);
 
             C.current_proto->code[jmp_pos] = make_op_jmp(static_cast<int32_t>(C.current_proto->code.size() - jmp_pos - 1));
 
@@ -1583,7 +1589,7 @@ namespace behl
         target_reg = std::nullopt;
 
         auto [left_reg, left_free] = try_get_rk(node.left);
-        node.right->accept(*this);
+        compile_node(node.right);
         Reg right_reg = C.freereg - 1;
 
         // Allocate result register: reuse left if it's temporary, else use saved target or allocate new
@@ -1728,10 +1734,10 @@ namespace behl
                     needs_mm = false;
                     break;
             }
-            emit(C, std::move(instr), binop_line, binop_column);
+            emit(C, std::move(instr), C.lastline, C.lastcolumn);
             if (needs_mm)
             {
-                emit(C, std::move(mm), binop_line, binop_column);
+                emit(C, std::move(mm), C.lastline, C.lastcolumn);
             }
         }
         if (result_reg != right_reg)
@@ -1755,7 +1761,7 @@ namespace behl
         size_t* const saved_jump_patch = jump_patch_location;
         compile_for_jump = false;
         jump_patch_location = nullptr;
-        node.expr->accept(*this);
+        compile_node(node.expr);
         compile_for_jump = saved_compile_for_jump;
         jump_patch_location = saved_jump_patch;
 
@@ -1810,7 +1816,7 @@ namespace behl
         // Compile condition
         auto saved_target = target_reg;
         target_reg = std::nullopt;
-        node.condition->accept(*this);
+        compile_node(node.condition);
         Reg cond_reg = C.freereg - 1;
 
         // Test condition: if false, jump to false branch
@@ -1821,7 +1827,7 @@ namespace behl
 
         // True branch: evaluate true_expr into result_reg
         target_reg = result_reg;
-        node.true_expr->accept(*this);
+        compile_node(node.true_expr);
         // Free any temporary registers used by true_expr
         while (C.freereg > result_reg + 1)
         {
@@ -1839,7 +1845,7 @@ namespace behl
 
         // False branch: evaluate false_expr into result_reg
         target_reg = result_reg;
-        node.false_expr->accept(*this);
+        compile_node(node.false_expr);
         // Free any temporary registers used by false_expr
         while (C.freereg > result_reg + 1)
         {
@@ -1898,7 +1904,7 @@ namespace behl
                 C.freereg++;
 
                 // Compile the argument into the next register
-                node.first_arg->accept(*this);
+                compile_node(node.first_arg);
                 Reg arg_reg = C.freereg - 1;
 
                 // Emit TOSTRING or TONUMBER: result goes to func_reg, reads from arg_reg
@@ -1976,7 +1982,7 @@ namespace behl
         }
         else
         {
-            node.func->accept(*this);
+            compile_node(node.func);
             func_reg = C.freereg - 1;
         }
         const size_t receiver_count = node.is_method_call ? 1 : 0;
@@ -2015,7 +2021,7 @@ namespace behl
         size_t i = 0;
         for (AstNode* arg = first_explicit_arg; arg && i < regular_args; arg = arg->next_child, ++i)
         {
-            arg->accept(*this);
+            compile_node(arg);
             Reg arg_reg = C.freereg - 1;
             Reg dest_reg = arg_base + static_cast<Reg>(i);
             if (arg_reg != dest_reg)
@@ -2092,9 +2098,6 @@ namespace behl
 
     void VisitorAdapter::visit(const AstFuncCall& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
         compile_call(node, 1);
 
         C.freereg = C.freereg - 1 + 1;
@@ -2172,7 +2175,7 @@ namespace behl
             if (field->key)
             {
                 // Hash field
-                field->value->accept(*this);
+                compile_node(field->value);
                 Reg val_reg = C.freereg - 1;
                 Reg key_reg;
                 if (auto* id = field->key->try_as<AstIdent>())
@@ -2185,7 +2188,7 @@ namespace behl
                 }
                 else
                 {
-                    field->key->accept(*this);
+                    compile_node(field->key);
                     key_reg = C.freereg - 1;
                     emit(C, make_op_setfield(reg, key_reg, val_reg), C.lastline);
                     free_reg(C, key_reg);
@@ -2218,7 +2221,7 @@ namespace behl
                 }
                 else if (batched)
                 {
-                    field->value->accept(*this);
+                    compile_node(field->value);
                     const Reg val_reg = static_cast<Reg>(C.freereg - 1);
                     const Reg dest_reg = static_cast<Reg>(list_base + pending);
                     if (val_reg != dest_reg)
@@ -2240,7 +2243,7 @@ namespace behl
                 else
                 {
                     // Regular array value - use SETFIELD with integer key
-                    field->value->accept(*this);
+                    compile_node(field->value);
                     Reg val_reg = C.freereg - 1;
                     Reg key_reg = alloc_reg(C);
                     const auto k = add_integer_constant(C, array_idx++);
@@ -2339,7 +2342,7 @@ namespace behl
     {
         size_t* const jump_patch = take_jump_patch();
         Reg result_reg = get_target_reg();
-        node.table->accept(*this);
+        compile_node(node.table);
         Reg table_reg = C.freereg - 1;
         const auto k = add_string_constant(C, node.name->view());
 
@@ -2599,7 +2602,7 @@ namespace behl
             PreparedTarget target{};
             if (auto* idx = v->try_as<AstIndex>())
             {
-                idx->table->accept(*this);
+                compile_node(idx->table);
                 target.table = static_cast<Reg>(C.freereg - 1);
                 const auto* int_node = idx->key->try_as<AstInt>();
                 const auto* str_node = idx->key->try_as<AstString>();
@@ -2614,13 +2617,13 @@ namespace behl
                 }
                 else
                 {
-                    idx->key->accept(*this);
+                    compile_node(idx->key);
                     target.key = static_cast<Reg>(C.freereg - 1);
                 }
             }
             else if (auto* mem = v->try_as<AstMember>())
             {
-                mem->table->accept(*this);
+                compile_node(mem->table);
                 target.table = static_cast<Reg>(C.freereg - 1);
                 const auto k = add_string_constant(C, mem->name->view());
                 if (k <= 511)
@@ -2725,7 +2728,7 @@ namespace behl
 
         for (AstNode* e = node.first_expr; e; e = e->next_child)
         {
-            e->accept(*this);
+            compile_node(e);
         }
         if (num_exprs < var_count)
         {
@@ -2782,11 +2785,26 @@ namespace behl
         C.freereg = expr_base;
     }
 
+    static bool writes_target_before_reading_operands(const AstNode* expr)
+    {
+        if (const auto* ctor = expr->try_as<AstTableCtor>())
+        {
+            return ctor->first_field != nullptr;
+        }
+        if (const auto* bin = expr->try_as<AstBinOp>())
+        {
+            return bin->op == TokenType::kAndOp || bin->op == TokenType::kOrOp;
+        }
+        if (const auto* ternary = expr->try_as<AstTernary>())
+        {
+            return writes_target_before_reading_operands(ternary->true_expr)
+                || writes_target_before_reading_operands(ternary->false_expr);
+        }
+        return false;
+    }
+
     void VisitorAdapter::visit(const AstAssignLocal& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
         int32_t loc = resolve_local(C, node.name->view());
         if (loc < 0)
         {
@@ -2798,13 +2816,22 @@ namespace behl
             raise_semantic_error(C.S, get_location(C), "Cannot assign to const variable '{}'", node.name->view());
         }
 
+        if (writes_target_before_reading_operands(node.expr))
+        {
+            compile_node(node.expr);
+            const Reg val_reg = static_cast<Reg>(C.freereg - 1);
+            emit(C, make_op_move(static_cast<uint8_t>(loc), val_reg), C.lastline);
+            free_reg(C, val_reg);
+            return;
+        }
+
         target_reg = static_cast<uint8_t>(loc);
-        node.expr->accept(*this);
+        compile_node(node.expr);
     }
 
     void VisitorAdapter::visit(const AstAssignGlobal& node)
     {
-        node.expr->accept(*this);
+        compile_node(node.expr);
         Reg val_reg = C.freereg - 1;
 
         const auto k = add_string_constant(C, node.name->view());
@@ -2815,7 +2842,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstAssignUpvalue& node)
     {
-        node.expr->accept(*this);
+        compile_node(node.expr);
         Reg val_reg = C.freereg - 1;
 
         uint32_t up = resolve_upvalue(C, node.name->view());
@@ -2833,20 +2860,145 @@ namespace behl
         free_reg(C, val_reg);
     }
 
-    void VisitorAdapter::visit(const AstCompoundAssign&)
+    void VisitorAdapter::emit_arith_with_fallback(TokenType op, Reg dst, Reg lhs, Reg rhs)
     {
-        raise_semantic_error(
-            C.S, get_location(C), "Unresolved AstCompoundAssign - semantic analyzer should have transformed this");
+        switch (op)
+        {
+            case TokenType::kPlus:
+                emit(C, make_op_add(dst, lhs, rhs), C.lastline);
+                emit(C, make_op_mmadd(dst, lhs, rhs), C.lastline);
+                break;
+            case TokenType::kMinus:
+                emit(C, make_op_sub(dst, lhs, rhs), C.lastline);
+                emit(C, make_op_mmsub(dst, lhs, rhs), C.lastline);
+                break;
+            case TokenType::kStar:
+                emit(C, make_op_mul(dst, lhs, rhs), C.lastline);
+                emit(C, make_op_mmmul(dst, lhs, rhs), C.lastline);
+                break;
+            case TokenType::kSlash:
+                emit(C, make_op_div(dst, lhs, rhs), C.lastline);
+                emit(C, make_op_mmdiv(dst, lhs, rhs), C.lastline);
+                break;
+            case TokenType::kPercent:
+                emit(C, make_op_mod(dst, lhs, rhs), C.lastline);
+                emit(C, make_op_mmmod(dst, lhs, rhs), C.lastline);
+                break;
+            default:
+                raise_syntax_error(C.S, get_location(C), "Unsupported compound assignment operator");
+        }
+    }
+
+    void VisitorAdapter::compile_field_update(const AstNode& target, TokenType op, const AstNode* rhs)
+    {
+        const Reg base = C.freereg;
+
+        const AstNode* table_expr = nullptr;
+        const AstNode* key_expr = nullptr;
+        const AstString* member_name = nullptr;
+        if (const auto* idx = target.try_as<AstIndex>())
+        {
+            table_expr = idx->table;
+            key_expr = idx->key;
+        }
+        else if (const auto* mem = target.try_as<AstMember>())
+        {
+            table_expr = mem->table;
+            member_name = mem->name;
+        }
+        else
+        {
+            raise_syntax_error(C.S, get_location(C), "Invalid target for compound assignment");
+        }
+
+        const Reg table_reg = try_get_reg(table_expr).first;
+
+        int32_t int_key = -1;
+        bool has_str_key = false;
+        ConstIndex str_key{};
+        Reg key_reg = 0;
+        if (member_name != nullptr)
+        {
+            const auto k = add_string_constant(C, member_name->view());
+            if (k <= 511)
+            {
+                has_str_key = true;
+                str_key = k;
+            }
+            else
+            {
+                key_reg = alloc_reg(C);
+                emit(C, make_op_loads(key_reg, k), C.lastline);
+            }
+        }
+        else if (const auto* int_node = key_expr->try_as<AstInt>();
+            int_node != nullptr && int_node->value >= 0 && int_node->value <= 511)
+        {
+            int_key = static_cast<int32_t>(int_node->value);
+        }
+        else if (const auto* str_node = key_expr->try_as<AstString>();
+            str_node != nullptr && add_string_constant(C, str_node->view()) <= 511)
+        {
+            has_str_key = true;
+            str_key = add_string_constant(C, str_node->view());
+        }
+        else
+        {
+            key_reg = try_get_reg(key_expr).first;
+        }
+
+        const Reg value_reg = alloc_reg(C);
+        if (int_key >= 0)
+        {
+            emit(C, make_op_getfieldi(value_reg, table_reg, int_key), C.lastline);
+        }
+        else if (has_str_key)
+        {
+            emit(C, make_op_getfields(value_reg, table_reg, str_key), C.lastline);
+        }
+        else
+        {
+            emit(C, make_op_getfield(value_reg, table_reg, key_reg), C.lastline);
+        }
+
+        Reg rhs_reg = 0;
+        if (rhs != nullptr)
+        {
+            compile_node(rhs);
+            rhs_reg = static_cast<Reg>(C.freereg - 1);
+        }
+        else
+        {
+            rhs_reg = alloc_reg(C);
+            emit(C, make_op_loadimm(rhs_reg, 1), C.lastline);
+        }
+
+        emit_arith_with_fallback(op, value_reg, value_reg, rhs_reg);
+
+        if (int_key >= 0)
+        {
+            emit(C, make_op_setfieldi(table_reg, value_reg, int_key), C.lastline);
+        }
+        else if (has_str_key)
+        {
+            emit(C, make_op_setfields(table_reg, value_reg, str_key), C.lastline);
+        }
+        else
+        {
+            emit(C, make_op_setfield(table_reg, key_reg, value_reg), C.lastline);
+        }
+
+        C.freereg = base;
+    }
+
+    void VisitorAdapter::visit(const AstCompoundAssign& node)
+    {
+        compile_field_update(*node.target, node.op, node.expr);
     }
 
     void VisitorAdapter::visit(const AstCompoundLocal& node)
     {
         // Save the line/column of the compound assignment itself
-        const int32_t compound_line = node.line;
-        const int32_t compound_column = node.column;
-
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
 
         int32_t loc = resolve_local(C, node.name->view());
         if (loc < 0)
@@ -2866,8 +3018,8 @@ namespace behl
                 int32_t rhs_loc = resolve_local(C, rhs_ident->name->view());
                 if (rhs_loc >= 0)
                 {
-                    emit(C, make_op_addlocal(static_cast<uint8_t>(loc), static_cast<uint8_t>(rhs_loc)), compound_line,
-                        compound_column);
+                    emit(C, make_op_addlocal(static_cast<uint8_t>(loc), static_cast<uint8_t>(rhs_loc)), C.lastline,
+                        C.lastcolumn);
                     return;
                 }
             }
@@ -2880,15 +3032,14 @@ namespace behl
                     emit(C,
                         make_op_addimm(
                             static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), static_cast<int32_t>(rhs_int->value)),
-                        compound_line, compound_column);
+                        C.lastline, C.lastcolumn);
                     return;
                 }
 
                 const auto k = add_integer_constant(C, rhs_int->value);
                 if (k <= kNarrowConstLimit)
                 {
-                    emit(C, make_op_addki(static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), k), compound_line,
-                        compound_column);
+                    emit(C, make_op_addki(static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), k), C.lastline, C.lastcolumn);
                     return;
                 }
             }
@@ -2897,8 +3048,7 @@ namespace behl
                 const auto k = add_fp_constant(C, rhs_fp->value);
                 if (k <= kNarrowConstLimit)
                 {
-                    emit(C, make_op_addkf(static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), k), compound_line,
-                        compound_column);
+                    emit(C, make_op_addkf(static_cast<uint8_t>(loc), static_cast<uint8_t>(loc), k), C.lastline, C.lastcolumn);
                     return;
                 }
             }
@@ -2906,33 +3056,33 @@ namespace behl
 
         Reg lhs_reg = static_cast<uint8_t>(loc);
 
-        node.expr->accept(*this);
+        compile_node(node.expr);
         Reg rhs_reg = C.freereg - 1;
 
         if (node.op == TokenType::kPlus)
         {
-            emit(C, make_op_add(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
-            emit(C, make_op_mmadd(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_add(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
+            emit(C, make_op_mmadd(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
         }
         else if (node.op == TokenType::kMinus)
         {
-            emit(C, make_op_sub(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
-            emit(C, make_op_mmsub(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_sub(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
+            emit(C, make_op_mmsub(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
         }
         else if (node.op == TokenType::kStar)
         {
-            emit(C, make_op_mul(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
-            emit(C, make_op_mmmul(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_mul(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
+            emit(C, make_op_mmmul(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
         }
         else if (node.op == TokenType::kSlash)
         {
-            emit(C, make_op_div(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
-            emit(C, make_op_mmdiv(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_div(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
+            emit(C, make_op_mmdiv(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
         }
         else if (node.op == TokenType::kPercent)
         {
-            emit(C, make_op_mod(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
-            emit(C, make_op_mmmod(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), compound_line, compound_column);
+            emit(C, make_op_mod(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
+            emit(C, make_op_mmmod(static_cast<uint8_t>(loc), lhs_reg, rhs_reg), C.lastline, C.lastcolumn);
         }
 
         free_reg(C, rhs_reg);
@@ -2945,7 +3095,7 @@ namespace behl
         Reg lhs_reg = alloc_reg(C);
         emit(C, make_op_getglobal(lhs_reg, k), C.lastline);
 
-        node.expr->accept(*this);
+        compile_node(node.expr);
         Reg rhs_reg = C.freereg - 1;
 
         if (node.op == TokenType::kPlus)
@@ -2996,7 +3146,7 @@ namespace behl
         Reg lhs_reg = alloc_reg(C);
         emit(C, make_op_getupval(lhs_reg, static_cast<uint8_t>(up)), C.lastline);
 
-        node.expr->accept(*this);
+        compile_node(node.expr);
         Reg rhs_reg = C.freereg - 1;
 
         if (node.op == TokenType::kPlus)
@@ -3031,9 +3181,9 @@ namespace behl
         free_reg(C, lhs_reg);
     }
 
-    void VisitorAdapter::visit(const AstIncrement&)
+    void VisitorAdapter::visit(const AstIncrement& node)
     {
-        raise_semantic_error(C.S, get_location(C), "Unresolved AstIncrement - semantic analyzer should have transformed this");
+        compile_field_update(*node.target, TokenType::kPlus, nullptr);
     }
 
     void VisitorAdapter::visit(const AstIncLocal& node)
@@ -3075,9 +3225,9 @@ namespace behl
         emit(C, make_op_incupvalue(static_cast<uint8_t>(up)), C.lastline);
     }
 
-    void VisitorAdapter::visit(const AstDecrement&)
+    void VisitorAdapter::visit(const AstDecrement& node)
     {
-        raise_semantic_error(C.S, get_location(C), "Unresolved AstDecrement - semantic analyzer should have transformed this");
+        compile_field_update(*node.target, TokenType::kMinus, nullptr);
     }
 
     void VisitorAdapter::visit(const AstDecLocal& node)
@@ -3121,9 +3271,6 @@ namespace behl
 
     void VisitorAdapter::visit(const AstLocalDecl& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
         // Count names
         size_t name_count = 0;
         for (AstNode* n = reinterpret_cast<AstNode*>(node.first_name); n; n = n->next_child)
@@ -3213,7 +3360,7 @@ namespace behl
         for (; init && i < new_locals.size(); ++i, init = init->next_child)
         {
             target_reg = new_locals[i].reg;
-            init->accept(*this);
+            compile_node(init);
         }
         target_reg = std::nullopt; // Clear target_reg after processing initializers
 
@@ -3242,7 +3389,7 @@ namespace behl
 
         if (node.then_block)
         {
-            node.then_block->accept(*this);
+            compile_node(node.then_block);
         }
 
         bool has_branches = node.first_elseif != nullptr || node.else_block != nullptr;
@@ -3268,7 +3415,7 @@ namespace behl
 
             if (elseif->block)
             {
-                elseif->block->accept(*this);
+                compile_node(elseif->block);
             }
 
             if (!last_instruction_is_terminal())
@@ -3284,7 +3431,7 @@ namespace behl
 
         if (node.else_block)
         {
-            node.else_block->accept(*this);
+            compile_node(node.else_block);
         }
 
         int32_t end = static_cast<int>(C.current_proto->code.size());
@@ -3305,7 +3452,7 @@ namespace behl
 
         if (node.block)
         {
-            node.block->accept(*this);
+            compile_node(node.block);
         }
 
         // Continue jumps should jump back to start_pc (before condition)
@@ -3363,7 +3510,7 @@ namespace behl
         else if (node.first_expr)
         {
             // Non-call expression - evaluate it normally
-            node.first_expr->accept(*this);
+            compile_node(node.first_expr);
             Reg expr_result = C.freereg - 1;
             // Assume it somehow provides 3 values (might be a variable holding an iterator triple?)
             // This is a fallback - most for-in loops should use pairs() or similar functions
@@ -3508,7 +3655,7 @@ namespace behl
         // Execute loop body
         if (node.block)
         {
-            node.block->accept(*this);
+            compile_node(node.block);
         }
 
         // Restore freereg
@@ -3547,7 +3694,7 @@ namespace behl
 
         if (init)
         {
-            init->accept(visitor);
+            visitor.compile_node(init);
         }
 
         size_t loop_start = C.current_proto->code.size();
@@ -3563,7 +3710,7 @@ namespace behl
 
         if (block)
         {
-            block->accept(visitor);
+            visitor.compile_node(block);
         }
 
         // Continue jumps should jump to the update statement (or loop start if no update)
@@ -3576,7 +3723,7 @@ namespace behl
         if (update)
         {
             Reg before_freereg = C.freereg;
-            update->accept(visitor);
+            visitor.compile_node(update);
 
             if (update->type != AstNodeType::kAssign && C.freereg > before_freereg)
             {
@@ -3639,18 +3786,18 @@ namespace behl
         Reg mode_reg = alloc_reg(C);
 
         // Compile start value
-        node.start->accept(*this);
+        compile_node(node.start);
         emit(C, make_op_move(base, static_cast<Reg>(C.freereg - 1)), C.lastline);
         free_reg(C, C.freereg - 1);
 
-        node.end->accept(*this);
+        compile_node(node.end);
         emit(C, make_op_move(limit_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
         free_reg(C, C.freereg - 1);
 
         // Compile step value
         if (node.step)
         {
-            node.step->accept(*this);
+            compile_node(node.step);
             emit(C, make_op_move(step_reg, static_cast<Reg>(C.freereg - 1)), C.lastline);
             free_reg(C, C.freereg - 1);
         }
@@ -3675,7 +3822,7 @@ namespace behl
 
         if (node.block)
         {
-            node.block->accept(*this);
+            compile_node(node.block);
         }
 
         // Continue jumps should jump to the FORLOOP instruction
@@ -3762,7 +3909,7 @@ namespace behl
         }
 
         func_expr.block = node.block;
-        func_expr.accept(*this);
+        compile_node(&func_expr);
         Reg func_reg = C.freereg - 1;
 
         if (treat_as_local)
@@ -3838,9 +3985,6 @@ namespace behl
 
     void VisitorAdapter::visit(const AstReturn& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
         const bool has_defers = !C.active_defers.empty();
 
         // Check if single expr that is a function call
@@ -3890,7 +4034,7 @@ namespace behl
             }
             else
             {
-                call_node.func->accept(*this);
+                compile_node(call_node.func);
                 func_reg = C.freereg - 1;
             }
 
@@ -3958,7 +4102,7 @@ namespace behl
                 }
                 else
                 {
-                    arg->accept(*this);
+                    compile_node(arg);
                     uint8_t arg_result = C.freereg - 1;
 
                     Reg dest_reg = static_cast<Reg>(func_reg + 1 + arg_regs.size());
@@ -4027,7 +4171,7 @@ namespace behl
                     }
                 }
 
-                node.first_expr->accept(*this);
+                compile_node(node.first_expr);
                 Reg result_reg = C.freereg - 1;
                 emit_return_with_defers(C, result_reg, 1);
             }
@@ -4048,7 +4192,7 @@ namespace behl
             // Compile all but last expression
             for (AstNode* expr = node.first_expr; expr && expr != last_expr; expr = expr->next_child)
             {
-                expr->accept(*this);
+                compile_node(expr);
                 result_regs.push_back(C.freereg - 1);
             }
 
@@ -4097,7 +4241,7 @@ namespace behl
             {
                 if (last_expr)
                 {
-                    last_expr->accept(*this);
+                    compile_node(last_expr);
                     result_regs.push_back(C.freereg - 1);
                 }
 
@@ -4155,9 +4299,6 @@ namespace behl
 
     void VisitorAdapter::visit(const AstDefer& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
         if (C.defer_count >= kMaxDeferBlocks)
         {
             raise_semantic_error(C.S, get_location(C), "too many defer statements in one function");
@@ -4223,7 +4364,7 @@ namespace behl
 
             if (body)
             {
-                body->accept(visitor);
+                visitor.compile_node(body);
             }
 
             emit_defer_calls_for_scope(C, current_scope_level(C));
@@ -4243,7 +4384,7 @@ namespace behl
         int32_t scope_level = current_scope_level(C);
         if (node.block)
         {
-            node.block->accept(*this);
+            compile_node(node.block);
         }
         // Emit defers for this scope before leaving
         emit_defer_calls_for_scope(C, scope_level);
@@ -4252,10 +4393,7 @@ namespace behl
 
     void VisitorAdapter::visit(const AstExprStat& node)
     {
-        C.lastline = node.line;
-        C.lastcolumn = node.column;
-
-        node.expr->accept(*this);
+        compile_node(node.expr);
 
         C.freereg = C.min_freereg;
     }
@@ -4266,7 +4404,7 @@ namespace behl
         int32_t scope_level = current_scope_level(C);
         for (const AstNode* stat = node.first_stat; stat != nullptr; stat = stat->next_child)
         {
-            stat->accept(*this);
+            compile_node(stat);
         }
         // Emit defers for this scope before leaving
         emit_defer_calls_for_scope(C, scope_level);
@@ -4277,7 +4415,7 @@ namespace behl
     {
         if (node.block)
         {
-            node.block->accept(*this);
+            compile_node(node.block);
         }
     }
 
@@ -4289,7 +4427,7 @@ namespace behl
     void VisitorAdapter::visit(const AstExportDecl& node)
     {
         // Just compile the inner declaration (function or const)
-        node.declaration->accept(*this);
+        compile_node(node.declaration);
     }
 
     void VisitorAdapter::visit(const AstExportList&)
@@ -4324,7 +4462,7 @@ namespace behl
 
         enter_scope(C);
         VisitorAdapter V(C);
-        program->accept(V);
+        V.compile_node(program);
         leave_scope(C);
 
         // Return nothing (0 values) - export transform pass will add explicit return if module

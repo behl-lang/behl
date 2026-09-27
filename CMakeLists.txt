@@ -154,6 +154,7 @@ set(BEHL_PRIVATE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/codegen_x86.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jit/x86/emitter_x86.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_buffer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_core.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_debug.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libs/lib_fs.cpp

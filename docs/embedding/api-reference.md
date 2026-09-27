@@ -46,9 +46,15 @@ Closes and cleans up the interpreter state.
 ```cpp
 void load_stdlib(State* S)
 ```
-Loads the core, table, gc, jit, debug, math, os and string libraries. Core installs its functions
+Loads the core, table, gc, jit, debug, math, os, string and buffer libraries. Core installs its functions
 directly as globals (`print`, `pcall`, `error`, `pairs`, `import`, ...); the other libraries are
 modules and must be explicitly imported using `import()`.
+
+### `load_lib_buffer(State*)`
+```cpp
+void load_lib_buffer(State* S)
+```
+Registers only the `buffer` module (see [buffer](../stdlib/buffer)). `load_stdlib` already calls it.
 
 ---
 
@@ -134,7 +140,7 @@ Pushes a C function onto the stack.
 Type type(State* S, int32_t idx)
 ```
 Returns the type of value at `idx`.
-- Types: `kNil`, `kBoolean`, `kInteger`, `kNumber`, `kString`, `kTable`, `kClosure`, `kCFunction`, `kUserdata`
+- Types: `kNil`, `kBoolean`, `kInteger`, `kNumber`, `kString`, `kTable`, `kClosure`, `kCFunction`, `kUserdata`, `kBuffer`
 
 ### `type_name(Type)`
 ```cpp
@@ -219,6 +225,12 @@ Returns boolean value. Raises an error if not a boolean.
 void* check_userdata(State* S, int32_t idx, uint32_t uid)
 ```
 Returns userdata pointer. Raises an error if not userdata or UID mismatch.
+
+### `check_buffer(State*, int32_t)`
+```cpp
+std::span<std::byte> check_buffer(State* S, int32_t idx)
+```
+Returns the bytes of the buffer at `idx`. Raises `bad argument #n (expected buffer, got T)` if the value is not a buffer. The span follows the rules in [Buffers](#buffers).
 
 ---
 
@@ -353,6 +365,66 @@ Generates unique 32-bit identifier from string using FNV-1a.
 
 ---
 
+## Buffers
+
+A buffer is a mutable byte array (script type `buffer`, `Type::kBuffer`). Buffer lengths are `SysInt`
+(`size_t`). See [buffer](../stdlib/buffer) for the script side.
+
+The functions below return a `std::span<std::byte>` over the buffer's bytes. The span stays valid
+while the buffer is reachable and has not been resized, the same rule as the `string_view` returned
+by `to_string`. Any resize (`buffer_resize` or the script function `buffer.resize`) invalidates
+spans obtained earlier, including spans of slices of that buffer.
+
+### `buffer_new(State*, SysInt)`
+```cpp
+std::span<std::byte> buffer_new(State* S, SysInt len)
+```
+Pushes a new zero-filled buffer of `len` bytes and returns its bytes. For `len == 0` the span is empty.
+
+### `buffer_get(State*, int32_t)`
+```cpp
+std::span<std::byte> buffer_get(State* S, int32_t idx)
+```
+Returns the bytes of the buffer at `idx`, or an empty span if the value is not a buffer.
+
+### `buffer_len(State*, int32_t)`
+```cpp
+SysInt buffer_len(State* S, int32_t idx)
+```
+Returns the length in bytes of the buffer at `idx`, or `0` if the value is not a buffer.
+
+### `buffer_resize(State*, int32_t, SysInt)`
+```cpp
+std::span<std::byte> buffer_resize(State* S, int32_t idx, SysInt new_len)
+```
+Resizes the buffer at `idx` to `new_len` bytes and returns its new bytes. Existing bytes up to
+`new_len` are kept and new bytes are zero. Spans obtained earlier are invalidated.
+
+The value must be a buffer that is not a slice. Anything else is API misuse: it asserts in Debug
+builds, and in Release builds nothing is changed and an empty span is returned.
+
+```cpp
+auto bytes = behl::buffer_new(S, 4);
+bytes[0] = std::byte{ 0x2A };
+bytes = behl::buffer_resize(S, -1, 8);   // the old span is no longer valid
+behl::set_global(S, "data");             // scripts see an 8-byte buffer, data[0] == 42
+```
+
+`check_buffer` (see [Type Checking](#type-checking)) is the variant for arguments of C functions.
+
+```cpp
+static int sum_bytes(behl::State* S) {
+    behl::Integer total = 0;
+    for (std::byte b : behl::check_buffer(S, 0)) {
+        total += std::to_integer<behl::Integer>(b);
+    }
+    behl::push_integer(S, total);
+    return 1;
+}
+```
+
+---
+
 ## Modules
 
 ### `create_module(State*, std::string_view, const ModuleDef&)`
@@ -479,7 +551,7 @@ namespace behl {
     enum class Type : uint8_t {
         kNil, kBoolean, kInteger, kNumber,
         kString, kTable, kClosure, kCFunction,
-        kUserdata
+        kUserdata, kBuffer
     };
 }
 ```

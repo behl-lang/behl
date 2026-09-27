@@ -18,7 +18,7 @@ Built-in modules and core functions available in Behl.
 The Behl standard library provides core functionality through global functions and modules. When `load_stdlib(S)` is called, it loads:
 
 - **Core Functions** - Global functions like `print()`, `typeof()`, `import()`
-- **Standard Modules** - `math`, `string`, `table`, `os`, `gc`, `jit`, `debug`
+- **Standard Modules** - `math`, `string`, `table`, `buffer`, `os`, `gc`, `jit`, `debug`
 
 Two further modules ship with Behl but are **not** loaded by `load_stdlib`,
 because they are security-sensitive: `fs` and `process`. An embedder opts in
@@ -53,6 +53,7 @@ table.insert(arr, value);
 - `math` - Mathematical functions and constants
 - `string` - String manipulation utilities
 - `table` - Table operations
+- `buffer` - Mutable byte buffers
 - `os` - Operating system functions
 - `gc` - Garbage collector control
 - `jit` - JIT compiler control
@@ -75,6 +76,7 @@ See [Module System](modules) for details.
 - [Math Module](stdlib/math) - Mathematical functions and constants
 - [String Module](stdlib/string) - String manipulation
 - [Table Module](stdlib/table) - Table utilities
+- [Buffer Module](stdlib/buffer) - Byte buffers, slices, little-endian typed access
 - [OS Module](stdlib/os) - Operating system interface
 - [GC Module](stdlib/gc) - Garbage collector control
 - [JIT Module](stdlib/jit) - JIT compiler control

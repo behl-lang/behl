@@ -102,6 +102,8 @@ namespace behl
         void mov32(GpReg dst, Mem src);
         void mov32(Mem dst, uint32_t imm);
         void mov32(Mem dst, GpReg src);
+        void mov8(Mem dst, GpReg src);
+        void movzx8(GpReg dst, Mem src);
 
         void movups(XmmReg dst, Mem src);
         void movups(Mem dst, XmmReg src);

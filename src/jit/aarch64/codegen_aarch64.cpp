@@ -2,6 +2,7 @@
 
 #if BEHL_JIT_AARCH64
 
+#    include "gc/gco_buffer.hpp"
 #    include "gc/gco_closure.hpp"
 #    include "gc/gco_proto.hpp"
 #    include "gc/gco_table.hpp"
@@ -471,7 +472,15 @@ namespace behl
         A64Mem elem = mem(kTable, 0);
         if (op.flag)
         {
-            elem = mem(kTable, static_cast<int32_t>(op.imm) * Value::size());
+            const int32_t disp = static_cast<int32_t>(op.imm) * Value::size();
+            if (disp < 4096)
+            {
+                elem = mem(kTable, disp);
+            }
+            else
+            {
+                emit_add_imm(kTable, disp);
+            }
         }
         else
         {
@@ -491,6 +500,69 @@ namespace behl
         {
             e_.ldr_q(kCopyVec, slot_tag(op.slot));
             e_.str_q(kCopyVec, elem);
+        }
+    }
+
+    void CodegenAArch64::emit_buffer_int(const CgOp& op)
+    {
+        constexpr A64Reg kBuf = A64Reg::x17;
+        constexpr A64Reg kIdx = A64Reg::x11;
+        constexpr auto kOwner = static_cast<int32_t>(offsetof(GCBuffer, owner));
+        constexpr auto kData = static_cast<int32_t>(offsetof(GCBuffer, data));
+        constexpr auto kOffset = static_cast<int32_t>(offsetof(GCBuffer, offset));
+        constexpr auto kLen = static_cast<int32_t>(offsetof(GCBuffer, len));
+
+        const bool is_get = op.kind == CgOpKind::kBufferGetInt;
+        const A64Label slow = label(op.label);
+        const int32_t buffer_slot = static_cast<int32_t>(op.var);
+
+        ensure_base();
+        if (!is_get)
+        {
+            e_.ldrb(kScratch, slot_tag(op.slot));
+            e_.cmpw(kScratch, static_cast<uint32_t>(Type::kInteger));
+            e_.bcond(A64Cond::ne, slow);
+        }
+
+        e_.ldr(kBuf, slot_payload(buffer_slot));
+        e_.ldr(kScratch, mem(kBuf, kLen));
+        if (op.flag)
+        {
+            e_.cmp(kScratch, static_cast<uint32_t>(op.imm));
+            e_.bcond(A64Cond::ls, slow);
+            e_.ldr(kIdx, mem(kBuf, kOffset));
+            if (op.imm != 0)
+            {
+                e_.add(kIdx, kIdx, static_cast<uint32_t>(op.imm));
+            }
+        }
+        else
+        {
+            e_.ldr(kIdx, slot_payload(static_cast<int32_t>(op.imm)));
+            e_.cmp(kIdx, kScratch);
+            e_.bcond(A64Cond::hs, slow);
+            e_.ldr(kScratch, mem(kBuf, kOffset));
+            e_.add(kIdx, kIdx, kScratch);
+        }
+
+        e_.ldr(kBuf, mem(kBuf, kOwner));
+        e_.ldr(kScratch, mem(kBuf, kLen));
+        e_.cmp(kIdx, kScratch);
+        e_.bcond(A64Cond::hs, slow);
+        e_.ldr(kBuf, mem(kBuf, kData));
+        e_.add(kBuf, kBuf, kIdx);
+
+        if (is_get)
+        {
+            e_.ldrb(kScratch, mem(kBuf, 0));
+            e_.str(kScratch, slot_payload(op.slot));
+            e_.mov32(kScratch, static_cast<uint32_t>(Type::kInteger));
+            e_.strw(kScratch, slot_tag(op.slot));
+        }
+        else
+        {
+            e_.ldr(kScratch, slot_payload(op.slot));
+            e_.strb(kScratch, mem(kBuf, 0));
         }
     }
 
@@ -1862,6 +1934,15 @@ namespace behl
                     cache_drop_slot(op.slot);
                 }
                 emit_table_int(op);
+                break;
+
+            case CgOpKind::kBufferGetInt:
+            case CgOpKind::kBufferSetInt:
+                if (cache_enabled_ && op.kind == CgOpKind::kBufferGetInt)
+                {
+                    cache_drop_slot(op.slot);
+                }
+                emit_buffer_int(op);
                 break;
 
             case CgOpKind::kHelperCall:

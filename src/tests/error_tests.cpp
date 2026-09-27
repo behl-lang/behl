@@ -498,5 +498,191 @@ TEST_P(ErrorTest, DescendingLoopLimitTableRaises)
     EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
 }
 
+static std::string runtime_error_of(behl::State* S, std::string_view code)
+{
+    if (!behl_test::load_ok(S, code, false))
+    {
+        return "<load failed: " + behl_test::error_text(S) + ">";
+    }
+    if (behl::call(S, 0, 0) >= 0)
+    {
+        return "<no error>";
+    }
+    return behl_test::error_text(S);
+}
+
+static void expect_error_on_line(behl::State* S, std::string_view code, int line)
+{
+    const std::string err = runtime_error_of(S, code);
+    std::string expected = "<string>(";
+    expected += std::to_string(line);
+    expected += ',';
+    EXPECT_NE(err.find(expected), std::string::npos) << "expected line " << line << ", got: " << err;
+    behl::set_top(S, 0);
+}
+
+TEST_P(ErrorTest, LocationOfMemberReadInIfCondition)
+{
+    expect_error_on_line(S, "let n = 5\nlet x = 1\nif (n.x) { }\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfMemberReadInWhileCondition)
+{
+    expect_error_on_line(S, "let n = 5\nlet x = 1\nwhile (n.x) { }\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfUnaryOperatorAssignedToGlobal)
+{
+    expect_error_on_line(S, "let n = {}\nlet x = 1\ng = -n\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfMemberReadAssignedToGlobal)
+{
+    expect_error_on_line(S, "let n = 5\nlet x = 1\ng = n.x\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfGlobalIncrement)
+{
+    expect_error_on_line(S, "g = {}\nlet x = 1\ng++\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfGlobalCompoundAssignment)
+{
+    expect_error_on_line(S, "g = {}\nlet x = 1\ng += 1\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfMemberReadAssignedToUpvalue)
+{
+    expect_error_on_line(S, "let n = 5\nlet u = 0\nfunction f() {\nlet x = 1\nu = n.x\n}\nf()\n", 5);
+}
+
+TEST_P(ErrorTest, LocationOfUpvalueIncrement)
+{
+    expect_error_on_line(S, "let u = {}\nfunction f() {\nlet x = 1\nu++\n}\nf()\n", 4);
+}
+
+TEST_P(ErrorTest, LocationOfNumericForBoundCompare)
+{
+    expect_error_on_line(S, "let n = {}\nlet x = 1\nfor (let i = 0; i < n; i = i + 1) { }\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfForInOverNonIterable)
+{
+    expect_error_on_line(S, "let n = 5\nlet x = 1\nfor (let k, v in n) { }\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfForInUndeclaredVariableCompileError)
+{
+    ASSERT_TRUE(behl_test::load_fails(S, "let n = 5\nlet x = 1\nfor (k, v in n) { }\n", false));
+    const std::string err = behl_test::error_text(S);
+    EXPECT_NE(err.find("<string>(3,"), std::string::npos) << err;
+}
+
+TEST_P(ErrorTest, LocationOfMethodDefinitionOnNonTable)
+{
+    expect_error_on_line(S, "let n = 5\nlet x = 1\nfunction n.m() { }\n", 3);
+}
+
+TEST_P(ErrorTest, LocationOfOperandOnContinuationLine)
+{
+    expect_error_on_line(S, "let n = {}\nlet x = 1\nlet y =\n    -n\n", 4);
+}
+
+TEST_P(ErrorTest, LocationOfTableConstructorFieldOnItsOwnLine)
+{
+    expect_error_on_line(S, "let n = 5\nlet t = {\n    a = 1,\n    b = n.x\n}\n", 4);
+}
+
+struct LocationCase
+{
+    const char* name;
+    const char* statement;
+    int line;
+};
+
+static constexpr std::string_view kLocationPrelude = "let n = 5\nlet t = {}\nlet s = \"str\"\nlet x = 1\n";
+
+static constexpr LocationCase kLocationCases[] = {
+    { "member read in local decl", "let a = n.x", 5 },
+    { "index read constant key", "let a = n[1]", 5 },
+    { "index read register key", "let a = n[x]", 5 },
+    { "member read in local assign", "x = n.x", 5 },
+    { "member read in global assign", "g = n.x", 5 },
+    { "member read as call argument", "print(n.x)", 5 },
+    { "member read in return", "return n.x", 5 },
+    { "nested member read on nil", "let a = t.a.b", 5 },
+    { "member write", "n.x = 1", 5 },
+    { "index write constant key", "n[1] = 1", 5 },
+    { "index write register key", "n[x] = 1", 5 },
+    { "member write through nil", "t.a.b = 1", 5 },
+    { "call non-function statement", "n()", 5 },
+    { "call non-function in local decl", "let a = n()", 5 },
+    { "call missing field", "x = t.missing()", 5 },
+    { "call non-function in global assign", "g = n(1)", 5 },
+    { "call non-function in return", "return n()", 5 },
+    { "method call on non-table", "n:m()", 5 },
+    { "method call missing method", "t:m()", 5 },
+    { "add", "let a = t + 1", 5 },
+    { "sub", "let a = 1 - t", 5 },
+    { "mul", "let a = t * 2", 5 },
+    { "div", "let a = t / 2", 5 },
+    { "mod", "let a = t % 2", 5 },
+    { "pow", "let a = t ** 2", 5 },
+    { "unary minus", "let a = -t", 5 },
+    { "band", "let a = t & 1", 5 },
+    { "bor", "let a = t | 1", 5 },
+    { "bxor", "let a = t ^ 1", 5 },
+    { "shl", "let a = t << 1", 5 },
+    { "shr", "let a = t >> 1", 5 },
+    { "bnot", "let a = ~t", 5 },
+    { "less than", "let a = t < 1", 5 },
+    { "less equal", "let a = t <= 1", 5 },
+    { "greater than", "let a = t > 1", 5 },
+    { "greater equal", "let a = t >= 1", 5 },
+    { "concat", "let a = s + t", 5 },
+    { "length", "let a = #n", 5 },
+    { "if condition", "if (n.x) { }", 5 },
+    { "if condition compare", "if (t < 1) { }", 5 },
+    { "else if condition", "if (false) { } else if (n.x) { }", 5 },
+    { "while condition", "while (n.x) { }", 5 },
+    { "for condition", "for (let i = 0; i < t; i = i + 1) { }", 5 },
+    { "for step", "for (let i = 0; i < 3; i = i + t) { }", 5 },
+    { "for-in over number", "for (let k, v in n) { }", 5 },
+    { "ternary false branch", "let a = false ? 0 : n.x", 5 },
+    { "ternary true branch", "let a = x ? n.x : 0", 5 },
+    { "and right operand", "let a = x && n.x", 5 },
+    { "or right operand", "let a = nil || n.x", 5 },
+    { "array constructor field", "let a = { n.x }", 5 },
+    { "hash constructor field", "let a = { k = n.x }", 5 },
+    { "compound add local", "x += t", 5 },
+    { "compound add field nil", "t.c += 1", 5 },
+    { "compound add field on non-table", "n.c += 1", 5 },
+    { "increment field nil", "t.c++", 5 },
+    { "increment field on non-table", "n.c++", 5 },
+    { "increment nil global", "g3++", 5 },
+    { "decrement local table", "t--", 5 },
+    { "function body", "function f() {\nlet a = n.x\n}\nf()", 6 },
+    { "defer body", "function f() {\ndefer {\nlet a = n.x\n}\n}\nf()", 7 },
+    { "call argument on next line", "print(\n    n.x\n)", 6 },
+    { "constructor field on next line", "let a = {\n    k = n.x\n}", 6 },
+    { "call on next line of chain", "let a = t\n    .missing()", 6 },
+    { "second statement on same line", "let y = 1; let a = n.x", 5 },
+};
+
+TEST_P(ErrorTest, LocationMatrix)
+{
+    for (const LocationCase& c : kLocationCases)
+    {
+        const std::string code = std::string(kLocationPrelude) + c.statement + "\n";
+        const std::string err = runtime_error_of(S, code);
+        std::string expected = "<string>(";
+        expected += std::to_string(c.line);
+        expected += ',';
+        EXPECT_NE(err.find(expected), std::string::npos)
+            << "[" << c.name << "] expected line " << c.line << ", got: " << err.substr(0, err.find('\n'));
+        behl::set_top(S, 0);
+    }
+}
+
 INSTANTIATE_TEST_SUITE_P(Mode, ErrorTest, ::testing::Bool(),
     [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

@@ -23,6 +23,106 @@ protected:
     }
 };
 
+TEST_P(RegressionTest, StoreErrorReportsTheLineOfTheStore)
+{
+    ASSERT_TRUE(behl_test::load_ok(S, "let n = 5\nlet x = 1\nn.field = 1\n", false));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 0));
+    const std::string field_err = behl_test::error_text(S);
+    EXPECT_NE(field_err.find("<string>(3,"), std::string::npos) << field_err;
+    behl::set_top(S, 0);
+
+    constexpr std::string_view code = "const buffer = import(\"buffer\")\nlet b = buffer.create(4)\nlet x = 1\nb[0] = \"x\"\n";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_fails(S, 0, 0));
+    const std::string buffer_err = behl_test::error_text(S);
+    EXPECT_NE(buffer_err.find("<string>(4,"), std::string::npos) << buffer_err;
+}
+
+TEST_P(RegressionTest, AssignTableCtorReadsOldValueOfTarget)
+{
+    constexpr std::string_view code = R"(
+        let a = { v = 1 }
+        let n = a
+        n = { next = n }
+        return n == a, n.next == a, n.next == n
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_FALSE(behl::to_boolean(S, -3));
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(RegressionTest, AssignTableCtorBuildsChainInLoop)
+{
+    constexpr std::string_view code = R"(
+        let node = { depth = 0 }
+        for (let i = 1; i <= 50; i = i + 1) { node = { depth = i, next = node } }
+        let count = 0
+        while (node.next != nil && count < 1000) { count = count + 1; node = node.next }
+        return count, node.depth
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 50);
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(RegressionTest, AssignArrayCtorAndNestedCtorReadOldValue)
+{
+    constexpr std::string_view code = R"(
+        let x = 5
+        x = { x, x + 1 }
+        let y = 7
+        y = { inner = { v = y } }
+        return x[0], x[1], y.inner.v
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 5);
+    EXPECT_EQ(behl::to_integer(S, -2), 6);
+    EXPECT_EQ(behl::to_integer(S, -1), 7);
+}
+
+TEST_P(RegressionTest, AssignLogicalOperatorsReadOldValueOfTarget)
+{
+    constexpr std::string_view code = R"(
+        let x = 5
+        let y = nil
+        x = y || x
+        let p = 7
+        let q = 3
+        p = q && p
+        let r = false
+        let s = 9
+        r = s && r
+        return x, p, r
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 5);
+    EXPECT_EQ(behl::to_integer(S, -2), 7);
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kBoolean);
+    EXPECT_FALSE(behl::to_boolean(S, -1));
+}
+
+TEST_P(RegressionTest, AssignTernaryBranchReadsOldValueOfTarget)
+{
+    constexpr std::string_view code = R"(
+        let c = true
+        let r = { v = 1 }
+        let old = r
+        r = c ? { next = r } : nil
+        let z = 4
+        z = c ? (nil || z) : 0
+        return r.next == old, z
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_TRUE(behl::to_boolean(S, -2));
+    EXPECT_EQ(behl::to_integer(S, -1), 4);
+}
+
 TEST_P(RegressionTest, RecursiveFibonacciDirectExpression)
 {
     constexpr std::string_view code = R"(

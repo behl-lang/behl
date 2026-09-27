@@ -296,6 +296,7 @@ namespace behl
     BEHL_API void load_lib_math(State* S);    // Math functions
     BEHL_API void load_lib_os(State* S);      // OS functions (time, exit, etc.)
     BEHL_API void load_lib_string(State* S);  // String manipulation functions
+    BEHL_API void load_lib_buffer(State* S);  // Byte buffer functions
     BEHL_API void load_lib_fs(State* S);      // Filesystem operations (security-sensitive, opt-in)
     BEHL_API void load_lib_process(State* S); // Process spawning and management (security-sensitive, opt-in)
 

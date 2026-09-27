@@ -73,7 +73,7 @@ See [Standard Library](../standard-library) for complete module documentation.
 
 ### Module Loading
 
-The registered modules are `math`, `string`, `table`, `os`, `gc`, `jit` and `debug`, plus the security-sensitive `fs` and `process` modules, which the host has to opt into. There is no `io` module.
+The registered modules are `math`, `string`, `table`, `buffer`, `os`, `gc`, `jit` and `debug`, plus the security-sensitive `fs` and `process` modules, which the host has to opt into. There is no `io` module.
 
 ```cpp
 // Core modules

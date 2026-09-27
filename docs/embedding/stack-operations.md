@@ -174,6 +174,7 @@ if (t == behl::Type::kInteger) {
 - `Type::kTable`
 - `Type::kClosure` / `Type::kCFunction`
 - `Type::kUserdata`
+- `Type::kBuffer`
 
 ### `type_name(Type)` / `value_typename(State*, int32_t)`
 
