@@ -445,7 +445,7 @@ namespace behl
 
                 case OpCode::kOpClosure:
                     handler_closure(S, *frame, instr.a(), instr.const_or_proto_index());
-                    continue;
+                    break;
 
                 case OpCode::kOpCall:
                 {
@@ -583,7 +583,7 @@ namespace behl
         auto& stack = S->stack;
 
         assert(func_pos < stack.size() && "perform_call: function position out of range");
-        const Value& func = stack[func_pos];
+        const Value func = stack[func_pos];
 
         gc_step(S);
 

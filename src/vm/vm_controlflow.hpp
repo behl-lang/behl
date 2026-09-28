@@ -492,12 +492,16 @@ namespace behl
 
     // Call instruction handler
     template<bool TExecuteCallee = true>
-    BEHL_INLINE void handler_call(State* S, CallFrame& frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
+    BEHL_INLINE void handler_call(
+        State* S, CallFrame& entry_frame, Reg a, uint8_t num_args, uint8_t num_results, bool is_self_call)
     {
+        CallFrame* live_frame = &entry_frame;
         if (S->gc.gc_debt > 0)
         {
             gc_step(S);
+            live_frame = &S->call_stack.back();
         }
+        CallFrame& frame = *live_frame;
 
         const auto call_pos = frame.base + a;
 
@@ -629,7 +633,7 @@ namespace behl
 
             // For tail call to C function, return with what the caller expects
             // Use kMultRet to return all values from the C function
-            return return_from_function(S, frame, a, static_cast<uint8_t>(kMultRet), entry_call_depth);
+            return return_from_function(S, S->call_stack.back(), a, static_cast<uint8_t>(kMultRet), entry_call_depth);
         }
         else if (func.is_table_like())
         {
@@ -642,7 +646,7 @@ namespace behl
                 // For C function metamethods, call and return immediately
                 call_function(S, a, num_args, static_cast<uint8_t>(kMultRet));
 
-                return return_from_function(S, frame, a, static_cast<uint8_t>(kMultRet), entry_call_depth);
+                return return_from_function(S, S->call_stack.back(), a, static_cast<uint8_t>(kMultRet), entry_call_depth);
             }
             else if (call_mm.is_closure())
             {
@@ -876,7 +880,7 @@ namespace behl
             {
                 result = !result;
             }
-            frame.pc += static_cast<uint32_t>(!result);
+            S->call_stack.back().pc += static_cast<uint32_t>(!result);
             return;
         }
 

@@ -298,7 +298,7 @@ namespace behl
                 case Type::kCFunction:
                 {
                     const auto val = S->stack[static_cast<size_t>(resolve_index(S, stack_idx))];
-                    const auto str_val = vm_tostring(S, val, S->call_stack.back());
+                    const auto str_val = vm_tostring(S, val);
                     if (str_val.is_nil())
                     {
                         format_value_to(out, format_arg("nil"), spec);

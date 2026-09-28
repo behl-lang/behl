@@ -195,7 +195,7 @@ namespace behl
             auto result = try_unary_metamethod<MetaMethodType::kLen>(S, val);
             if (result.has_value())
             {
-                get_register(S, frame, a) = result;
+                get_register(S, S->call_stack.back(), a) = result;
                 return;
             }
         }
@@ -235,11 +235,12 @@ namespace behl
     {
         const Value& val = get_register(S, frame, b);
 
-        Value result = vm_tostring(S, val, frame);
-        get_register(S, frame, a) = result;
+        Value result = vm_tostring(S, val);
+        CallFrame& live_frame = S->call_stack.back();
+        get_register(S, live_frame, a) = result;
 
         // TOSTRING produces exactly 1 result in register a, so top = base + a + 1
-        frame_header(S, frame).top = frame.base + a + 1;
+        frame_header(S, live_frame).top = live_frame.base + a + 1;
 
         gc_step(S);
     }

@@ -13,6 +13,7 @@
 #include "vm_detail.hpp"
 #include "vm_error.hpp"
 #include "vm_metatable.hpp"
+#include "vm_table.hpp"
 #include "vm_upvalues.hpp"
 
 #include <cassert>
@@ -277,8 +278,8 @@ namespace behl
     //////////////////////////////////////////////////////////////////////////
     // Increment/Decrement Helpers
 
-    BEHL_INLINE
-    bool increment_value(State* S, Value& value)
+    template<typename TStore>
+    BEHL_INLINE bool increment_value(State* S, Value& value, TStore&& store)
     {
         if (value.is_integer()) [[likely]]
         {
@@ -299,7 +300,7 @@ namespace behl
             auto result = try_arith_metamethod<MetaMethodType::kAdd>(S, value, one);
             if (result.has_value())
             {
-                value = result;
+                store(result);
                 return true;
             }
         }
@@ -307,8 +308,8 @@ namespace behl
         return false;
     }
 
-    BEHL_INLINE
-    bool decrement_value(State* S, Value& value)
+    template<typename TStore>
+    BEHL_INLINE bool decrement_value(State* S, Value& value, TStore&& store)
     {
         if (value.is_integer())
         {
@@ -329,7 +330,7 @@ namespace behl
             auto result = try_arith_metamethod<MetaMethodType::kSub>(S, value, one);
             if (result.has_value())
             {
-                value = result;
+                store(result);
                 return true;
             }
         }
@@ -580,7 +581,7 @@ namespace behl
         Value* base = S->stack.data() + frame.base;
         Value& reg = base[a];
 
-        if (increment_value(S, reg))
+        if (increment_value(S, reg, [S, a](const Value& result) { get_register(S, S->call_stack.back(), a) = result; }))
         {
             return;
         }
@@ -604,7 +605,8 @@ namespace behl
         {
             Value& global = it->second;
 
-            if (increment_value(S, global))
+            if (increment_value(
+                    S, global, [S, table, &key](const Value& result) { table_raw_setfield(S, table, key, result); }))
             {
                 return;
             }
@@ -623,7 +625,7 @@ namespace behl
         const auto upvalue_idx = upvalue_indices[a];
         Value& upval = upvalue_ref(S, upvalue_idx);
 
-        if (increment_value(S, upval))
+        if (increment_value(S, upval, [S, upvalue_idx](const Value& result) { upvalue_ref(S, upvalue_idx) = result; }))
         {
             return;
         }
@@ -636,7 +638,7 @@ namespace behl
     {
         Value& reg = get_register(S, frame, a);
 
-        if (decrement_value(S, reg))
+        if (decrement_value(S, reg, [S, a](const Value& result) { get_register(S, S->call_stack.back(), a) = result; }))
         {
             return;
         }
@@ -660,7 +662,8 @@ namespace behl
         {
             Value& global = it->second;
 
-            if (decrement_value(S, global))
+            if (decrement_value(
+                    S, global, [S, table, &key](const Value& result) { table_raw_setfield(S, table, key, result); }))
             {
                 return;
             }
@@ -679,7 +682,7 @@ namespace behl
         const auto upvalue_idx = upvalue_indices[a];
         Value& upval = upvalue_ref(S, upvalue_idx);
 
-        if (decrement_value(S, upval))
+        if (decrement_value(S, upval, [S, upvalue_idx](const Value& result) { upvalue_ref(S, upvalue_idx) = result; }))
         {
             return;
         }

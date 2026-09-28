@@ -30,8 +30,6 @@ namespace behl
     {
         int n = get_top(S);
 
-        const auto current_frame = S->call_stack.back();
-
         for (int i = 0; i < n; ++i)
         {
             const auto real_index = resolve_index(S, i);
@@ -50,7 +48,7 @@ namespace behl
             else
             {
                 // Use vm_tostring which respects __tostring metamethod
-                Value str_val = vm_tostring(S, val, current_frame);
+                Value str_val = vm_tostring(S, val);
                 if (str_val.get_type() == Type::kString)
                 {
                     print(S, "{}", str_val.get_string()->view());

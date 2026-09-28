@@ -23,6 +23,34 @@ protected:
     }
 };
 
+static int make_finalizable_userdata(behl::State* L)
+{
+    behl::userdata_new(L, 8, behl::make_uid("RegressionFinalizable"));
+    return 1;
+}
+
+TEST_P(RegressionTest, ClosureCreationSurvivesFinalizerGrowingCallStack)
+{
+    behl::register_function(S, "make_ud", make_finalizable_userdata);
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let finalized = 0
+        let u = make_ud()
+        setmetatable(u, { __gc = function(x) { finalized = finalized + 1; rec(5000) } })
+        u = nil
+        let total = 0
+        for (let i = 0; i < 300000; i = i + 1) {
+            let c = function() { return i }
+            total = total + 1
+        }
+        return total, finalized
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 300000);
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
 TEST_P(RegressionTest, StoreErrorReportsTheLineOfTheStore)
 {
     ASSERT_TRUE(behl_test::load_ok(S, "let n = 5\nlet x = 1\nn.field = 1\n", false));
@@ -1190,6 +1218,233 @@ TEST_P(RegressionTest, IncrementInsideFunctionExpressionInConditions)
     ASSERT_TRUE(behl_test::load_ok(S, code));
     ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
     EXPECT_EQ(behl::to_integer(S, -2), 6);
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(RegressionTest, TailCallToCFunctionSurvivesCallStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        function deep(n) { if (n == 0) { return typeof(n) } let r = deep(n - 1); return r }
+        let ok = 0
+        for (let d = 0; d < 600; d = d + 1) { if (deep(d) == "integer") { ok = ok + 1 } }
+        return ok
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 600);
+}
+
+TEST_P(RegressionTest, TailCallToCCallMetamethodSurvivesCallStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        let obj = setmetatable({}, { __call = typeof })
+        function deep(n) { if (n == 0) { return obj(n) } let r = deep(n - 1); return r }
+        let ok = 0
+        for (let d = 0; d < 600; d = d + 1) { if (deep(d) == "table") { ok = ok + 1 } }
+        return ok
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 600);
+}
+
+TEST_P(RegressionTest, ComparisonMetamethodBranchSurvivesCallStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let depth = 150
+        function grow() { depth = depth * 2; rec(depth) }
+        let mt = {
+            __lt = function(x, y) { grow(); return false },
+            __le = function(x, y) { grow(); return false },
+            __eq = function(x, y) { grow(); return false }
+        }
+        let a = setmetatable({}, mt)
+        let b = setmetatable({}, mt)
+        let r = ""
+        if (a < b) { r = r + "T" } else { r = r + "F" }
+        if (a <= b) { r = r + "T" } else { r = r + "F" }
+        if (a > b) { r = r + "T" } else { r = r + "F" }
+        if (a >= b) { r = r + "T" } else { r = r + "F" }
+        if (a == b) { r = r + "T" } else { r = r + "F" }
+        if (a != b) { r = r + "T" } else { r = r + "F" }
+        if (a < 5) { r = r + "T" } else { r = r + "F" }
+        return r
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "FFTTFTF");
+}
+
+TEST_P(RegressionTest, LenMetamethodSurvivesStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let a = setmetatable({}, { __len = function(o) { rec(2000); return 7 } })
+        let n = #a
+        return n
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 7);
+}
+
+TEST_P(RegressionTest, ToStringMetamethodSurvivesStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let a = setmetatable({}, { __tostring = function(o) { rec(2000); return "obj" } })
+        let s = tostring(a)
+        return s
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "obj");
+}
+
+TEST_P(RegressionTest, ToStringNonStringErrorSurvivesStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let a = setmetatable({}, { __tostring = function(o) { rec(3000); return 5 } })
+        let ok, e = pcall(function() { return tostring(a) })
+        return ok, e
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    const std::string err{ behl::to_string(S, -1) };
+    EXPECT_NE(err.find("__tostring must return a string"), std::string::npos) << err;
+}
+
+TEST_P(RegressionTest, FormatToStringErrorSurvivesStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        const string = import("string")
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let a = setmetatable({}, { __tostring = function(o) { rec(3000); return 5 } })
+        let ok, e = pcall(function() { return string.format("{}", a) })
+        return ok, e
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_FALSE(behl::to_boolean(S, -2));
+    const std::string err{ behl::to_string(S, -1) };
+    EXPECT_NE(err.find("__tostring must return a string"), std::string::npos) << err;
+}
+
+TEST_P(RegressionTest, IncDecLocalMetamethodSurvivesStackGrowth)
+{
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let mt = {
+            __add = function(x, y) { rec(3000); return 42 },
+            __sub = function(x, y) { rec(12000); return 41 }
+        }
+        function f() {
+            let x = setmetatable({}, mt)
+            x++
+            let y = setmetatable({}, mt)
+            y--
+            return x, y
+        }
+        return f()
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 42);
+    EXPECT_EQ(behl::to_integer(S, -1), 41);
+}
+
+TEST_P(RegressionTest, IncDecGlobalMetamethodSurvivesGlobalsRehash)
+{
+    constexpr std::string_view code = R"(
+        function fill(from, to) { for (let i = from; i < to; i = i + 1) { _G["g" + tostring(i)] = i } }
+        let mt = {
+            __add = function(x, y) { fill(0, 5000); return 42 },
+            __sub = function(x, y) { fill(5000, 40000); return 41 }
+        }
+        gx = setmetatable({}, mt)
+        gx++
+        gy = setmetatable({}, mt)
+        gy--
+        return gx, gy
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 42);
+    EXPECT_EQ(behl::to_integer(S, -1), 41);
+}
+
+TEST_P(RegressionTest, IncDecUpvalueMetamethodSurvivesUpvalueGrowth)
+{
+    constexpr std::string_view code = R"(
+        let keep = {}
+        function capture(from, to) {
+            for (let i = from; i < to; i = i + 1) { let v = i; keep[i] = function() { return v } }
+        }
+        let mt = {
+            __add = function(x, y) { capture(0, 5000); return 42 },
+            __sub = function(x, y) { capture(5000, 40000); return 41 }
+        }
+        function outer() {
+            let x = setmetatable({}, mt)
+            let y = setmetatable({}, mt)
+            return function() { x++; y--; return x, y }
+        }
+        let g = outer()
+        return g()
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 42);
+    EXPECT_EQ(behl::to_integer(S, -1), 41);
+}
+
+TEST_P(RegressionTest, CallSurvivesFinalizerGrowingCallStackDuringGcStep)
+{
+    behl::register_function(S, "make_ud", make_finalizable_userdata);
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        let finalized = 0
+        let u = make_ud()
+        setmetatable(u, { __gc = function(x) { finalized = finalized + 1; rec(5000) } })
+        u = nil
+        let n = 0
+        while (finalized == 0 && n < 2000000) { make_ud(); n = n + 1 }
+        return finalized
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(RegressionTest, ApiCallSurvivesFinalizerGrowingValueStackDuringGcStep)
+{
+    behl::register_function(S, "make_ud", make_finalizable_userdata);
+    constexpr std::string_view code = R"(
+        function rec(n) { if (n == 0) { return 0 } let r = rec(n - 1); return r }
+        finalized = 0
+        let u = make_ud()
+        setmetatable(u, { __gc = function(x) { finalized = finalized + 1; rec(5000) } })
+        u = nil
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
+
+    int64_t finalized = 0;
+    for (int32_t i = 0; i < 2000000 && finalized == 0; ++i)
+    {
+        behl::push_cfunction(S, make_finalizable_userdata);
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
+        if ((i & 255) == 0)
+        {
+            behl::get_global(S, "finalized");
+            finalized = behl::to_integer(S, -1);
+            behl::set_top(S, 0);
+        }
+    }
+    behl::get_global(S, "finalized");
     EXPECT_EQ(behl::to_integer(S, -1), 1);
 }
 

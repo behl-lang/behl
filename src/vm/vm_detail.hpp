@@ -133,7 +133,7 @@ namespace behl
     }
 
     BEHL_INLINE
-    Value vm_tostring(State* S, const Value& val, const CallFrame& frame)
+    Value vm_tostring(State* S, const Value& val)
     {
         const auto type = val.get_type();
         switch (val.get_type())
@@ -185,7 +185,7 @@ namespace behl
                 // __tostring must return a string, otherwise error
                 if (!result.is_string())
                 {
-                    raise_type_error(S, get_current_location(frame), "__tostring must return a string");
+                    raise_type_error(S, get_current_location(S->call_stack.back()), "__tostring must return a string");
                 }
                 return result;
             }

@@ -1706,11 +1706,15 @@ namespace behl
                     }
 
                     const uint32_t r = helper_call(jit_op_tailcall, ins.raw, pcn);
-                    branch_var_eq_u32(r, kJitTailReturned, ret_stub_);
+                    const uint32_t returned = new_label();
+                    branch_var_eq_u32(r, kJitTailReturned, returned);
 
                     const uint32_t replaced = new_label();
                     branch_var_eq_u32(r, kJitTailReplaced, replaced);
                     jump((*labels_)[0]);
+
+                    bind(returned, true);
+                    return_dispatch();
 
                     bind(replaced, true);
                     tail_jump_native(tail_stub_);
