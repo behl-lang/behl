@@ -215,6 +215,11 @@ namespace behl
         return type(S, idx) == Type::kUserdata;
     }
 
+    bool is_buffer(State* S, int32_t idx)
+    {
+        return type(S, idx) == Type::kBuffer;
+    }
+
     static int32_t one_based_arg_index(State* S, int32_t idx)
     {
         assert(S != nullptr && "State can not be null");

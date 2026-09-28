@@ -84,6 +84,24 @@ TEST_P(BufferTest, NewPushesZeroFilledBuffer)
     EXPECT_TRUE(std::all_of(bytes.begin(), bytes.end(), [](std::byte b) { return b == std::byte{ 0 }; }));
 }
 
+TEST_P(BufferTest, IsBufferOnlyForBuffers)
+{
+    buffer_new(S, 4);
+    push_integer(S, 1);
+    table_new(S);
+    userdata_new(S, 4, 1);
+    push_string(S, "abcd");
+
+    EXPECT_TRUE(is_buffer(S, 0));
+    EXPECT_FALSE(is_buffer(S, 1));
+    EXPECT_FALSE(is_buffer(S, 2));
+    EXPECT_FALSE(is_buffer(S, 3));
+    EXPECT_FALSE(is_buffer(S, 4));
+    EXPECT_FALSE(is_buffer(S, 50));
+    EXPECT_FALSE(is_userdata(S, 0));
+    EXPECT_FALSE(is_table(S, 0));
+}
+
 TEST_P(BufferTest, NewWithZeroLengthIsEmpty)
 {
     const auto bytes = buffer_new(S, 0);

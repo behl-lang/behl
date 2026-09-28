@@ -157,6 +157,7 @@ namespace behl
     BEHL_API bool is_function(State* S, int32_t idx); // true for both closures and C functions
     BEHL_API bool is_cfunction(State* S, int32_t idx);
     BEHL_API bool is_userdata(State* S, int32_t idx);
+    BEHL_API bool is_buffer(State* S, int32_t idx);
 
     // Userdata operations
     ///////////////////////////////////////////////////////////////////////////
