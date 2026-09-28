@@ -296,6 +296,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/math_tests.cpp
         src/tests/api_tests.cpp
         src/tests/api_stack_tests.cpp
+        src/tests/api_table_tests.cpp
         src/tests/bitwise_tests.cpp
         src/tests/buffer_tests.cpp
         src/tests/callstack_tests.cpp
@@ -341,6 +342,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/recursion_tests.cpp
         src/tests/register_tests.cpp
         src/tests/regression_tests.cpp
+        src/tests/table_lib_tests.cpp
         src/tests/table_tests.cpp
         src/tests/tonumber_tests.cpp
         src/tests/tostring_tests.cpp

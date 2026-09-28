@@ -286,7 +286,7 @@ namespace behl
     // Standard library loading
     //////////////////////////////////////////////////////////////////////////
 
-    // Loads all standard libraries (core, table, gc, debug, math, os, string).
+    // Loads all standard libraries (core, table, gc, jit, debug, math, os, string, buffer).
     BEHL_API void load_stdlib(State* S);
 
     BEHL_API void load_lib_core(State* S);    // Core functions (print, typeof, tonumber, tostring, etc.)

@@ -109,13 +109,13 @@ namespace behl
 
     // Call metamethod helper - pushes function+args, calls and returns first result
     template<typename... Args>
-    BEHL_INLINE Value metatable_call_method_result(State* S, const Value& mm, Args&&... args)
+    BEHL_INLINE Value metatable_call_method_result(State* S, Value mm, Args... args)
     {
         auto& stack = S->stack;
         const size_t call_base = stack.size();
 
         stack.push_back(S, mm);
-        (stack.push_back(S, std::forward<Args>(args)), ...);
+        (stack.push_back(S, args), ...);
 
         perform_call(S, static_cast<int>(sizeof...(Args)), 1, call_base);
 
@@ -131,13 +131,13 @@ namespace behl
     }
 
     template<typename... Args>
-    BEHL_INLINE void metatable_call_method(State* S, const Value& mm, Args&&... args)
+    BEHL_INLINE void metatable_call_method(State* S, Value mm, Args... args)
     {
         auto& stack = S->stack;
         const size_t call_base = stack.size();
 
         stack.push_back(S, mm);
-        (stack.push_back(S, std::forward<Args>(args)), ...);
+        (stack.push_back(S, args), ...);
 
         perform_call(S, static_cast<int>(sizeof...(Args)), 0, call_base);
         stack.resize(S, call_base);

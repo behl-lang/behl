@@ -174,27 +174,32 @@ namespace behl
         }
 
         auto it = t->hash.begin();
-        if (!prev_key.is_nil())
+        if (!prev_key.is_nil() && !in_array_phase)
         {
-            // Try to find prev_key in hash (could be integer or non-integer)
-            auto prev_it = t->hash.find(prev_key);
-            if (prev_it != t->hash.end())
+            it = t->hash.find(prev_key);
+            if (it == t->hash.end() && prev_key.is_gcobject())
             {
-                ++prev_it;
-                it = prev_it;
+                it = t->hash.find_matching(
+                    prev_key, [&prev_key](const Value& stored) { return stored.is_dead_key_of(prev_key); });
             }
-            else if (!in_array_phase || start_i > t->array.size())
+            if (it == t->hash.end())
             {
                 raise_runtime_error(S, SourceLocation{}, "invalid key to 'next'");
             }
+            ++it;
+        }
 
-            // integer key not in hash means we just finished array part, start hash iteration
+        while (it != t->hash.end() && it->second.is_nil())
+        {
+            ++it;
         }
 
         if (it != t->hash.end())
         {
-            S->stack.push_back(S, it->first);
-            S->stack.push_back(S, it->second);
+            const Value next_key = it->first;
+            const Value next_value = it->second;
+            S->stack.push_back(S, next_key);
+            S->stack.push_back(S, next_value);
             return true;
         }
 
@@ -244,8 +249,7 @@ namespace behl
             return;
         }
 
-        const Value& table_val = S->stack[static_cast<size_t>(table_idx)];
-
+        const Value table_val = S->stack[static_cast<size_t>(table_idx)];
         if (!table_val.is_table())
         {
             pop(S, 1);
@@ -253,79 +257,10 @@ namespace behl
             return;
         }
 
-        auto* t = table_val.get_table();
-        assert(t != nullptr);
-
-        Value key = S->stack.back();
+        const Value key = S->stack.back();
+        const Value result = table_getfield_vm(S, table_val.get_table(), key);
         pop(S, 1);
-
-        // Try raw access first
-        Value result;
-        bool found = false;
-
-        if (const auto index = key_as_positive_index(key); index.has_value() && *index < t->array.size())
-        {
-            result = t->array[*index];
-            found = !result.is_nil();
-        }
-
-        if (!found)
-        {
-            auto it = t->hash.find(key);
-            if (it != t->hash.end())
-            {
-                result = it->second;
-                found = !result.is_nil();
-            }
-        }
-
-        // If found and not nil, return it
-        if (found)
-        {
-            S->stack.push_back(S, result);
-            return;
-        }
-
-        // Not found, check for __index metamethod
-        Value index_mm = metatable_get_method<MetaMethodType::kIndex>(table_val);
-
-        if (!index_mm.has_value())
-        {
-            push_nil(S);
-            return;
-        }
-
-        // If __index is a function, call it
-        if (index_mm.is_callable())
-        {
-            Value call_result = metatable_call_method_result(S, index_mm, table_val, key);
-            if (call_result.has_value())
-            {
-                S->stack.push_back(S, call_result);
-            }
-            else
-            {
-                push_nil(S);
-            }
-            return;
-        }
-
-        // If __index is a table, retry lookup in that table
-        if (index_mm.is_table())
-        {
-            S->stack.push_back(S, index_mm); // Push the __index table
-            S->stack.push_back(S, key);      // Push the key
-            table_get(S, -2);                // Recursive lookup
-            // Remove the __index table, keep the result
-            Value result_val = S->stack.back();
-            pop(S, 1);
-            pop(S, 1); // Remove __index table
-            S->stack.push_back(S, result_val);
-            return;
-        }
-
-        // __index is neither function nor table, return nil
-        push_nil(S);
+        S->stack.push_back(S, result);
     }
 
     void table_set(State* S, int32_t idx)
@@ -342,75 +277,17 @@ namespace behl
             return;
         }
 
-        Value& table_val = S->stack[static_cast<size_t>(table_idx)];
-
+        const Value table_val = S->stack[static_cast<size_t>(table_idx)];
         if (!table_val.is_table())
         {
             pop(S, 2);
             return;
         }
 
-        GCTable* t = table_val.get_table();
-        assert(t != nullptr);
-
-        Value val = S->stack.back();
-        pop(S, 1);
-        Value key = S->stack.back();
-        pop(S, 1);
-
-        // Check if key exists in the table (raw check)
-        bool exists = false;
-
-        if (const auto index = key_as_positive_index(key); index.has_value() && *index < t->array.size())
-        {
-            exists = !t->array[*index].is_nil();
-        }
-
-        if (!exists)
-        {
-            auto it = t->hash.find(key);
-            if (it != t->hash.end() && !it->second.is_nil())
-            {
-                exists = true;
-            }
-        }
-
-        // If key exists, do raw set
-        if (exists)
-        {
-            table_raw_setfield(S, t, key, val);
-            return;
-        }
-
-        // Key doesn't exist, check for __newindex metamethod
-        Value newindex_mm = metatable_get_method<MetaMethodType::kNewIndex>(table_val);
-
-        if (!newindex_mm.has_value())
-        {
-            // No metamethod, do raw set
-            table_raw_setfield(S, t, key, val);
-            return;
-        }
-
-        // If __newindex is a function, call it
-        if (newindex_mm.is_callable())
-        {
-            metatable_call_method(S, newindex_mm, table_val, key, val);
-            return;
-        }
-
-        // If __newindex is a table, retry set in that table
-        if (newindex_mm.is_table())
-        {
-            S->stack.push_back(S, newindex_mm); // Push the __newindex table
-            S->stack.push_back(S, key);         // Push the key
-            S->stack.push_back(S, val);         // Push the value
-            table_set(S, -3);                   // Recursive set
-            pop(S, 1);                          // Remove the __newindex table
-            return;
-        }
-
-        // __newindex is neither function nor table, ignore
+        const Value val = S->stack.back();
+        const Value key = S->stack[S->stack.size() - 2];
+        table_setfield_vm(S, table_val.get_table(), key, val);
+        pop(S, 2);
     }
 
     void table_getfield(State* S, int32_t idx, std::string_view k)
@@ -446,7 +323,7 @@ namespace behl
 
         // Check for __len metamethod
         ptrdiff_t table_idx = resolve_index(S, idx);
-        const Value& table_val = S->stack[static_cast<size_t>(table_idx)];
+        const Value table_val = S->stack[static_cast<size_t>(table_idx)];
         Value len_mm = metatable_get_method<MetaMethodType::kLen>(table_val);
 
         if (len_mm.is_callable())

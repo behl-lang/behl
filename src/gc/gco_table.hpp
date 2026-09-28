@@ -11,6 +11,19 @@
 namespace behl
 {
 
+    struct TableHashTraits
+    {
+        static constexpr bool kDropsEntries = true;
+
+        template<typename KeyValue>
+        static constexpr bool drop_on_rehash(const KeyValue& entry) noexcept
+        {
+            return entry.second.is_nil();
+        }
+    };
+
+    using TableHash = HashMap<Value, Value, ValueHash, ValueEq, TableHashTraits>;
+
     struct GCTable : GCObject
     {
         static constexpr auto kObjectType = GCType::kTable;
@@ -18,7 +31,7 @@ namespace behl
         GCOHeader header{};
 
         Vector<Value> array;
-        HashMap<Value, Value, ValueHash, ValueEq> hash;
+        TableHash hash;
         GCTable* metatable{};
 
         void assign_name(std::string_view name)

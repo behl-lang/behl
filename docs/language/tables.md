@@ -183,7 +183,7 @@ print(t["key"]);   // "value"
 
 ### Key Types
 
-Keys can be any type, including `nil`:
+Keys can be any value except `nil` and NaN:
 
 ```cpp
 let t = {};
@@ -203,10 +203,14 @@ t[false] = "no";
 let key_table = {1, 2, 3};
 t[key_table] = "value";
 
-// A nil key is accepted too
-t[nil] = 1;
-print(t[nil]);  // 1
+// nil and NaN keys cannot be stored
+let z = 0.0;
+t[nil] = 1;    // RuntimeError: index is nil
+t[z / z] = 1;  // RuntimeError: index is NaN
+print(t[nil]); // nil, reading with a nil or NaN key is not an error
 ```
+
+A float key with an integral value is stored as the equal integer, so `t[5000.0]` and `t[5000]` are the same entry and `pairs()` returns the key as the integer `5000`.
 
 ## Table Length
 
@@ -333,36 +337,30 @@ if (t["name"] != nil) {
     print("name exists");
 }
 
-// Can't distinguish between nil value and missing key this way
+// A key whose value is nil does not exist
 t["value"] = nil;
-print(t["value"]);  // nil (but key exists!)
-
-// Use pairs() to check if key actually exists
-function hasKey(t, key) {
-    for (k, _ in pairs(t)) {
-        if (k == key) {
-            return true;
-        }
-    }
-    return false;
-}
+print(t["value"]);  // nil
 ```
 
 ### Clearing Keys
 
-There is **no** key removal. Assigning `nil` overwrites the slot in place, it never erases the key:
+Assigning `nil` removes a key, as in Lua:
 
 ```cpp
 let t = { a = 1, b = 2, c = 3 };
 
-t["b"] = nil;  // Clears the value, the key stays
+t["b"] = nil;
 
 for (k, v in pairs(t)) {
-    print(k, v);  // Prints "a" 1, "b" nil and "c" 3
+    print(k, v);  // Prints "a" 1 and "c" 3, never a nil value
 }
 ```
 
-A hash key whose value was set to `nil` is still visited by `pairs()`, with `nil` as its value. To drop a key entirely, build a new table without it.
+`pairs()` and `next` never return an entry whose value is `nil`, and `rawlen`/`#` are unaffected. Assigning `nil` to a key that does not exist does nothing.
+
+Clearing fields while traversing with `pairs()` is allowed, including the current key, even if the garbage collector runs in the middle of the loop. Adding new keys during a traversal is undefined behaviour, as in Lua.
+
+Internally the entry stays in the hash part with a `nil` value until the hash part is rebuilt. If its key is a collectable object (string, table, function, userdata, buffer), the garbage collector no longer keeps that object alive through the table. The memory of cleared entries is reclaimed the next time the hash part grows or is rebuilt.
 
 ## Tables as Objects
 
@@ -430,7 +428,7 @@ table.rawset(t, 0, 99);
 table.print(t);
 ```
 
-The module provides `insert`, `unpack`, `rawget`, `rawset`, `rawlen`, `dump`, `print` and `set_name`. Note that `table.insert` takes only a table and a value and always appends to the end, there is no positional insert and there is no `table.remove`.
+The module provides `insert`, `unpack`, `rawget`, `rawset`, `rawlen`, `dump`, `print` and `set_name`. `table.insert(t, value)` appends and `table.insert(t, pos, value)` inserts at a 0-based position, shifting later elements up. There is no `table.remove`.
 
 See [Standard Library - table module](../stdlib/table) for the full reference.
 

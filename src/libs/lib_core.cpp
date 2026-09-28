@@ -119,16 +119,20 @@ namespace behl
 
     static int lib_rawlen(State* S)
     {
-        if (get_top(S) < 1)
+        if (is_string(S, 0))
         {
-            push_integer(S, 0);
+            push_integer(S, static_cast<Integer>(to_string(S, 0).size()));
             return 1;
         }
-
-        if (type(S, 0) != Type::kTable)
+        if (is_buffer(S, 0))
         {
-            push_integer(S, 0);
+            push_integer(S, static_cast<Integer>(buffer_len(S, 0)));
             return 1;
+        }
+        if (!is_table(S, 0))
+        {
+            raise_type_error(
+                S, SourceLocation{}, "bad argument #1 (expected table, string or buffer, got {})", value_typename(S, 0));
         }
 
         table_rawlen(S, 0);
@@ -184,7 +188,7 @@ namespace behl
         }
 
         // Check for __pairs metamethod
-        const auto& table_val = S->stack[static_cast<size_t>(resolve_index(S, 0))];
+        const Value table_val = S->stack[static_cast<size_t>(resolve_index(S, 0))];
         Value pairs_mm = metatable_get_method<MetaMethodType::kPairs>(table_val);
 
         if (pairs_mm.is_callable())

@@ -135,7 +135,7 @@ If a C++ function called inside `pcall` throws a C++ exception that was not rais
 
 ## `pairs(table)`
 
-Returns an iterator for iterating over table key-value pairs.
+Returns an iterator for iterating over table key-value pairs. Entries whose value is `nil` are skipped. Setting existing fields (including the current one) to `nil` during the loop is allowed; adding new keys during the loop is undefined behaviour.
 
 ```cpp
 let t = {
@@ -219,9 +219,9 @@ table.rawset(t, "key", 1);  // Sets directly, no error
 
 ---
 
-## `rawlen(table)`
+## `rawlen(value)`
 
-Returns the length of the array part of a table (consecutive integer keys starting from 0).
+For a table, returns the length of the array part (consecutive integer keys starting from 0), ignoring `__len`. For a string or a buffer, returns its length in bytes. Raises `bad argument #1 (expected table, string or buffer, got ...)` for anything else, including a missing argument.
 
 ```cpp
 let t = {10, 20, 30};

@@ -298,13 +298,13 @@ Creates a new empty table and pushes it.
 ```cpp
 void table_get(State* S, int32_t idx)
 ```
-Gets value from table. Pops key, pushes value.
+Gets value from table. Pops key, pushes value. Follows `__index` like a script read; an `__index` chain longer than the VM limit raises `'__index' chain too long; possible loop`. A `nil` or NaN key yields `nil`.
 
 ### `table_set(State*, int32_t)`
 ```cpp
 void table_set(State* S, int32_t idx)
 ```
-Sets value in table. Pops key and value.
+Sets value in table. Pops key and value. Follows `__newindex` like a script write; an `__newindex` chain longer than the VM limit raises `'__newindex' chain too long; possible loop`. Storing with a `nil` or NaN key raises `index is nil` or `index is NaN` (this also applies to `table_rawset` and `table_rawsetfield`). Setting a key to `nil` clears it, and `table_next`/`table_rawnext` skip entries whose value is `nil`.
 
 ### `table_rawgetfield(State*, int32_t, std::string_view)`
 ```cpp
@@ -356,6 +356,12 @@ Returns UID of userdata at `idx`, or `0` if not userdata.
 bool is_userdata(State* S, int32_t idx)
 ```
 Returns `true` if value at `idx` is userdata.
+
+### `is_buffer(State*, int32_t)`
+```cpp
+bool is_buffer(State* S, int32_t idx)
+```
+Returns `true` if value at `idx` is a buffer (including a slice).
 
 ### `make_uid(std::string_view)`
 ```cpp

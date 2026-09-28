@@ -501,6 +501,70 @@ namespace behl
         EXPECT_NE(behl_test::error_text(S).find("RuntimeError"), std::string::npos) << behl_test::error_text(S);
     }
 
+    TEST_P(StringFormatTest, TostringResultsSurviveCollectionsDuringLaterArguments)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            const gc = import("gc");
+            let meta = {
+                __tostring = function(self) {
+                    gc.collect();
+                    let junk = {};
+                    for (let i = 0; i < 200; i = i + 1) { junk[i] = { i }; }
+                    gc.collect();
+                    return "object-number-" + tostring(self.id) + "-with-a-long-enough-name-for-heap-storage";
+                }
+            };
+            let objects = {};
+            for (let i = 0; i < 6; i = i + 1) { objects[i] = setmetatable({ id = i }, meta); }
+            return string.format("{}|{}|{}|{}|{}|{}", objects[0], objects[1], objects[2], objects[3], objects[4], objects[5]);
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+
+        std::string expected;
+        for (int i = 0; i < 6; ++i)
+        {
+            if (i > 0)
+            {
+                expected += '|';
+            }
+            expected += "object-number-";
+            expected += std::to_string(i);
+            expected += "-with-a-long-enough-name-for-heap-storage";
+        }
+        EXPECT_EQ(to_string(S, -1), expected);
+    }
+
+    TEST_P(StringFormatTest, ErrorInsideTostringPropagatesUnchanged)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            let t = setmetatable({}, { __tostring = function(self) { error({ code = 42 }) } });
+            let ok, err = pcall(string.format, "{}", t);
+            return ok, typeof(err), err.code;
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+        EXPECT_FALSE(to_boolean(S, -3));
+        EXPECT_EQ(to_string(S, -2), "table");
+        EXPECT_EQ(to_integer(S, -1), 42);
+    }
+
+    TEST_P(StringFormatTest, ArgumentsFormattedInPlaceholderOrderWithExplicitIndices)
+    {
+        constexpr std::string_view code = R"(
+            const string = import("string");
+            return string.format("{1}-{0}-{1}", "a", "b");
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+        EXPECT_EQ(to_string(S, -1), "b-a-b");
+    }
+
     INSTANTIATE_TEST_SUITE_P(Mode, StringFormatTest, ::testing::Bool(),
         [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 

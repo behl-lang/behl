@@ -41,7 +41,7 @@ behl::table_new(S);  // Stack: [table]
 
 ### `table_get(State*, int32_t)`
 
-Gets a value from a table. Pops key, pushes value.
+Gets a value from a table. Pops key, pushes value. Honours `__index` with the same chain limit as the VM (`'__index' chain too long; possible loop`).
 
 **Stack:** `[... table ... key]` → `[... table ... value]`
 
@@ -53,7 +53,7 @@ behl::table_get(S, -2);          // Stack: [table, value]
 
 ### `table_set(State*, int32_t)`
 
-Sets a value in a table. Pops key and value.
+Sets a value in a table. Pops key and value. Honours `__newindex` with the same chain limit as the VM (`'__newindex' chain too long; possible loop`). A `nil` or NaN key raises `index is nil` or `index is NaN`, here and in the raw set functions.
 
 **Stack:** `[... table ... key value]` → `[... table ...]`
 

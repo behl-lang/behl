@@ -155,13 +155,49 @@ namespace behl
             }
             const Value moved = it->second;
             t->hash.erase(next_key);
+            if (moved.is_nil())
+            {
+                return;
+            }
             t->array.push_back(S, moved);
         }
     }
 
     BEHL_INLINE
+    bool table_key_is_invalid(const Value& key)
+    {
+        return key.is_nil() || (key.is_fp() && std::isnan(key.get_fp()));
+    }
+
+    [[noreturn]] BEHL_NOINLINE inline void raise_invalid_table_key(State* S, const Value& key)
+    {
+        raise_runtime_error(S, S->call_stack.empty() ? SourceLocation{} : get_current_location(S->call_stack.back()),
+            "index is {}", key.is_nil() ? "nil" : "NaN");
+    }
+
+    BEHL_INLINE
+    Value table_normalize_key(const Value& key)
+    {
+        if (key.is_fp())
+        {
+            const FP d = key.get_fp();
+            Integer k = 0;
+            if (std::floor(d) == d && arithmetic::try_from_fp(d, k))
+            {
+                return Value(k);
+            }
+        }
+        return key;
+    }
+
+    BEHL_INLINE
     void table_raw_setfield(State* S, struct GCTable* t, const Value& key, const Value& v)
     {
+        if (table_key_is_invalid(key)) [[unlikely]]
+        {
+            raise_invalid_table_key(S, key);
+        }
+
         gc_barrier(S, t, v);
         gc_barrier(S, t, key);
 
@@ -172,7 +208,7 @@ namespace behl
             const size_t arr_size = t->array.size();
 
             // Hot path: sequential append
-            if (i == arr_size)
+            if (i == arr_size && !v.is_nil())
             {
                 t->array.push_back(S, v);
                 table_migrate_hash_to_array(S, t, arr_size);
@@ -185,7 +221,7 @@ namespace behl
                 return;
             }
             // Near miss: resize if within growth limit
-            if (i < arr_size + kTableArrayGrowthLimit)
+            if (i < arr_size + kTableArrayGrowthLimit && !v.is_nil())
             {
                 t->array.resize(S, i + 1);
                 t->array[i] = v;
@@ -195,7 +231,16 @@ namespace behl
         }
 
         // Use hash table for non-array indices
-        t->hash.insert_or_assign(S, key, v);
+        const Value hash_key = table_normalize_key(key);
+        if (v.is_nil())
+        {
+            if (auto it = t->hash.find(hash_key); it != t->hash.end())
+            {
+                it->second = v;
+            }
+            return;
+        }
+        t->hash.insert_or_assign(S, hash_key, v);
         // t->hash.emplace(key, v);
     }
 

@@ -1100,6 +1100,105 @@ namespace behl
         bool spilled_ = false;
     };
 
+    template<typename Out, typename FormatArgument>
+    void vformat_to(Out& out, std::string_view fmt, size_t arg_count, FormatArgument&& format_argument)
+    {
+        size_t i = 0;
+        size_t arg_index = 0;
+
+        while (i < fmt.size())
+        {
+            if (fmt[i] == '{')
+            {
+                if (i + 1 < fmt.size() && fmt[i + 1] == '{')
+                {
+                    out += '{';
+                    i += 2;
+                    continue;
+                }
+
+                const size_t spec_start = i + 1;
+                const size_t brace_pos = fmt.find('}', spec_start);
+                if (brace_pos == std::string_view::npos)
+                {
+                    throw std::runtime_error("unmatched '{' in format string");
+                }
+
+                std::string_view spec_str = fmt.substr(spec_start, brace_pos - spec_start);
+                size_t actual_arg_index = arg_index;
+                const size_t colon_pos = spec_str.find(':');
+
+                if (colon_pos != std::string_view::npos || !spec_str.empty())
+                {
+                    const std::string_view index_part = (colon_pos != std::string_view::npos) ? spec_str.substr(0, colon_pos)
+                                                                                              : spec_str;
+
+                    if (!index_part.empty() && index_part[0] >= '0' && index_part[0] <= '9')
+                    {
+                        size_t parsed_index = 0;
+                        for (const char c : index_part)
+                        {
+                            if (c < '0' || c > '9')
+                            {
+                                break;
+                            }
+                            parsed_index = parsed_index * 10 + static_cast<size_t>(c - '0');
+                        }
+                        actual_arg_index = parsed_index;
+
+                        if (colon_pos != std::string_view::npos && colon_pos + 1 < spec_str.size())
+                        {
+                            spec_str = spec_str.substr(colon_pos + 1);
+                        }
+                        else
+                        {
+                            spec_str = std::string_view();
+                        }
+                    }
+                    else if (colon_pos != std::string_view::npos)
+                    {
+                        spec_str = spec_str.substr(colon_pos + 1);
+                        actual_arg_index = arg_index++;
+                    }
+                    else
+                    {
+                        actual_arg_index = arg_index++;
+                        spec_str = std::string_view();
+                    }
+                }
+                else
+                {
+                    actual_arg_index = arg_index++;
+                }
+
+                const format_spec spec = parse_format_spec(spec_str);
+
+                if (actual_arg_index >= arg_count)
+                {
+                    throw std::runtime_error("not enough arguments for format string");
+                }
+
+                format_argument(out, actual_arg_index, spec);
+
+                i = brace_pos + 1;
+            }
+            else if (fmt[i] == '}')
+            {
+                if (i + 1 < fmt.size() && fmt[i + 1] == '}')
+                {
+                    out += '}';
+                    i += 2;
+                    continue;
+                }
+                throw std::runtime_error("unmatched '}' in format string");
+            }
+            else
+            {
+                out += fmt[i++];
+            }
+        }
+    }
+
     std::string vformat(std::string_view fmt, const std::vector<format_arg>& args);
 
 } // namespace behl

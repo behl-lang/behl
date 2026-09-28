@@ -301,6 +301,25 @@ namespace behl
             return reinterpret_cast<uintptr_t>(gc_object_);
         }
 
+        BEHL_FORCEINLINE
+        constexpr bool is_dead_key() const noexcept
+        {
+            return type_ == Type::kDeadKey;
+        }
+
+        BEHL_FORCEINLINE
+        void kill_key() noexcept
+        {
+            assert(is_gcobject());
+            type_ = Type::kDeadKey;
+        }
+
+        BEHL_FORCEINLINE
+        bool is_dead_key_of(const Value& key) const noexcept
+        {
+            return is_dead_key() && key.is_gcobject() && gc_object_ == key.gc_object_;
+        }
+
         // Boolean
         BEHL_FORCEINLINE
         constexpr bool is_bool() const noexcept
@@ -506,6 +525,8 @@ namespace behl
                     return "buffer";
                 case Type::kNullOpt:
                     return "nullopt";
+                case Type::kDeadKey:
+                    return "deadkey";
             }
             assert(false && "Unreachable type in Value::get_type_string");
             BEHL_UNREACHABLE();

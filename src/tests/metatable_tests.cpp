@@ -2187,13 +2187,133 @@ TEST_P(MetatableTest, LenMetamethodNonIntegerResultIsReturnedAsIs)
     EXPECT_EQ(behl::to_string(S, -1), "abc");
 }
 
-TEST_P(MetatableTest, RawlenOfNonTableIsZero)
+TEST_P(MetatableTest, RawlenOfNonTableRaises)
 {
-    constexpr std::string_view code = R"(
-        return rawlen("abc") + rawlen(5) + rawlen(nil) + rawlen(true)
-    )";
-    ASSERT_TRUE(behl_test::load_ok(S, code));
-    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    const std::pair<std::string_view, std::string_view> cases[] = {
+        { "return rawlen(5)", "bad argument #1 (expected table, string or buffer, got integer)" },
+        { "return rawlen(nil)", "bad argument #1 (expected table, string or buffer, got nil)" },
+        { "return rawlen(true)", "bad argument #1 (expected table, string or buffer, got boolean)" },
+        { "return rawlen()", "bad argument #1 (expected table, string or buffer, got nil)" },
+    };
+    for (const auto& [code, expected] : cases)
+    {
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_fails(S, 0, 1)) << code;
+        EXPECT_NE(behl_test::error_text(S).find(expected), std::string::npos) << behl_test::error_text(S);
+        behl::set_top(S, 0);
+    }
+}
+
+static int pairs_mm_reports_argument(behl::State* L)
+{
+    behl::push_boolean(L, behl::is_table(L, 0));
+    behl::push_integer(L, 7);
+    behl::push_integer(L, 8);
+    return 3;
+}
+
+TEST_P(MetatableTest, PairsMetamethodReceivesTableWhenStackReallocates)
+{
+    for (size_t extra = 0; extra < 64; ++extra)
+    {
+        behl::State* L = behl::new_state();
+        L->jit_enabled = GetParam();
+        behl::load_stdlib(L);
+        behl::set_top(L, 0);
+        behl::table_new(L);
+        behl::table_new(L);
+        behl::push_cfunction(L, pairs_mm_reports_argument);
+        behl::table_rawsetfield(L, -2, "__pairs");
+        behl::metatable_set(L, -2);
+        behl::set_global(L, "subject");
+        behl::set_top(L, 0);
+
+        const size_t capacity = L->stack.capacity();
+        const size_t fill = capacity > extra ? capacity - extra : 0;
+        while (L->stack.size() < fill)
+        {
+            behl::push_nil(L);
+        }
+
+        behl::get_global(L, "pairs");
+        behl::get_global(L, "subject");
+
+        const bool call_ok = behl::call(L, 1, 3) >= 0;
+        EXPECT_TRUE(call_ok) << "extra=" << extra << ": " << behl_test::error_text(L);
+        if (call_ok)
+        {
+            EXPECT_TRUE(behl::to_boolean(L, -3)) << "__pairs did not receive the table, extra=" << extra;
+            EXPECT_EQ(behl::to_integer(L, -2), 7) << "extra=" << extra;
+            EXPECT_EQ(behl::to_integer(L, -1), 8) << "extra=" << extra;
+        }
+        behl::close(L);
+    }
+}
+
+static std::string g_captured_print;
+
+static int tostring_mm_reports_argument(behl::State* L)
+{
+    behl::push_string(L, behl::is_table(L, 0) ? "got table" : "got something else");
+    return 1;
+}
+
+static void capture_print(behl::State*, std::string_view msg)
+{
+    g_captured_print.append(msg);
+}
+
+TEST_P(MetatableTest, TostringMetamethodReceivesValueWhenStackReallocates)
+{
+    for (size_t extra = 0; extra < 64; ++extra)
+    {
+        behl::State* L = behl::new_state();
+        L->jit_enabled = GetParam();
+        behl::load_stdlib(L);
+        behl::set_print_handler(L, capture_print);
+        behl::set_top(L, 0);
+        behl::table_new(L);
+        behl::table_new(L);
+        behl::push_cfunction(L, tostring_mm_reports_argument);
+        behl::table_rawsetfield(L, -2, "__tostring");
+        behl::metatable_set(L, -2);
+        behl::set_global(L, "subject");
+        behl::set_top(L, 0);
+
+        const size_t capacity = L->stack.capacity();
+        const size_t fill = capacity > extra ? capacity - extra : 0;
+        while (L->stack.size() < fill)
+        {
+            behl::push_nil(L);
+        }
+
+        g_captured_print.clear();
+        behl::get_global(L, "print");
+        behl::get_global(L, "subject");
+        const bool call_ok = behl::call(L, 1, 0) >= 0;
+        EXPECT_TRUE(call_ok) << "extra=" << extra << ": " << behl_test::error_text(L);
+        EXPECT_NE(g_captured_print.find("got table"), std::string::npos) << "extra=" << extra << ": " << g_captured_print;
+        behl::close(L);
+    }
+}
+
+TEST_P(MetatableTest, RawlenOfStringIsByteLength)
+{
+    ASSERT_TRUE(behl_test::load_ok(S, "return rawlen(\"abc\"), rawlen(\"\"), rawlen(\"a\\0b\")"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 3);
+    EXPECT_EQ(behl::to_integer(S, -2), 0);
+    EXPECT_EQ(behl::to_integer(S, -1), 3);
+}
+
+TEST_P(MetatableTest, RawlenOfBufferIsByteLength)
+{
+    ASSERT_TRUE(behl_test::load_ok(S,
+        "const buffer = import(\"buffer\")\nreturn rawlen(buffer.create(7)), rawlen(buffer.slice(buffer.create(8), 2, 3)), "
+        "rawlen(buffer.create(0))"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+    EXPECT_EQ(behl::to_integer(S, -3), 7);
+    EXPECT_EQ(behl::to_integer(S, -2), 3);
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 

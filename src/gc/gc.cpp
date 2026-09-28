@@ -760,6 +760,15 @@ namespace behl
         // Mark hash entries
         for (auto& entry : table->hash)
         {
+            if (entry.second.is_nil())
+            {
+                if (entry.first.is_gcobject())
+                {
+                    entry.first.kill_key();
+                }
+                continue;
+            }
+
             // Mark key if it's a GC object
             if (entry.first.is_gcobject())
             {

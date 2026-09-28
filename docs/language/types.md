@@ -271,7 +271,7 @@ print(#s);               // 5
 print(string.len(s));    // 5
 ```
 
-**Note**: `rawlen()` only works on tables. It returns `0` for a string or any other non-table value.
+**Note**: `rawlen()` accepts tables, strings and buffers. For a string it returns the length in bytes, like `#s`. Any other value raises `bad argument #1 (expected table, string or buffer, got ...)`.
 
 ### String Operations
 

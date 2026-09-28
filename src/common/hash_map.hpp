@@ -27,7 +27,19 @@ namespace behl
 
     } // namespace detail
 
-    template<typename K, typename V, typename Hash = std::hash<K>, typename Eq = std::equal_to<K>>
+    struct HashMapDefaultTraits
+    {
+        static constexpr bool kDropsEntries = false;
+
+        template<typename KeyValue>
+        static constexpr bool drop_on_rehash(const KeyValue&) noexcept
+        {
+            return false;
+        }
+    };
+
+    template<typename K, typename V, typename Hash = std::hash<K>, typename Eq = std::equal_to<K>,
+        typename Traits = HashMapDefaultTraits>
     struct HashMap
     {
         // Load factor threshold: rehash when size > capacity * load_factor
@@ -308,6 +320,37 @@ namespace behl
             return find_impl(*this, std::forward<KeyType>(key));
         }
 
+        template<typename KeyType, typename Match>
+        iterator find_matching(const KeyType& key, Match&& match)
+        {
+            if (capacity_ == 0)
+            {
+                return end();
+            }
+
+            const auto hash = hasher_(key);
+            const int8_t h2_val = h2(hash);
+            const size_t mask = capacity_ - 1;
+            size_t index = hash & mask;
+            const size_t start = index;
+
+            do
+            {
+                const int8_t ctrl = ctrl_[index];
+                if (ctrl == kEmpty)
+                {
+                    return end();
+                }
+                if (ctrl == h2_val && match(slots_[index].first))
+                {
+                    return iterator(ctrl_ + index, ctrl_ + capacity_, slots_ + index);
+                }
+                index = (index + 1) & mask;
+            } while (index != start);
+
+            return end();
+        }
+
         template<typename KeyType>
         const_iterator find(KeyType&& key) const
         {
@@ -328,8 +371,7 @@ namespace behl
                     return iterator(ctrl_ + (existing - slots_), ctrl_ + capacity_, existing);
                 }
 
-                return rehash_and_insert(state, capacity_ == 0 ? kMinCapacity : capacity_ * 2, std::forward<KeyType>(key),
-                    std::forward<ValueType>(value));
+                return rehash_and_insert(state, grown_capacity(), std::forward<KeyType>(key), std::forward<ValueType>(value));
             }
 
             const auto hash = hasher_(key);
@@ -558,7 +600,10 @@ namespace behl
             {
                 if (old_ctrl[i] != kEmpty && old_ctrl[i] != kDeleted)
                 {
-                    place(std::move(old_slots[i].first), std::move(old_slots[i].second));
+                    if (!Traits::drop_on_rehash(old_slots[i]))
+                    {
+                        place(std::move(old_slots[i].first), std::move(old_slots[i].second));
+                    }
 
                     std::destroy_at(&old_slots[i].first);
                     std::destroy_at(&old_slots[i].second);
@@ -591,6 +636,32 @@ namespace behl
         }
 
     private:
+        size_t grown_capacity() const
+        {
+            if (capacity_ == 0)
+            {
+                return kMinCapacity;
+            }
+
+            if constexpr (Traits::kDropsEntries)
+            {
+                size_t kept = 0;
+                for (size_t i = 0; i < capacity_; ++i)
+                {
+                    if (ctrl_[i] != kEmpty && ctrl_[i] != kDeleted && !Traits::drop_on_rehash(slots_[i]))
+                    {
+                        ++kept;
+                    }
+                }
+                if (static_cast<double>(kept + 1) <= static_cast<double>(capacity_) * kLoadFactor * 0.5)
+                {
+                    return capacity_;
+                }
+            }
+
+            return capacity_ * 2;
+        }
+
         // Internal find that returns KeyValue*
         template<typename TSelf, typename KeyType>
         static auto find_internal_impl(TSelf&& self, KeyType&& key)

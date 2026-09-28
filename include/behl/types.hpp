@@ -36,6 +36,7 @@ namespace behl
 
         // Internal type, this never reaches the public API.
         kNullOpt = 1,
+        kDeadKey = 11,
     };
 
     // If the amount of returned values is variable, this should be passed as the nresults parameter when performing calls.

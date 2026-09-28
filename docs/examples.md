@@ -350,8 +350,9 @@ const table = import("table");
 
 let arr = {10, 20, 30};
 
-table.insert(arr, 40);        // Append; insert always appends
-print(table.rawlen(arr));     // 4
+table.insert(arr, 40);        // Append
+table.insert(arr, 0, 1);      // Insert at index 0, shifting the rest up
+print(table.rawlen(arr));     // 5
 
 table.rawset(arr, 0, 5);      // Overwrite index 0
 print(table.rawget(arr, 0));  // 5
