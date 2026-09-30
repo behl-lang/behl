@@ -65,18 +65,6 @@ namespace behl
         return 0;
     }
 
-    static int lib_typeof(State* S)
-    {
-        push_string(S, value_typename(S, 0));
-        return 1;
-    }
-
-    static int lib_typeid(State* S)
-    {
-        push_integer(S, static_cast<int>(type(S, 0)));
-        return 1;
-    }
-
     static int lib_getmetatable(State* S)
     {
         Type t = type(S, 0);
@@ -385,8 +373,6 @@ namespace behl
     void load_lib_core(State* S)
     {
         register_function(S, "print", lib_print);
-        register_function(S, "typeof", lib_typeof);
-        register_function(S, "typeid", lib_typeid);
         register_function(S, "getmetatable", lib_getmetatable);
         register_function(S, "setmetatable", lib_setmetatable);
         register_function(S, "rawlen", lib_rawlen);

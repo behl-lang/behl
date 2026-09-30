@@ -257,6 +257,22 @@ namespace behl
         frame_header(S, frame).top = frame.base + a + 1;
     }
 
+    BEHL_FORCEINLINE
+    void handler_typeof(State* S, CallFrame& frame, Reg a, Reg b)
+    {
+        const Type type = get_register(S, frame, b).get_type();
+        GCString* name = S->type_names[type_name_slot(type)];
+        assert(name != nullptr && "handler_typeof: missing type name");
+        get_register(S, frame, a).emplace<GCString*>(name);
+    }
+
+    BEHL_FORCEINLINE
+    void handler_typeid(State* S, CallFrame& frame, Reg a, Reg b)
+    {
+        const Type type = get_register(S, frame, b).get_type();
+        get_register(S, frame, a).emplace<Integer>(static_cast<Integer>(static_cast<uint8_t>(type)));
+    }
+
     BEHL_INLINE
     bool for_loop_condition(State* S, const Value idx, const Value limit, Integer mode)
     {

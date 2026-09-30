@@ -118,10 +118,12 @@ namespace behl
         kOpMMShl,
         kOpMMShr,
         kOpClose,
+        kOpTypeOf,
+        kOpTypeId,
     };
 
     // Total number of opcodes - computed from last enum value
-    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpClose) + 1;
+    static constexpr auto kOpCount = static_cast<size_t>(OpCode::kOpTypeId) + 1;
 
     struct Instruction
     {
@@ -499,6 +501,20 @@ namespace behl
     {
         Instruction i{};
         i.raw = (static_cast<uint32_t>(OpCode::kOpToNumber) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8);
+        return i;
+    }
+
+    constexpr Instruction make_op_typeof(Reg a, Reg b) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpTypeOf) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8);
+        return i;
+    }
+
+    constexpr Instruction make_op_typeid(Reg a, Reg b) noexcept
+    {
+        Instruction i{};
+        i.raw = (static_cast<uint32_t>(OpCode::kOpTypeId) << 25) | static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8);
         return i;
     }
 

@@ -1127,6 +1127,15 @@ namespace behl
                     break;
                 }
 
+                case OpCode::kOpTypeOf:
+                case OpCode::kOpTypeId:
+                {
+                    CgOp& op = push(ins.op() == OpCode::kOpTypeOf ? CgOpKind::kTypeOf : CgOpKind::kTypeId);
+                    op.slot = ins.a();
+                    op.imm = ins.b();
+                    break;
+                }
+
                 case OpCode::kOpLoadImm:
                 {
                     store_tag(ins.a(), Type::kInteger);

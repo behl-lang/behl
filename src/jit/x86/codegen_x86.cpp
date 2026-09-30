@@ -1280,6 +1280,46 @@ namespace behl
         }
     }
 
+    void CodegenX86::emit_type_query(const CgOp& op)
+    {
+        const int32_t src_slot = static_cast<int32_t>(op.imm);
+        const bool is_typeof = op.kind == CgOpKind::kTypeOf;
+        const auto result_tag = static_cast<uint8_t>(is_typeof ? Type::kString : Type::kInteger);
+
+        if (cache_enabled_)
+        {
+            cache_drop_slot(op.slot);
+        }
+        ensure_base();
+
+        const uint8_t tmp_index = alloc_gp_slot();
+        if (failed_)
+        {
+            return;
+        }
+        const GpReg tmp = kGpPool[tmp_index];
+
+        e_.movzx8(tmp, slot_tag(src_slot));
+        if (is_typeof)
+        {
+            e_.and_(tmp, static_cast<int32_t>(kTypeNameMask));
+            e_.mov(tmp, mem(kStateReg, tmp, static_cast<uint8_t>(sizeof(GCString*)), State::type_names_offset()));
+        }
+        e_.mov(slot_payload(op.slot), tmp);
+        if constexpr (!kMode64)
+        {
+            e_.mov32(slot_payload_hi(op.slot), 0u);
+        }
+        e_.mov32(slot_tag(op.slot), result_tag);
+
+        gp_used_ &= ~(1u << tmp_index);
+
+        if (cache_enabled_)
+        {
+            slots_[static_cast<size_t>(op.slot)].tag = result_tag;
+        }
+    }
+
     void CodegenX86::emit_const_f64(const CgOp& op)
     {
         alloc_f64(op.var);
@@ -1596,6 +1636,8 @@ namespace behl
                     }
                     break;
                 case CgOpKind::kCopySlot:
+                case CgOpKind::kTypeOf:
+                case CgOpKind::kTypeId:
                     if (op.slot == slot || op.imm == slot)
                     {
                         return static_cast<uint32_t>(i);
@@ -2592,6 +2634,11 @@ namespace behl
                 emit_buffer_int(op);
                 break;
 
+            case CgOpKind::kTypeOf:
+            case CgOpKind::kTypeId:
+                emit_type_query(op);
+                break;
+
             case CgOpKind::kHelperCall:
                 if (cache_enabled_)
                 {
@@ -2664,6 +2711,8 @@ namespace behl
                         max_slot = (op.slot > max_slot) ? op.slot : max_slot;
                         break;
                     case CgOpKind::kCopySlot:
+                    case CgOpKind::kTypeOf:
+                    case CgOpKind::kTypeId:
                         max_slot = (op.slot > max_slot) ? op.slot : max_slot;
                         max_slot = (static_cast<int32_t>(op.imm) > max_slot) ? static_cast<int32_t>(op.imm) : max_slot;
                         break;

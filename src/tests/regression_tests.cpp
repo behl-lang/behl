@@ -1224,9 +1224,9 @@ TEST_P(RegressionTest, IncrementInsideFunctionExpressionInConditions)
 TEST_P(RegressionTest, TailCallToCFunctionSurvivesCallStackGrowth)
 {
     constexpr std::string_view code = R"(
-        function deep(n) { if (n == 0) { return typeof(n) } let r = deep(n - 1); return r }
+        function deep(n) { if (n == 0) { return rawlen("abc") } let r = deep(n - 1); return r }
         let ok = 0
-        for (let d = 0; d < 600; d = d + 1) { if (deep(d) == "integer") { ok = ok + 1 } }
+        for (let d = 0; d < 600; d = d + 1) { if (deep(d) == 3) { ok = ok + 1 } }
         return ok
     )";
     ASSERT_TRUE(behl_test::load_ok(S, code));
@@ -1237,10 +1237,10 @@ TEST_P(RegressionTest, TailCallToCFunctionSurvivesCallStackGrowth)
 TEST_P(RegressionTest, TailCallToCCallMetamethodSurvivesCallStackGrowth)
 {
     constexpr std::string_view code = R"(
-        let obj = setmetatable({}, { __call = typeof })
+        let obj = setmetatable({1, 2, 3}, { __call = rawlen })
         function deep(n) { if (n == 0) { return obj(n) } let r = deep(n - 1); return r }
         let ok = 0
-        for (let d = 0; d < 600; d = d + 1) { if (deep(d) == "table") { ok = ok + 1 } }
+        for (let d = 0; d < 600; d = d + 1) { if (deep(d) == 3) { ok = ok + 1 } }
         return ok
     )";
     ASSERT_TRUE(behl_test::load_ok(S, code));

@@ -80,6 +80,8 @@ print(typeid({}));     // 86
 
 Note that `typeid()` distinguishes a Behl closure from a C function, while `typeof()` reports `"function"` for both.
 
+`typeof` and `typeid` are compiler intrinsics, like `tostring` and `tonumber`: a call with exactly one argument compiles to a single `TYPEOF` or `TYPEID` instruction, and `typeof` returns a string created once per state, so it never allocates. They are not values, so `let f = typeof` gives `nil`. A local, parameter or upvalue with the same name shadows them. See [Core](../stdlib/core) for the details.
+
 ## Nil
 
 `nil` represents the absence of a value:

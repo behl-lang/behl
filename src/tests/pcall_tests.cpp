@@ -191,7 +191,7 @@ TEST_P(PCallTest, ClosureCall)
 TEST_P(PCallTest, CFunctionCall)
 {
     constexpr std::string_view code = R"(
-        success, result = pcall(typeof, 42);
+        success, result = pcall(rawlen, "hello");
     )";
 
     ASSERT_TRUE(behl_test::load_ok(S, code));
@@ -202,9 +202,8 @@ TEST_P(PCallTest, CFunctionCall)
     pop(S, 1);
 
     get_global(S, "result");
-    ASSERT_EQ(type(S, -1), Type::kString);
-    std::string_view type_name = to_string(S, -1);
-    ASSERT_EQ(type_name, "integer");
+    ASSERT_EQ(type(S, -1), Type::kInteger);
+    ASSERT_EQ(to_integer(S, -1), 5);
     pop(S, 1);
 }
 

@@ -216,6 +216,12 @@ namespace behl
             case OpCode::kOpToNumber:
                 opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.a(), instr.b());
                 break;
+            case OpCode::kOpTypeOf:
+                opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.a(), instr.b());
+                break;
+            case OpCode::kOpTypeId:
+                opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.a(), instr.b());
+                break;
             case OpCode::kOpJmp:
                 opcode_str = behl::format("{:<9} {}", meta.name, instr.jump_offset());
                 break;

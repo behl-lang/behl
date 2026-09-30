@@ -66,6 +66,8 @@ namespace behl
         kTableSetInt,
         kBufferGetInt,
         kBufferSetInt,
+        kTypeOf,
+        kTypeId,
         kHelperCall,
         kSyncFrame,
         kReturnResult,

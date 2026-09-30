@@ -994,6 +994,14 @@ namespace behl
             mark_gray(S, S->memory_error_message);
         }
 
+        for (GCString* name : S->type_names)
+        {
+            if (name != nullptr)
+            {
+                mark_gray(S, name);
+            }
+        }
+
         // Stack
         auto& stack = S->stack;
         gc_log("Marking stack ({} values, {} frames)", stack.size(), S->call_stack.size());

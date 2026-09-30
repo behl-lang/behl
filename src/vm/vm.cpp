@@ -228,6 +228,13 @@ namespace behl
                     handler_tonumber(S, *frame, instr.a(), instr.b());
                     break;
 
+                case OpCode::kOpTypeOf:
+                    handler_typeof(S, *frame, instr.a(), instr.b());
+                    continue;
+                case OpCode::kOpTypeId:
+                    handler_typeid(S, *frame, instr.a(), instr.b());
+                    continue;
+
                 case OpCode::kOpAddImm:
                     handler_add_imm(S, *frame, instr.a(), instr.b(), instr.signed_immediate_9bit());
                     break;

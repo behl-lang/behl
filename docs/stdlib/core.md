@@ -52,16 +52,20 @@ print(typeof(print));     // "function"
 
 **Returns:** `"nil"`, `"boolean"`, `"integer"`, `"number"`, `"string"`, `"table"`, `"function"`, `"userdata"`, or `"buffer"`
 
+`typeof` is a compiler intrinsic, not a global function. A call with exactly one argument compiles to the `TYPEOF` instruction, which does not allocate: every call returns the same string object for a given type name, created once per state. Because it is not a value, `typeof` cannot be stored, passed or called indirectly (`let f = typeof` gives `nil`, and `pcall(typeof, x)` fails). A call with zero or more than one argument is a normal call of the global `typeof`, which is `nil` unless you define one. A local, parameter or upvalue named `typeof` shadows the intrinsic, and calls then go to that value.
+
 ---
 
 ## `typeid(value)`
 
-Returns the numeric type ID of a value.
+Returns the numeric type tag of a value as an integer. See [Types](../language/types) for the values.
 
 ```cpp
 let id = typeid(42);
-print(id);  // Type ID as integer
+print(id);  // 35
 ```
+
+`typeid` is a compiler intrinsic with the same rules as `typeof`: a one-argument call compiles to the `TYPEID` instruction, the bare name is not a value, other argument counts are a normal call of the global `typeid`, and a local, parameter or upvalue named `typeid` shadows it.
 
 ---
 

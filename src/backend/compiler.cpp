@@ -594,6 +594,35 @@ namespace behl
         return kInvalidUpvalue;
     }
 
+    static bool is_name_bound(CompilerState& C, std::string_view name)
+    {
+        for (CompilerState* state = &C; state != nullptr; state = state->parent)
+        {
+            if (resolve_local(*state, name) >= 0 || state->upvalue_indices.contains(name))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static bool is_type_intrinsic_call(CompilerState& C, const AstFuncCall& node)
+    {
+        const auto* ident = node.func->try_as<AstIdent>();
+        if (ident == nullptr || node.is_self_call || node.first_arg == nullptr || node.first_arg->next_child != nullptr)
+        {
+            return false;
+        }
+
+        const std::string_view name = ident->name->view();
+        if (name != "typeof" && name != "typeid")
+        {
+            return false;
+        }
+
+        return !is_name_bound(C, name);
+    }
+
     struct VisitorAdapter : AstVisitor
     {
         CompilerState& C;
@@ -1875,6 +1904,57 @@ namespace behl
             C.freereg = C.min_freereg;
         }
 
+        if (is_type_intrinsic_call(C, node))
+        {
+            const auto saved_target = target_reg;
+            const bool saved_compile_for_jump = compile_for_jump;
+            size_t* const saved_jump_patch = jump_patch_location;
+            target_reg = std::nullopt;
+            compile_for_jump = false;
+            jump_patch_location = nullptr;
+
+            const Reg func_reg = alloc_reg(C);
+
+            compile_node(node.first_arg);
+            const Reg arg_reg = C.freereg - 1;
+
+            const bool is_typeof = node.func->try_as<AstIdent>()->name->view() == "typeof";
+            emit(C, is_typeof ? make_op_typeof(func_reg, arg_reg) : make_op_typeid(func_reg, arg_reg), node.line);
+
+            C.freereg = func_reg + 1;
+            if (C.freereg < C.min_freereg)
+            {
+                C.freereg = C.min_freereg;
+            }
+
+            if (nresults > 1 && nresults != static_cast<uint8_t>(kMultRet))
+            {
+                for (uint8_t i = 1; i < nresults; ++i)
+                {
+                    alloc_reg(C);
+                }
+                emit(C, make_op_loadnil(static_cast<Reg>(func_reg + 1), static_cast<Reg>(nresults - 2)), C.lastline);
+            }
+
+            if (saved_target.has_value() && nresults == 1)
+            {
+                const Reg target = saved_target.value();
+                if (func_reg != target)
+                {
+                    emit(C, make_op_move(target, func_reg), C.lastline);
+                    C.freereg = target + 1;
+                    if (C.freereg < C.min_freereg)
+                    {
+                        C.freereg = C.min_freereg;
+                    }
+                }
+            }
+
+            compile_for_jump = saved_compile_for_jump;
+            jump_patch_location = saved_jump_patch;
+            return;
+        }
+
         // Check if this is a call to tostring/tonumber builtin with exactly one argument
         if (const auto* ident = node.func->try_as<AstIdent>())
         {
@@ -1882,11 +1962,16 @@ namespace behl
             const bool is_tonumber = ident->name->view() == "tonumber";
 
             // Check if exactly one arg (first_arg != nullptr and first_arg->next_child == nullptr)
-            if ((is_tostring || is_tonumber) && node.first_arg && !node.first_arg->next_child && !node.is_self_call)
+            if ((is_tostring || is_tonumber) && node.first_arg && !node.first_arg->next_child && !node.is_self_call
+                && !is_name_bound(C, ident->name->view()))
             {
                 // Emit kOpToString bytecode instead of a function call
                 auto saved_target = target_reg;
+                const bool saved_compile_for_jump = compile_for_jump;
+                size_t* const saved_jump_patch = jump_patch_location;
                 target_reg = std::nullopt;
+                compile_for_jump = false;
+                jump_patch_location = nullptr;
 
                 // Ensure freereg is at least min_freereg before allocating registers
                 if (C.freereg < C.min_freereg)
@@ -1927,6 +2012,15 @@ namespace behl
                     C.freereg = C.min_freereg;
                 }
 
+                if (nresults > 1 && nresults != static_cast<uint8_t>(kMultRet))
+                {
+                    for (uint8_t i = 1; i < nresults; ++i)
+                    {
+                        alloc_reg(C);
+                    }
+                    emit(C, make_op_loadnil(static_cast<Reg>(func_reg + 1), static_cast<Reg>(nresults - 2)), C.lastline);
+                }
+
                 // Handle target_reg if specified (move result to target)
                 if (saved_target.has_value() && nresults == 1)
                 {
@@ -1943,6 +2037,8 @@ namespace behl
                 }
 
                 target_reg = saved_target;
+                compile_for_jump = saved_compile_for_jump;
+                jump_patch_location = saved_jump_patch;
                 return;
             }
         }
@@ -2005,7 +2101,7 @@ namespace behl
         {
             const auto* last_arg_call = last_arg->try_as<AstFuncCall>();
             const auto* last_arg_vararg = last_arg->try_as<AstVararg>();
-            if (last_arg_call)
+            if (last_arg_call && !is_type_intrinsic_call(C, *last_arg_call))
             {
                 last_is_call = true;
                 regular_args = args_count - 1;
@@ -3992,12 +4088,20 @@ namespace behl
         {
             const auto& call_node = static_cast<const AstFuncCall&>(*node.first_expr);
 
+            if (is_type_intrinsic_call(C, call_node))
+            {
+                compile_call(call_node, 1);
+                emit(C, make_op_return1(static_cast<Reg>(C.freereg - 1)), C.lastline);
+                return;
+            }
+
             // Check if this is a tail call to tostring/tonumber builtin - if so, use compile_call optimization
             if (const auto* ident = call_node.func->try_as<AstIdent>())
             {
                 const bool is_builtin = (ident->name->view() == "tostring" || ident->name->view() == "tonumber");
                 // Check exactly one arg: first_arg != nullptr && first_arg->next_child == nullptr
-                if (is_builtin && call_node.first_arg && !call_node.first_arg->next_child && !call_node.is_self_call)
+                if (is_builtin && call_node.first_arg && !call_node.first_arg->next_child && !call_node.is_self_call
+                    && !is_name_bound(C, ident->name->view()))
                 {
                     // Use the standard compile_call which will optimize tostring
                     compile_call(call_node, 0);
@@ -4063,7 +4167,7 @@ namespace behl
                 const auto* arg_call = arg->try_as<AstFuncCall>();
                 const auto* arg_vararg = arg->try_as<AstVararg>();
 
-                if (is_last && arg_call)
+                if (is_last && arg_call && !is_type_intrinsic_call(C, *arg_call))
                 {
                     compile_call(*arg_call, static_cast<uint8_t>(kMultRet));
                     uint8_t arg_result = C.freereg - 1;
@@ -4137,7 +4241,7 @@ namespace behl
         {
             // Single return expression
             const auto* call_expr = node.first_expr->try_as<AstFuncCall>();
-            if (call_expr)
+            if (call_expr && !is_type_intrinsic_call(C, *call_expr))
             {
                 compile_call(*call_expr, static_cast<uint8_t>(kMultRet));
                 Reg call_reg = C.freereg - 1;
@@ -4184,7 +4288,9 @@ namespace behl
             {
                 last_expr = expr;
             }
-            const auto* last_call = last_expr ? last_expr->try_as<AstFuncCall>() : nullptr;
+            const auto* last_call_expr = last_expr ? last_expr->try_as<AstFuncCall>() : nullptr;
+            const auto* last_call = (last_call_expr != nullptr && !is_type_intrinsic_call(C, *last_call_expr)) ? last_call_expr
+                                                                                                               : nullptr;
             const auto* last_vararg = last_expr ? last_expr->try_as<AstVararg>() : nullptr;
 
             AutoVector<Reg> result_regs(C.S);

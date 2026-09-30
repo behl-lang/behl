@@ -347,6 +347,7 @@ if(BEHL_BUILD_TESTS)
         src/tests/tonumber_tests.cpp
         src/tests/tostring_tests.cpp
         src/tests/typecheck_tests.cpp
+        src/tests/typeof_tests.cpp
         src/tests/userdata_tests.cpp
         src/tests/varargs_tests.cpp
         src/tests/variable_tests.cpp

@@ -225,6 +225,8 @@ namespace behl
         { OpCode::kOpMMShl, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHL" },
         { OpCode::kOpMMShr, OpMode::kWrite, OpMode::kRead, OpMode::kRead, true, false, false, "MMSHR" },
         { OpCode::kOpClose, OpMode::kRead, OpMode::kNone, OpMode::kNone, true, false, false, "CLOSE", true },
+        { OpCode::kOpTypeOf, OpMode::kWrite, OpMode::kRead, OpMode::kNone, false, false, false, "TYPEOF", true },
+        { OpCode::kOpTypeId, OpMode::kWrite, OpMode::kRead, OpMode::kNone, false, false, false, "TYPEID", true },
     } };
 
     // Helper function to get metadata for an opcode

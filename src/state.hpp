@@ -16,6 +16,7 @@
 #include "vm/upvalue.hpp"
 #include "vm/value.hpp"
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <exception>
@@ -25,6 +26,14 @@
 namespace behl
 {
     struct JitArena;
+
+    inline constexpr size_t kTypeNameSlots = 16;
+    inline constexpr uint8_t kTypeNameMask = kTypeNameSlots - 1;
+
+    constexpr size_t type_name_slot(Type type) noexcept
+    {
+        return static_cast<size_t>(static_cast<uint8_t>(type) & kTypeNameMask);
+    }
 
     struct State
     {
@@ -44,6 +53,7 @@ namespace behl
 
         Value globals_table{};
         GCString* memory_error_message{};
+        std::array<GCString*, kTypeNameSlots> type_names{};
         uint32_t cfunction_stack_base = 0;
 
         // Module system
@@ -127,6 +137,11 @@ namespace behl
         static constexpr int32_t debug_enabled_offset()
         {
             return static_cast<int32_t>(offsetof(State, debug) + offsetof(DebugState, enabled));
+        }
+
+        static constexpr int32_t type_names_offset()
+        {
+            return static_cast<int32_t>(offsetof(State, type_names));
         }
     };
 
