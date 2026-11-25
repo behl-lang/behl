@@ -1918,7 +1918,7 @@ namespace behl
             compile_node(node.first_arg);
             const Reg arg_reg = C.freereg - 1;
 
-            const bool is_typeof = node.func->try_as<AstIdent>()->name->view() == "typeof";
+            const bool is_typeof = node.func->as<AstIdent>()->name->view() == "typeof";
             emit(C, is_typeof ? make_op_typeof(func_reg, arg_reg) : make_op_typeid(func_reg, arg_reg), node.line);
 
             C.freereg = func_reg + 1;
