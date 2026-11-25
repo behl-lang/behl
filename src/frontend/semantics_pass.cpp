@@ -3,9 +3,9 @@
 #include "ast/ast_holder.hpp"
 #include "common/format.hpp"
 #include "common/hash_map.hpp"
-#include "exceptions.hpp"
 #include "memory.hpp"
 #include "state.hpp"
+#include "vm/vm_error.hpp"
 
 namespace behl
 {
@@ -133,15 +133,30 @@ namespace behl
         return false;
     }
 
+    static void transform_target(SemanticsState& state, AstNode* target)
+    {
+        if (auto* index = target->try_as<AstIndex>())
+        {
+            transform_expression(state, index->table);
+            transform_expression(state, index->key);
+        }
+        else if (auto* member = target->try_as<AstMember>())
+        {
+            transform_expression(state, member->table);
+        }
+    }
+
     AstNode* transform_assign(SemanticsState& state, AstAssign* assign)
     {
         size_t var_count = 0, expr_count = 0;
         for (AstNode* v = assign->first_var; v; v = v->next_child)
         {
+            transform_target(state, v);
             ++var_count;
         }
         for (AstNode* e = assign->first_expr; e; e = e->next_child)
         {
+            transform_expression(state, e);
             ++expr_count;
         }
 
@@ -161,11 +176,9 @@ namespace behl
         // In module mode, disallow bare assignments (globals) except to stdlib
         if (state.is_module && !is_local(state, var_name) && !is_upvalue(state, var_name))
         {
-            const auto msg = behl::format(
+            raise_runtime_error(state.state, SourceLocation{},
                 "Cannot assign to undeclared variable '{}' in module mode. Use 'let' or 'const' to declare variables.",
                 var_name);
-
-            throw RuntimeError(msg);
         }
 
         if (auto* binop = assign->first_expr->try_as<AstBinOp>())
@@ -203,22 +216,28 @@ namespace behl
             }
         }
 
+        AstNode* lowered = nullptr;
         if (is_local(state, var_name))
         {
-            return state.holder.make<AstAssignLocal>(var_ident->name, assign->first_expr);
+            lowered = state.holder.make<AstAssignLocal>(var_ident->name, assign->first_expr);
         }
         else if (is_upvalue(state, var_name))
         {
-            return state.holder.make<AstAssignUpvalue>(var_ident->name, assign->first_expr);
+            lowered = state.holder.make<AstAssignUpvalue>(var_ident->name, assign->first_expr);
         }
         else
         {
-            return state.holder.make<AstAssignGlobal>(var_ident->name, assign->first_expr);
+            lowered = state.holder.make<AstAssignGlobal>(var_ident->name, assign->first_expr);
         }
+        lowered->line = assign->line;
+        lowered->column = assign->column;
+        return lowered;
     }
 
     AstNode* transform_compound_assign(SemanticsState& state, AstCompoundAssign* compound)
     {
+        transform_target(state, compound->target);
+        transform_expression(state, compound->expr);
         auto* var_ident = compound->target->try_as<AstIdent>();
         if (!var_ident)
         {
@@ -255,6 +274,7 @@ namespace behl
         auto* var_ident = inc->target->try_as<AstIdent>();
         if (!var_ident)
         {
+            transform_target(state, inc->target);
             return inc;
         }
 
@@ -288,6 +308,7 @@ namespace behl
         auto* var_ident = dec->target->try_as<AstIdent>();
         if (!var_ident)
         {
+            transform_target(state, dec->target);
             return dec;
         }
 
@@ -383,10 +404,10 @@ namespace behl
             // In module mode, any non-local, non-upvalue, non-builtin variable is an error
             if (state.is_module && !is_local(state, name) && !is_upvalue(state, name) && !is_builtin_function(name))
             {
-                const auto msg = behl::format("Variable '{}' is not declared. Use 'let' or 'const' to declare local variables, "
-                                              "or 'import()' to load modules.",
+                raise_semantic_error(state.state, SourceLocation{},
+                    "Variable '{}' is not declared. Use 'let' or 'const' to declare local variables, "
+                    "or 'import()' to load modules.",
                     name);
-                throw SemanticError(msg);
             }
         }
 
@@ -480,7 +501,8 @@ namespace behl
         {
             if (!state.is_module)
             {
-                throw std::runtime_error("'export' can only be used in module mode. Add 'module;' at the top of the file.");
+                raise_semantic_error(state.state, SourceLocation{},
+                    "'export' can only be used in module mode. Add 'module;' at the top of the file.");
             }
 
             // Transform the inner declaration and collect export name
@@ -500,7 +522,8 @@ namespace behl
                 // Can only export const, not let
                 if (!local_decl->is_const)
                 {
-                    throw std::runtime_error("Cannot export mutable variables. Only 'const' can be exported.");
+                    raise_semantic_error(
+                        state.state, SourceLocation{}, "Cannot export mutable variables. Only 'const' can be exported.");
                 }
                 for (AstNode* n = reinterpret_cast<AstNode*>(local_decl->first_name); n; n = n->next_child)
                 {
@@ -516,7 +539,8 @@ namespace behl
         {
             if (!state.is_module)
             {
-                throw std::runtime_error("'export' can only be used in module mode. Add 'module;' at the top of the file.");
+                raise_semantic_error(state.state, SourceLocation{},
+                    "'export' can only be used in module mode. Add 'module;' at the top of the file.");
             }
 
             // Add all names to exported list (need to clone to avoid breaking the chain)
@@ -562,12 +586,14 @@ namespace behl
         }
         else if (auto* if_stmt = node->try_as<AstIf>())
         {
+            transform_expression(state, if_stmt->cond);
             if (if_stmt->then_block)
             {
                 transform_block(state, *if_stmt->then_block);
             }
             for (ElseIf* elseif = if_stmt->first_elseif; elseif != nullptr; elseif = static_cast<ElseIf*>(elseif->next_child))
             {
+                transform_expression(state, elseif->cond);
                 if (elseif->block)
                 {
                     transform_block(state, *elseif->block);
@@ -581,6 +607,7 @@ namespace behl
         }
         else if (auto* while_stmt = node->try_as<AstWhile>())
         {
+            transform_expression(state, while_stmt->cond);
             if (while_stmt->block)
             {
                 transform_block(state, *while_stmt->block);
@@ -589,6 +616,7 @@ namespace behl
         }
         else if (auto* for_in = node->try_as<AstForIn>())
         {
+            transform_expression(state, for_in->first_expr);
             ScopeGuard scope(state);
             for (const AstNode* name = for_in->first_name; name != nullptr; name = name->next_child)
             {
@@ -611,6 +639,8 @@ namespace behl
                 for_c->init = transform_statement(state, for_c->init);
             }
 
+            transform_expression(state, for_c->condition);
+
             if (for_c->update)
             {
                 for_c->update = transform_statement(state, for_c->update);
@@ -625,6 +655,9 @@ namespace behl
         else if (auto* for_c_numeric = node->try_as<AstForCNumeric>())
         {
             // Handle optimized numeric for loops (created by LoopOptimizationPass)
+            transform_expression(state, for_c_numeric->start);
+            transform_expression(state, for_c_numeric->end);
+            transform_expression(state, for_c_numeric->step);
             ScopeGuard scope(state);
             declare_local(state, for_c_numeric->var->view());
             if (for_c_numeric->block)
@@ -641,6 +674,15 @@ namespace behl
                 declare_local(state, first_name->view());
             }
             transform_function_stat(state, *func_def);
+            return node;
+        }
+        else if (auto* defer_stmt = node->try_as<AstDefer>())
+        {
+            if (defer_stmt->body)
+            {
+                ScopeGuard scope(state);
+                defer_stmt->body = transform_statement(state, defer_stmt->body);
+            }
             return node;
         }
         else if (auto* scope_block = node->try_as<AstScope>())

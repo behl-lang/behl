@@ -1,7 +1,10 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class LogicalOperatorTest : public ::testing::Test
+class LogicalOperatorTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +12,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,152 +21,152 @@ protected:
     }
 };
 
-TEST_F(LogicalOperatorTest, AndTrueTrue)
+TEST_P(LogicalOperatorTest, AndTrueTrue)
 {
     constexpr std::string_view code = R"(
         return true && true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndTrueFalse)
+TEST_P(LogicalOperatorTest, AndTrueFalse)
 {
     constexpr std::string_view code = R"(
         return true && false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndFalseTrue)
+TEST_P(LogicalOperatorTest, AndFalseTrue)
 {
     constexpr std::string_view code = R"(
         return false && true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndFalseFalse)
+TEST_P(LogicalOperatorTest, AndFalseFalse)
 {
     constexpr std::string_view code = R"(
         return false && false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrTrueTrue)
+TEST_P(LogicalOperatorTest, OrTrueTrue)
 {
     constexpr std::string_view code = R"(
         return true || true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrTrueFalse)
+TEST_P(LogicalOperatorTest, OrTrueFalse)
 {
     constexpr std::string_view code = R"(
         return true || false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrFalseTrue)
+TEST_P(LogicalOperatorTest, OrFalseTrue)
 {
     constexpr std::string_view code = R"(
         return false || true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrFalseFalse)
+TEST_P(LogicalOperatorTest, OrFalseFalse)
 {
     constexpr std::string_view code = R"(
         return false || false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndWithNil)
+TEST_P(LogicalOperatorTest, AndWithNil)
 {
     constexpr std::string_view code = R"(
         return true && nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrWithNil)
+TEST_P(LogicalOperatorTest, OrWithNil)
 {
     constexpr std::string_view code = R"(
         return nil || true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndWithNumbers)
+TEST_P(LogicalOperatorTest, AndWithNumbers)
 {
     constexpr std::string_view code = R"(
         return 5 && 10
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrWithNumbers)
+TEST_P(LogicalOperatorTest, OrWithNumbers)
 {
     constexpr std::string_view code = R"(
         return 0 || 1
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndWithZero)
+TEST_P(LogicalOperatorTest, AndWithZero)
 {
     constexpr std::string_view code = R"(
         return 0 && false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndShortCircuitLeft)
+TEST_P(LogicalOperatorTest, AndShortCircuitLeft)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -173,13 +177,13 @@ TEST_F(LogicalOperatorTest, AndShortCircuitLeft)
         let result = false && inc();
         return x;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LogicalOperatorTest, AndNoShortCircuit)
+TEST_P(LogicalOperatorTest, AndNoShortCircuit)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -190,13 +194,13 @@ TEST_F(LogicalOperatorTest, AndNoShortCircuit)
         let result = true && inc();
         return x;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, OrShortCircuitLeft)
+TEST_P(LogicalOperatorTest, OrShortCircuitLeft)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -207,13 +211,13 @@ TEST_F(LogicalOperatorTest, OrShortCircuitLeft)
         let result = true || inc();
         return x;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LogicalOperatorTest, OrNoShortCircuit)
+TEST_P(LogicalOperatorTest, OrNoShortCircuit)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -224,13 +228,13 @@ TEST_F(LogicalOperatorTest, OrNoShortCircuit)
         let result = false || inc();
         return x;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, NilShortCircuitAnd)
+TEST_P(LogicalOperatorTest, NilShortCircuitAnd)
 {
     constexpr std::string_view code = R"(
         let x = 0;
@@ -241,81 +245,81 @@ TEST_F(LogicalOperatorTest, NilShortCircuitAnd)
         let result = nil && inc();
         return x;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(LogicalOperatorTest, ChainedAnd)
+TEST_P(LogicalOperatorTest, ChainedAnd)
 {
     constexpr std::string_view code = R"(
         return true && true && true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, ChainedAndWithFalse)
+TEST_P(LogicalOperatorTest, ChainedAndWithFalse)
 {
     constexpr std::string_view code = R"(
         return true && false && true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, ChainedOr)
+TEST_P(LogicalOperatorTest, ChainedOr)
 {
     constexpr std::string_view code = R"(
         return false || false || true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, ChainedOrAllFalse)
+TEST_P(LogicalOperatorTest, ChainedOrAllFalse)
 {
     constexpr std::string_view code = R"(
         return false || false || false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, MixedAndOr)
+TEST_P(LogicalOperatorTest, MixedAndOr)
 {
     constexpr std::string_view code = R"(
         return true || false && false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, MixedOrAnd)
+TEST_P(LogicalOperatorTest, MixedOrAnd)
 {
     constexpr std::string_view code = R"(
         return false && true || true
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndInIfCondition)
+TEST_P(LogicalOperatorTest, AndInIfCondition)
 {
     constexpr std::string_view code = R"(
         let x = 5;
@@ -325,13 +329,13 @@ TEST_F(LogicalOperatorTest, AndInIfCondition)
         }
         return 0;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, OrInIfCondition)
+TEST_P(LogicalOperatorTest, OrInIfCondition)
 {
     constexpr std::string_view code = R"(
         let x = 5;
@@ -341,13 +345,13 @@ TEST_F(LogicalOperatorTest, OrInIfCondition)
         }
         return 0;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, ComplexCondition)
+TEST_P(LogicalOperatorTest, ComplexCondition)
 {
     constexpr std::string_view code = R"(
         let a = 10;
@@ -358,13 +362,13 @@ TEST_F(LogicalOperatorTest, ComplexCondition)
         }
         return 0;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1);
 }
 
-TEST_F(LogicalOperatorTest, AndInWhileLoop)
+TEST_P(LogicalOperatorTest, AndInWhileLoop)
 {
     constexpr std::string_view code = R"(
         let i = 0;
@@ -375,122 +379,165 @@ TEST_F(LogicalOperatorTest, AndInWhileLoop)
         }
         return i;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(LogicalOperatorTest, NotAndCombination)
+TEST_P(LogicalOperatorTest, NotAndCombination)
 {
     constexpr std::string_view code = R"(
         return !(true && false)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, NotOrCombination)
+TEST_P(LogicalOperatorTest, NotOrCombination)
 {
     constexpr std::string_view code = R"(
         return !(false || false)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, DeMorgansLaw1)
+TEST_P(LogicalOperatorTest, DeMorgansLaw1)
 {
     constexpr std::string_view code = R"(
         return !(true && false) == (!true || !false)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, DeMorgansLaw2)
+TEST_P(LogicalOperatorTest, DeMorgansLaw2)
 {
     constexpr std::string_view code = R"(
         return !(true || false) == (!true && !false)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AssignAndResult)
+TEST_P(LogicalOperatorTest, AssignAndResult)
 {
     constexpr std::string_view code = R"(
         let x = true && false;
         return x;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AssignOrResult)
+TEST_P(LogicalOperatorTest, AssignOrResult)
 {
     constexpr std::string_view code = R"(
         let x = false || true;
         return x;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, AndReturnsLastValue)
+TEST_P(LogicalOperatorTest, AndReturnsLastValue)
 {
     constexpr std::string_view code = R"(
         return 5 && 10
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 10);
 }
 
-TEST_F(LogicalOperatorTest, AndReturnsFirstFalsy)
+TEST_P(LogicalOperatorTest, AndReturnsFirstFalsy)
 {
     constexpr std::string_view code = R"(
         return 5 && false
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(LogicalOperatorTest, OrReturnsFirstTruthy)
+TEST_P(LogicalOperatorTest, OrReturnsFirstTruthy)
 {
     constexpr std::string_view code = R"(
         return false || 5
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(LogicalOperatorTest, OrReturnsLastValue)
+TEST_P(LogicalOperatorTest, OrReturnsLastValue)
 {
     constexpr std::string_view code = R"(
         return false || nil
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
+
+TEST_P(LogicalOperatorTest, NotOfLocalInConditionTakesCorrectBranch)
+{
+    constexpr std::string_view code = R"(
+        let hits = 0
+        let t = true
+        let f = false
+        if (!t) { hits = hits + 1 }
+        if (!f) { hits = hits + 10 }
+        if (!!t) { hits = hits + 100 }
+        while (!t) { hits = hits + 1000
+            break }
+        let c = 46
+        let good = (c >= 48 && c <= 57) || c == 46
+        if (!good) { hits = hits + 10000 }
+        if (!(c == 46)) { hits = hits + 100000 }
+        return hits
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 110);
+}
+
+TEST_P(LogicalOperatorTest, NotOfLocalInConditionInsideFunction)
+{
+    constexpr std::string_view code = R"(
+        function count_bad(s) {
+            let bad = 0
+            for (let i = 0; i < #s; i++) {
+                let good = s[i] == 1 || s[i] == 2
+                if (!good) { bad = bad + 1 }
+            }
+            return bad
+        }
+        return count_bad({1, 2, 1, 3, 2})
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    ASSERT_EQ(behl::to_integer(S, -1), 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, LogicalOperatorTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

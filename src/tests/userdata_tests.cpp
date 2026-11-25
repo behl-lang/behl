@@ -1,5 +1,8 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+#include "vm/vm_error.hpp"
+
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <cstring>
 #include <gtest/gtest.h>
 
@@ -61,7 +64,7 @@ static int finalizer_modify(behl::State* S)
     return 0;
 }
 
-class UserdataTest : public ::testing::Test
+class UserdataTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S = nullptr;
@@ -69,6 +72,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
         behl::register_function(S, "create_test_userdata", create_test_userdata);
         behl::register_function(S, "get_userdata_value", get_userdata_value);
@@ -85,21 +89,16 @@ protected:
 
     bool run_code(std::string_view code)
     {
-        try
+        if (behl::load_string(S, code) != 0 || behl::call(S, 0, 0) < 0)
         {
-            behl::load_string(S, code);
-            behl::call(S, 0, 0);
-            return true;
-        }
-        catch (const std::exception& e)
-        {
-            EXPECT_TRUE(false) << "Error running code: " << e.what();
+            ADD_FAILURE() << "Error running code: " << behl_test::error_text(S);
             return false;
         }
+        return true;
     }
 };
 
-TEST_F(UserdataTest, CreateUserdataFromCAPI)
+TEST_P(UserdataTest, CreateUserdataFromCAPI)
 {
     void* data = behl::userdata_new(S, sizeof(TestData), TestData_UID);
     ASSERT_NE(data, nullptr);
@@ -115,7 +114,7 @@ TEST_F(UserdataTest, CreateUserdataFromCAPI)
     EXPECT_DOUBLE_EQ(retrieved->score, 2.5);
 }
 
-TEST_F(UserdataTest, CreateUserdataFromScript)
+TEST_P(UserdataTest, CreateUserdataFromScript)
 {
     constexpr std::string_view code = R"(
         let ud = create_test_userdata();
@@ -124,67 +123,67 @@ TEST_F(UserdataTest, CreateUserdataFromScript)
 
     EXPECT_TRUE(run_code(code));
 
-    ASSERT_NO_THROW(behl::load_string(S, "let ud = create_test_userdata(); return get_userdata_value(ud);"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, "let ud = create_test_userdata(); return get_userdata_value(ud);"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(UserdataTest, UserdataTypeCheck)
+TEST_P(UserdataTest, UserdataTypeCheck)
 {
-    ASSERT_NO_THROW(behl::load_string(S, "let ud = create_test_userdata(); return typeof(ud);"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, "let ud = create_test_userdata(); return typeof(ud);"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_string(S, -1), "userdata");
 }
 
-TEST_F(UserdataTest, ModifyUserdataValue)
+TEST_P(UserdataTest, ModifyUserdataValue)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud = create_test_userdata();
         set_userdata_value(ud, 123);
         return get_userdata_value(ud);
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(UserdataTest, UserdataInTable)
+TEST_P(UserdataTest, UserdataInTable)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let t = {};
         t["userdata"] = create_test_userdata();
         return get_userdata_value(t["userdata"]);
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(UserdataTest, UserdataAsTableKey)
+TEST_P(UserdataTest, UserdataAsTableKey)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud = create_test_userdata();
         let t = {};
         t[ud] = "stored_value";
         return t[ud];
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::to_string(S, -1), "stored_value");
 }
 
-TEST_F(UserdataTest, UserdataWithMetatable)
+TEST_P(UserdataTest, UserdataWithMetatable)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud = create_test_userdata();
         let mt = {};
         setmetatable(ud, mt);
         return getmetatable(ud) != nil;
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(UserdataTest, UserdataMetatableIndex)
+TEST_P(UserdataTest, UserdataMetatableIndex)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud = create_test_userdata();
         let mt = {};
         mt["__index"] = function(t, k) {
@@ -196,13 +195,13 @@ TEST_F(UserdataTest, UserdataMetatableIndex)
         setmetatable(ud, mt);
         return ud["value"];
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(UserdataTest, UserdataMetatableNewIndex)
+TEST_P(UserdataTest, UserdataMetatableNewIndex)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud = create_test_userdata();
         let mt = {};
         let storage = {};
@@ -213,13 +212,13 @@ TEST_F(UserdataTest, UserdataMetatableNewIndex)
         ud["custom_field"] = 999;
         return storage["custom_field"];
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 999);
 }
 
-TEST_F(UserdataTest, UserdataMetatableAdd)
+TEST_P(UserdataTest, UserdataMetatableAdd)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud1 = create_test_userdata();
         let ud2 = create_test_userdata();
         let mt = {};
@@ -230,13 +229,13 @@ TEST_F(UserdataTest, UserdataMetatableAdd)
         setmetatable(ud2, mt);
         return ud1 + ud2;
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 84);
 }
 
-TEST_F(UserdataTest, UserdataMetatableCall)
+TEST_P(UserdataTest, UserdataMetatableCall)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud = create_test_userdata();
         let mt = {};
         mt["__call"] = function(self, arg) {
@@ -246,13 +245,13 @@ TEST_F(UserdataTest, UserdataMetatableCall)
         let result = ud(10);
         return result == 52
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(UserdataTest, UserdataMetatableTailCall)
+TEST_P(UserdataTest, UserdataMetatableTailCall)
 {
-    ASSERT_NO_THROW(behl::load_string(S, R"(
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
         let ud = create_test_userdata();
         let mt = {};
         mt["__call"] = function(self, arg) {
@@ -261,11 +260,11 @@ TEST_F(UserdataTest, UserdataMetatableTailCall)
         setmetatable(ud, mt);
         return ud(10);
     )"));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 52);
 }
 
-TEST_F(UserdataTest, UserdataMetatableToString)
+TEST_P(UserdataTest, UserdataMetatableToString)
 {
     constexpr std::string_view code = R"(
         let ud = create_test_userdata();
@@ -280,12 +279,12 @@ TEST_F(UserdataTest, UserdataMetatableToString)
         return str;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(to_string(S, -1), "TestData(42)");
 }
 
-TEST_F(UserdataTest, UserdataGCFinalizerCalled)
+TEST_P(UserdataTest, UserdataGCFinalizerCalled)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -301,7 +300,7 @@ TEST_F(UserdataTest, UserdataGCFinalizerCalled)
     EXPECT_EQ(gc_counter, 1);
 }
 
-TEST_F(UserdataTest, UserdataGCMultipleFinalizersCalled)
+TEST_P(UserdataTest, UserdataGCMultipleFinalizersCalled)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -318,7 +317,7 @@ TEST_F(UserdataTest, UserdataGCMultipleFinalizersCalled)
     EXPECT_EQ(gc_counter, 10);
 }
 
-TEST_F(UserdataTest, UserdataGCFinalizerModifiesData)
+TEST_P(UserdataTest, UserdataGCFinalizerModifiesData)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -333,7 +332,7 @@ TEST_F(UserdataTest, UserdataGCFinalizerModifiesData)
     EXPECT_TRUE(run_code(code));
 }
 
-TEST_F(UserdataTest, UserdataWithoutFinalizerNoError)
+TEST_P(UserdataTest, UserdataWithoutFinalizerNoError)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -345,7 +344,7 @@ TEST_F(UserdataTest, UserdataWithoutFinalizerNoError)
     EXPECT_TRUE(run_code(code));
 }
 
-TEST_F(UserdataTest, UserdataReferencedNotCollected)
+TEST_P(UserdataTest, UserdataReferencedNotCollected)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -360,15 +359,15 @@ TEST_F(UserdataTest, UserdataReferencedNotCollected)
         return get_userdata_value(global_ud);
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, behl::kMultRet));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, behl::kMultRet));
     EXPECT_EQ(gc_counter, 0); // Should not be finalized
 
     EXPECT_EQ(behl::to_integer(S, -1), 42);
     behl::pop(S, 1);
 }
 
-TEST_F(UserdataTest, UserdataInClosurePreserved)
+TEST_P(UserdataTest, UserdataInClosurePreserved)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -390,14 +389,14 @@ TEST_F(UserdataTest, UserdataInClosurePreserved)
         return closure();
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, behl::kMultRet));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, behl::kMultRet));
     EXPECT_EQ(gc_counter, 0); // Should not be finalized yet
     EXPECT_EQ(behl::to_integer(S, -1), 42);
     behl::pop(S, 1);
 }
 
-TEST_F(UserdataTest, UserdataPassedToFunction)
+TEST_P(UserdataTest, UserdataPassedToFunction)
 {
     constexpr std::string_view code = R"(
         function process_userdata(ud, multiplier) {
@@ -408,12 +407,12 @@ TEST_F(UserdataTest, UserdataPassedToFunction)
         return process_userdata(ud, 2);
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 84);
 }
 
-TEST_F(UserdataTest, UserdataReturnedFromFunction)
+TEST_P(UserdataTest, UserdataReturnedFromFunction)
 {
     constexpr std::string_view code = R"(
         function create_wrapper() {
@@ -424,12 +423,12 @@ TEST_F(UserdataTest, UserdataReturnedFromFunction)
         return get_userdata_value(ud);
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(UserdataTest, MultipleUserdataIndependent)
+TEST_P(UserdataTest, MultipleUserdataIndependent)
 {
     constexpr std::string_view code = R"(
         let ud1 = create_test_userdata();
@@ -441,12 +440,12 @@ TEST_F(UserdataTest, MultipleUserdataIndependent)
         return get_userdata_value(ud1) == 100 && get_userdata_value(ud2) == 200;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(UserdataTest, UserdataArrayInTable)
+TEST_P(UserdataTest, UserdataArrayInTable)
 {
     constexpr std::string_view code = R"(
         let arr = {};
@@ -464,12 +463,12 @@ TEST_F(UserdataTest, UserdataArrayInTable)
         return all_correct;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(UserdataTest, UserdataWithNestedMetatables)
+TEST_P(UserdataTest, UserdataWithNestedMetatables)
 {
     constexpr std::string_view code = R"(
         let ud = create_test_userdata();
@@ -487,12 +486,12 @@ TEST_F(UserdataTest, UserdataWithNestedMetatables)
         return ud["get_value"](ud);
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(UserdataTest, UserdataMetatableEq)
+TEST_P(UserdataTest, UserdataMetatableEq)
 {
     constexpr std::string_view code = R"(
         let ud1 = create_test_userdata();
@@ -509,12 +508,12 @@ TEST_F(UserdataTest, UserdataMetatableEq)
         return ud1 == ud2;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(UserdataTest, UserdataMetatableLt)
+TEST_P(UserdataTest, UserdataMetatableLt)
 {
     constexpr std::string_view code = R"(
         let ud1 = create_test_userdata();
@@ -536,12 +535,12 @@ TEST_F(UserdataTest, UserdataMetatableLt)
         return is_less && !is_not_less;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(UserdataTest, UserdataMetatableLen)
+TEST_P(UserdataTest, UserdataMetatableLen)
 {
     constexpr std::string_view code = R"(
         let ud = create_test_userdata();
@@ -556,12 +555,12 @@ TEST_F(UserdataTest, UserdataMetatableLen)
         return #ud;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(UserdataTest, UserdataGCWithTableReferences)
+TEST_P(UserdataTest, UserdataGCWithTableReferences)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -584,7 +583,7 @@ TEST_F(UserdataTest, UserdataGCWithTableReferences)
     EXPECT_EQ(gc_counter, 5);
 }
 
-TEST_F(UserdataTest, UserdataStressTestManyAllocations)
+TEST_P(UserdataTest, UserdataStressTestManyAllocations)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -603,7 +602,7 @@ TEST_F(UserdataTest, UserdataStressTestManyAllocations)
     EXPECT_EQ(gc_counter, 100);
 }
 
-TEST_F(UserdataTest, UserdataCircularReferenceWithTable)
+TEST_P(UserdataTest, UserdataCircularReferenceWithTable)
 {
     constexpr std::string_view code = R"(
         const gc = import("gc");
@@ -629,41 +628,41 @@ TEST_F(UserdataTest, UserdataCircularReferenceWithTable)
     EXPECT_EQ(gc_counter, 1); // Should still be collected
 }
 
-TEST_F(UserdataTest, ToUserdataReturnsNullForNonUserdata)
+TEST_P(UserdataTest, ToUserdataReturnsNullForNonUserdata)
 {
     behl::push_integer(S, 42);
     void* result = behl::to_userdata(S, -1);
     EXPECT_EQ(result, nullptr);
 }
 
-TEST_F(UserdataTest, CheckUserdataThrowsForNonUserdata)
+TEST_P(UserdataTest, CheckUserdataThrowsForNonUserdata)
 {
     constexpr std::string_view code = R"(
         get_userdata_value(42);
     )";
 
-    EXPECT_NO_THROW(behl::load_string(S, code));
-    EXPECT_ANY_THROW(behl::call(S, 0, 0)); // Should fail with type error
+    EXPECT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 0)); // Should fail with type error
 }
 
-TEST_F(UserdataTest, UserdataZeroSize)
+TEST_P(UserdataTest, UserdataZeroSize)
 {
     void* data = behl::userdata_new(S, 0, TestData_UID);
     EXPECT_NE(data, nullptr); // Should still return valid pointer
     EXPECT_EQ(behl::type(S, -1), behl::Type::kUserdata);
 }
 
-TEST_F(UserdataTest, CheckUserdataWrongUIDThrows)
+TEST_P(UserdataTest, CheckUserdataWrongUIDThrows)
 {
     constexpr uint32_t WrongUID = behl::make_uid("WrongType");
 
     void* data = behl::userdata_new(S, sizeof(TestData), TestData_UID);
     ASSERT_NE(data, nullptr);
 
-    EXPECT_THROW({ behl::check_userdata(S, -1, WrongUID); }, behl::RuntimeError);
+    EXPECT_THROW({ behl::check_userdata(S, -1, WrongUID); }, behl::Exception);
 }
 
-TEST_F(UserdataTest, CheckUserdataCorrectUIDSucceeds)
+TEST_P(UserdataTest, CheckUserdataCorrectUIDSucceeds)
 {
     void* data = behl::userdata_new(S, sizeof(TestData), TestData_UID);
     ASSERT_NE(data, nullptr);
@@ -673,7 +672,7 @@ TEST_F(UserdataTest, CheckUserdataCorrectUIDSucceeds)
     EXPECT_EQ(data, checked);
 }
 
-TEST_F(UserdataTest, MixedUserdataTypesIsolated)
+TEST_P(UserdataTest, MixedUserdataTypesIsolated)
 {
     constexpr uint32_t TypeA_UID = behl::make_uid("TypeA");
     constexpr uint32_t TypeB_UID = behl::make_uid("TypeB");
@@ -688,16 +687,16 @@ TEST_F(UserdataTest, MixedUserdataTypesIsolated)
     EXPECT_NO_THROW({ checkedB = behl::check_userdata(S, -1, TypeB_UID); });
     EXPECT_EQ(dataB, checkedB);
 
-    EXPECT_THROW({ behl::check_userdata(S, -1, TypeA_UID); }, behl::RuntimeError);
+    EXPECT_THROW({ behl::check_userdata(S, -1, TypeA_UID); }, behl::Exception);
 
     void* checkedA = nullptr;
     EXPECT_NO_THROW({ checkedA = behl::check_userdata(S, -2, TypeA_UID); });
     EXPECT_EQ(dataA, checkedA);
 
-    EXPECT_THROW({ behl::check_userdata(S, -2, TypeB_UID); }, behl::RuntimeError);
+    EXPECT_THROW({ behl::check_userdata(S, -2, TypeB_UID); }, behl::Exception);
 }
 
-TEST_F(UserdataTest, UserdataUIDMismatchFromScript)
+TEST_P(UserdataTest, UserdataUIDMismatchFromScript)
 {
     behl::push_cfunction(S, [](behl::State* state) -> int {
         constexpr uint32_t MyType_UID = behl::make_uid("MyType");
@@ -723,12 +722,12 @@ TEST_F(UserdataTest, UserdataUIDMismatchFromScript)
         return result;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_FALSE(behl::to_boolean(S, -1));
 }
 
-TEST_F(UserdataTest, UserdataGetUID)
+TEST_P(UserdataTest, UserdataGetUID)
 {
     constexpr uint32_t TypeA_UID = behl::make_uid("TypeA");
     constexpr uint32_t TypeB_UID = behl::make_uid("TypeB");
@@ -753,7 +752,7 @@ TEST_F(UserdataTest, UserdataGetUID)
     EXPECT_EQ(retrieved_uid, 0);
 }
 
-TEST_F(UserdataTest, UserdataPolymorphicHandler)
+TEST_P(UserdataTest, UserdataPolymorphicHandler)
 {
     behl::push_cfunction(S, [](behl::State* state) -> int {
         constexpr uint32_t TypeA_UID = behl::make_uid("PolyTypeA");
@@ -810,11 +809,235 @@ TEST_F(UserdataTest, UserdataPolymorphicHandler)
         return typeA_name, typeA_val, typeB_name, typeB_val;
     )";
 
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
 
     EXPECT_EQ(behl::to_string(S, -4), "TypeA");
     EXPECT_EQ(behl::to_integer(S, -3), 100);
     EXPECT_EQ(behl::to_string(S, -2), "TypeB");
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 3.14);
 }
+
+TEST_P(UserdataTest, FinalizerCallingCollectDoesNotCorruptState)
+{
+    gc_counter = 0;
+
+    constexpr std::string_view code = R"(
+            const gc = import("gc");
+            let mt = {};
+            mt["__gc"] = function(ud) { gc.collect(); };
+            let ud = create_test_userdata();
+            setmetatable(ud, mt);
+            ud = nil;
+            gc.collect();
+
+            let survivors = {};
+            for (let i = 0; i < 200; i = i + 1) { survivors[i] = {id = i}; }
+            gc.collect();
+
+            let bad = 0;
+            for (let i = 0; i < 200; i = i + 1) {
+                if (survivors[i] == nil || survivors[i].id != i) { bad = bad + 1; }
+            }
+            return bad;
+        )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_integer(S, -1), 0) << "heap corrupted after a finalizer re-entered the collector";
+}
+
+TEST_P(UserdataTest, ThrowingFinalizerLeavesAutomaticCollectionRunning)
+{
+    gc_counter = 0;
+
+    constexpr std::string_view thrower = R"(
+            let mt = {};
+            mt["__gc"] = function(ud) { error("boom") };
+            let ud = create_test_userdata();
+            setmetatable(ud, mt);
+            ud = nil;
+            for (let i = 0; i < 200000; i = i + 1) { let junk = {pad = i}; }
+        )";
+
+    const bool threw = behl::load_string(S, thrower) != 0 || behl::call(S, 0, 0) < 0;
+    ASSERT_TRUE(threw) << "finalizer never threw, test does not exercise the path";
+
+    behl::set_top(S, 0);
+
+    constexpr std::string_view after = R"(
+            const gc = import("gc");
+            let active = 0;
+            let keep = {};
+            for (let i = 0; i < 120000; i = i + 1) {
+                keep[i % 500] = {pad = i};
+                if (gc.phase() != "idle") { active = active + 1; }
+            }
+            return active;
+        )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, after));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_LT(behl::to_integer(S, -1), 50000) << "automatic collection never ran again after a finalizer threw";
+}
+
+TEST_P(UserdataTest, FinalizerResurrectedUserdataKeepsItsMetatable)
+{
+    constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let calls = 0
+            let mt = {}
+            mt.tag = "alive"
+            mt.__gc = function(u) { calls = calls + 1; saved = u }
+
+            let ud = create_test_userdata()
+            set_userdata_value(ud, 77)
+            setmetatable(ud, mt)
+            mt = nil
+            ud = nil
+            gc.collect()
+
+            let resurrected = saved != nil
+
+            for (let c = 0; c < 5; c = c + 1) {
+                let churn = {}
+                for (let i = 0; i < 5000; i = i + 1) { churn[i % 100] = {pad = i} }
+                gc.collect()
+            }
+
+            let m = getmetatable(saved)
+            let tag_ok = m != nil && m.tag == "alive"
+            return resurrected, tag_ok, get_userdata_value(saved), calls
+        )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
+    ASSERT_TRUE(behl::to_boolean(S, -4)) << "finalizer never stored the userdata";
+    EXPECT_TRUE(behl::to_boolean(S, -3)) << "metatable of the resurrected userdata was freed";
+    EXPECT_EQ(behl::to_integer(S, -2), 77) << "payload of the resurrected userdata was corrupted";
+    EXPECT_EQ(behl::to_integer(S, -1), 1) << "finalizer must run exactly once";
+}
+
+TEST_P(UserdataTest, CloseRunsPendingFinalizers)
+{
+    behl::State* L = behl::new_state();
+    L->jit_enabled = GetParam();
+    behl::load_stdlib(L);
+    behl::register_function(L, "create_test_userdata", create_test_userdata);
+    behl::register_function(L, "finalizer_counter", finalizer_counter);
+    gc_counter = 0;
+
+    constexpr std::string_view code = R"(
+            let mt = {}
+            mt["__gc"] = finalizer_counter
+            for (let i = 0; i < 3; i = i + 1) {
+                let ud = create_test_userdata()
+                setmetatable(ud, mt)
+            }
+            kept = create_test_userdata()
+            setmetatable(kept, mt)
+        )";
+
+    bool ran = false;
+    if (behl::load_string(L, code) == 0 && behl::call(L, 0, 0) >= 0)
+    {
+        ran = true;
+    }
+    else
+    {
+        ADD_FAILURE() << "script failed: " << behl_test::error_text(L);
+    }
+
+    behl::close(L);
+
+    ASSERT_TRUE(ran);
+    EXPECT_EQ(gc_counter, 4) << "close() released finalizable userdata without running __gc";
+}
+
+TEST_P(UserdataTest, FinalizersRunInReverseCreationOrder)
+{
+    constexpr std::string_view code = R"(
+            const gc = import("gc")
+            let order = {}
+            let n = 0
+            let mt = {}
+            mt.__gc = function(u) { order[n] = get_userdata_value(u); n = n + 1 }
+
+            function make(id) {
+                let u = create_test_userdata()
+                set_userdata_value(u, id)
+                setmetatable(u, mt)
+            }
+
+            for (let i = 0; i < 5; i = i + 1) { make(i) }
+            gc.collect()
+
+            return n, order[0], order[1], order[2], order[3], order[4]
+        )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 6));
+    ASSERT_EQ(behl::to_integer(S, -6), 5);
+    EXPECT_EQ(behl::to_integer(S, -5), 4);
+    EXPECT_EQ(behl::to_integer(S, -4), 3);
+    EXPECT_EQ(behl::to_integer(S, -3), 2);
+    EXPECT_EQ(behl::to_integer(S, -2), 1);
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(UserdataTest, OtherFinalizersStillRunAfterOneThrows)
+{
+    constexpr std::string_view code = R"(
+            const gc = import("gc")
+            let ran = 0
+
+            function make(throws) {
+                let u = create_test_userdata()
+                setmetatable(u, {__gc = function(x) {
+                    if (throws) { error("finalizer failed") }
+                    ran = ran + 1
+                }})
+            }
+
+            make(false)
+            make(true)
+            make(false)
+
+            let ok = pcall(gc.collect)
+            gc.collect()
+            gc.collect()
+            return ok, ran
+        )";
+
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_FALSE(behl::to_boolean(S, -2)) << "the throwing finalizer did not surface its error";
+    EXPECT_EQ(behl::to_integer(S, -1), 2) << "a throwing finalizer prevented the other finalizers from running";
+}
+
+TEST_P(UserdataTest, ZeroSizeUserdataSurvivesCollectionWhileReferenced)
+{
+    constexpr uint32_t ZeroUID = behl::make_uid("ZeroSized");
+
+    behl::userdata_new(S, 0, ZeroUID);
+    behl::set_global(S, "zero");
+
+    ASSERT_TRUE(behl_test::load_ok(S, R"(
+            const gc = import("gc")
+            for (let i = 0; i < 5000; i = i + 1) { let junk = {pad = i} }
+            gc.collect()
+            gc.collect()
+            return typeof(zero)
+        )"));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::to_string(S, -1), "userdata");
+    behl::pop(S, 1);
+
+    behl::get_global(S, "zero");
+    EXPECT_TRUE(behl::is_userdata(S, -1));
+    EXPECT_EQ(behl::userdata_get_uid(S, -1), ZeroUID);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, UserdataTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

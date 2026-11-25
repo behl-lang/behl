@@ -101,6 +101,9 @@ namespace behl
         void mov32(GpReg dst, uint32_t imm);
         void mov32(GpReg dst, Mem src);
         void mov32(Mem dst, uint32_t imm);
+        void mov32(Mem dst, GpReg src);
+        void mov8(Mem dst, GpReg src);
+        void movzx8(GpReg dst, Mem src);
 
         void movups(XmmReg dst, Mem src);
         void movups(Mem dst, XmmReg src);
@@ -134,6 +137,7 @@ namespace behl
         void cmp(GpReg reg, int32_t imm);
         void cmp(Mem mem_op, int32_t imm);
         void cmp8(Mem mem_op, uint8_t imm);
+        void test8(Mem mem_op, uint8_t imm);
         void shl(GpReg reg, uint8_t imm);
         void shl32(GpReg reg, uint8_t imm);
         void test(GpReg lhs, GpReg rhs);
@@ -175,6 +179,7 @@ namespace behl
         void align(uint8_t boundary);
 
         void jmp(Label label);
+        void jmp(GpReg reg);
         void jcc(Cond cond, Label label);
 
         size_t size();

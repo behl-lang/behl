@@ -2,16 +2,18 @@
 
 #include "config_internal.hpp"
 #include "gc/gco_string.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <behl/config.hpp>
 #include <behl/types.hpp>
+#include <bit>
 #include <cassert>
 #include <compare>
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 
 namespace behl
 {
@@ -22,6 +24,7 @@ namespace behl
     struct GCClosure;
     struct GCProto;
     struct UserdataData;
+    struct GCBuffer;
 
     constexpr uint16_t kTypePairNilNil = (static_cast<uint16_t>(Type::kNil) << 8) | static_cast<uint16_t>(Type::kNil);
     constexpr uint16_t kTypePairIntInt = (static_cast<uint16_t>(Type::kInteger) << 8) | static_cast<uint16_t>(Type::kInteger);
@@ -102,6 +105,11 @@ namespace behl
             , userdata_{ val }
         {
         }
+        constexpr explicit Value(GCBuffer* val) noexcept
+            : type_{ Type::kBuffer }
+            , buffer_{ val }
+        {
+        }
 
         BEHL_FORCEINLINE
         std::partial_ordering operator<=>(const Value& other) const noexcept
@@ -136,6 +144,11 @@ namespace behl
                 if (lhs_t == Type::kNil) [[unlikely]]
                 {
                     return std::partial_ordering::equivalent;
+                }
+
+                if (lhs_t == Type::kCFunction)
+                {
+                    return std::bit_cast<uintptr_t>(get_cfunction()) <=> std::bit_cast<uintptr_t>(other.get_cfunction());
                 }
 
                 // Everything else is a GC object → pointer comparison
@@ -219,6 +232,11 @@ namespace behl
                 type_ = Type::kUserdata;
                 userdata_ = std::forward<U>(new_value);
             }
+            else if constexpr (std::is_same_v<StoredType, GCBuffer*>)
+            {
+                type_ = Type::kBuffer;
+                buffer_ = std::forward<U>(new_value);
+            }
         }
 
         // Update value without changing type (avoids redundant type assignment)
@@ -281,6 +299,25 @@ namespace behl
         uintptr_t get_gcobject_ptr() const noexcept
         {
             return reinterpret_cast<uintptr_t>(gc_object_);
+        }
+
+        BEHL_FORCEINLINE
+        constexpr bool is_dead_key() const noexcept
+        {
+            return type_ == Type::kDeadKey;
+        }
+
+        BEHL_FORCEINLINE
+        void kill_key() noexcept
+        {
+            assert(is_gcobject());
+            type_ = Type::kDeadKey;
+        }
+
+        BEHL_FORCEINLINE
+        bool is_dead_key_of(const Value& key) const noexcept
+        {
+            return is_dead_key() && key.is_gcobject() && gc_object_ == key.gc_object_;
         }
 
         // Boolean
@@ -403,6 +440,17 @@ namespace behl
         }
 
         BEHL_FORCEINLINE
+        constexpr bool is_buffer() const noexcept
+        {
+            return type_ == Type::kBuffer;
+        }
+        BEHL_FORCEINLINE
+        constexpr GCBuffer* get_buffer() const noexcept
+        {
+            return buffer_;
+        }
+
+        BEHL_FORCEINLINE
         constexpr bool is_truthy() const noexcept
         {
             if (is_nil())
@@ -473,8 +521,12 @@ namespace behl
                     return "function";
                 case Type::kUserdata:
                     return "userdata";
+                case Type::kBuffer:
+                    return "buffer";
                 case Type::kNullOpt:
                     return "nullopt";
+                case Type::kDeadKey:
+                    return "deadkey";
             }
             assert(false && "Unreachable type in Value::get_type_string");
             BEHL_UNREACHABLE();
@@ -487,10 +539,6 @@ namespace behl
             return static_cast<int32_t>(sizeof(Value));
         }
 
-#if defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Winvalid-offsetof"
-#endif
         static constexpr int32_t type_offset()
         {
             return static_cast<int32_t>(offsetof(Value, type_));
@@ -500,9 +548,6 @@ namespace behl
         {
             return static_cast<int32_t>(offsetof(Value, int_));
         }
-#if defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#endif
 
     private:
         Type type_;
@@ -516,9 +561,12 @@ namespace behl
             alignas(8) GCTable* table_;
             alignas(8) GCClosure* closure_;
             alignas(8) UserdataData* userdata_;
+            alignas(8) GCBuffer* buffer_;
             alignas(8) CFunction cfunction_;
         };
     };
+
+    static_assert(std::is_standard_layout_v<Value>);
 
     struct ValueHash
     {

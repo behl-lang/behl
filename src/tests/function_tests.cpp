@@ -1,7 +1,10 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class FunctionTest : public ::testing::Test
+class FunctionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +12,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
     }
 
     void TearDown() override
@@ -17,7 +21,7 @@ protected:
     }
 };
 
-TEST_F(FunctionTest, ExecuteFunctionCall)
+TEST_P(FunctionTest, ExecuteFunctionCall)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
@@ -25,94 +29,94 @@ TEST_F(FunctionTest, ExecuteFunctionCall)
         }
         return add(3, 4)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 7);
 }
 
-TEST_F(FunctionTest, GlobalFunctionAcrossLoadStrings)
+TEST_P(FunctionTest, GlobalFunctionAcrossLoadStrings)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
             return a + b
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
 
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         return add(2, 3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code2));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code2));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(FunctionTest, GlobalFunctionOverrideAcrossLoadStrings)
+TEST_P(FunctionTest, GlobalFunctionOverrideAcrossLoadStrings)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
             return a + b
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         function add(a, b) {
             return a * b
         }
         return add(2, 3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code2));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code2));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
 }
 
-TEST_F(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
+TEST_P(FunctionTest, GlobalFunctionDefineCallOverrideThenCall)
 {
     constexpr std::string_view code = R"(
         function add(a, b) {
             return a + b
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 
-    const char* code2 = R"(
+    constexpr std::string_view code2 = R"(
         return add(2, 3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code2));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code2));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
     behl::pop(S, 1);
 
-    const char* code3 = R"(
+    constexpr std::string_view code3 = R"(
         function add(a, b) {
             return a * b
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code3));
-    ASSERT_NO_THROW(behl::call(S, 0, 0));
+    ASSERT_TRUE(behl_test::load_ok(S, code3));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
     ASSERT_EQ(behl::get_top(S), 0);
 
-    const char* code4 = R"(
+    constexpr std::string_view code4 = R"(
         return add(2, 3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code4));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code4));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 6);
     behl::pop(S, 1);
 }
 
-TEST_F(FunctionTest, ClosureCapturesLexicalVar)
+TEST_P(FunctionTest, ClosureCapturesLexicalVar)
 {
     constexpr std::string_view code = R"(
         function make() {
@@ -125,13 +129,13 @@ TEST_F(FunctionTest, ClosureCapturesLexicalVar)
         let c = make()
         return c() + c()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 3);
 }
 
-TEST_F(FunctionTest, ClosureIndependentCounters)
+TEST_P(FunctionTest, ClosureIndependentCounters)
 {
     constexpr std::string_view code = R"(
         function make() {
@@ -145,13 +149,13 @@ TEST_F(FunctionTest, ClosureIndependentCounters)
         let c2 = make()
         return c1() + c2() + c1()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 4);
 }
 
-TEST_F(FunctionTest, ClosureCapturesArgument)
+TEST_P(FunctionTest, ClosureCapturesArgument)
 {
     constexpr std::string_view code = R"(
         function mk(n) {
@@ -161,13 +165,13 @@ TEST_F(FunctionTest, ClosureCapturesArgument)
         }
         return mk(5)()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 5);
 }
 
-TEST_F(FunctionTest, ExecuteTableFunctionCall)
+TEST_P(FunctionTest, ExecuteTableFunctionCall)
 {
     constexpr std::string_view code = R"(
         let tab = {
@@ -177,13 +181,13 @@ TEST_F(FunctionTest, ExecuteTableFunctionCall)
         }
         return tab.func(1)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 2);
 }
 
-TEST_F(FunctionTest, ExecuteMethodCallColonPassesSelf)
+TEST_P(FunctionTest, ExecuteMethodCallColonPassesSelf)
 {
     constexpr std::string_view code = R"(
         let t = { value = 41 }
@@ -192,13 +196,13 @@ TEST_F(FunctionTest, ExecuteMethodCallColonPassesSelf)
         }
         return t:inc(1)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(FunctionTest, ExecuteMethodCallDotDoesNotPassSelf)
+TEST_P(FunctionTest, ExecuteMethodCallDotDoesNotPassSelf)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -207,13 +211,13 @@ TEST_F(FunctionTest, ExecuteMethodCallDotDoesNotPassSelf)
         }
         return t.whoami()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code)) << behl::to_string(S, -1);
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(FunctionTest, ExecuteMethodLocalCallColonPassesSelf)
+TEST_P(FunctionTest, ExecuteMethodLocalCallColonPassesSelf)
 {
     constexpr std::string_view code = R"(
         let t = { value = 41 }
@@ -222,13 +226,13 @@ TEST_F(FunctionTest, ExecuteMethodLocalCallColonPassesSelf)
         }
         return t:inc(1)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(FunctionTest, ExecuteMethodLocalCallDotDoesNotPassSelf)
+TEST_P(FunctionTest, ExecuteMethodLocalCallDotDoesNotPassSelf)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -237,13 +241,13 @@ TEST_F(FunctionTest, ExecuteMethodLocalCallDotDoesNotPassSelf)
         }
         return t.whoami()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(FunctionTest, ExecuteLocalFunctionMutualRecursion_EvenOdd)
+TEST_P(FunctionTest, ExecuteLocalFunctionMutualRecursion_EvenOdd)
 {
     constexpr std::string_view code = R"(
         let even
@@ -262,13 +266,13 @@ TEST_F(FunctionTest, ExecuteLocalFunctionMutualRecursion_EvenOdd)
         }
         return even(10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_TRUE(behl::to_boolean(S, -1));
 }
 
-TEST_F(FunctionTest, UpvalueModificationWhileOnStack)
+TEST_P(FunctionTest, UpvalueModificationWhileOnStack)
 {
     constexpr std::string_view code = R"(
         function outer() {
@@ -282,8 +286,50 @@ TEST_F(FunctionTest, UpvalueModificationWhileOnStack)
         }
         return outer()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 12);
 }
+
+TEST_P(FunctionTest, MethodCallOnComputedIndexEvaluatesKeyOnce)
+{
+    constexpr std::string_view code = R"(
+        let n = 0
+        let obj = {m = function(self) { return 5 }}
+        let t = {obj}
+        function k() {
+            n++
+            return 0
+        }
+        let r = t[k()]:m()
+        return r, n
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 2));
+    EXPECT_EQ(behl::to_integer(S, -2), 5);
+    EXPECT_EQ(behl::to_integer(S, -1), 1);
+}
+
+TEST_P(FunctionTest, ManyCallArgumentsRaiseErrorOrWork)
+{
+    std::string code = "function f(...) { return rawlen({...}) }\nreturn f(";
+    for (int i = 0; i < 252; ++i)
+    {
+        if (i != 0)
+        {
+            code += ",";
+        }
+        code += std::to_string(i);
+    }
+    code += ")\n";
+    if (behl::load_string(S, code) < 0 || behl::call(S, 0, 1) < 0)
+    {
+        SUCCEED();
+        return;
+    }
+    EXPECT_EQ(behl::to_integer(S, -1), 252);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, FunctionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

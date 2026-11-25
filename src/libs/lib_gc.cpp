@@ -21,7 +21,7 @@ namespace behl
     static int gc_count_fn(State* S)
     {
         size_t count = 0;
-        for (GCObject* obj = S->gc.gc_all_objects.head(); obj != nullptr; obj = obj->next)
+        for (GCObject* obj = S->gc.gc_all_objects.head(); obj != nullptr; obj = obj->get_header().next)
         {
             count++;
         }

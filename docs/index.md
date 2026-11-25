@@ -28,7 +28,7 @@ Lua-inspired scripting language with C-like syntax, implemented in C++20.
 - **Modern VM** - Register-based bytecode with incremental garbage collection
 - **JIT Compilation** - Hand-written baseline JIT for x86-64, x86 and AArch64 with automatic interpreter fallback
 - **C++ API** - Easy embedding with a Lua-like API: `push_integer()`, `call()`, etc.
-- **Fast Performance** - Competitive with Lua in many benchmarks
+- **Performance-Oriented** - Register-based bytecode, AST and peephole optimization passes, and a native JIT
 
 ## Quick Example
 
@@ -126,12 +126,11 @@ int main() {
     behl::State* S = behl::new_state();
     behl::load_stdlib(S);
     
-    // Load and run a script
-    behl::load_string(S, "return 2 + 3");
-    behl::call(S, 0, 1);
-    
-    int result = behl::to_integer(S, -1);
-    // result == 5
+    // Load and run a script, both return a negative status code on error
+    if (behl::load_string(S, "return 2 + 3") == 0 && behl::call(S, 0, 1) >= 0) {
+        behl::Integer result = behl::to_integer(S, -1);
+        // result == 5
+    }
     
     behl::close(S);
     return 0;
@@ -159,6 +158,9 @@ Complete language reference:
 - [Functions](language/functions) - Definitions, closures, and calls
 - [Tables](language/tables) - Arrays, dictionaries, and metatables
 - [Error Handling](language/error-handling) - Errors and protected calls
+- [Varargs](language/varargs) - Variadic functions
+- [Defer](language/defer) - Scope-exit cleanup
+- [Ternary Operator](language/ternary) - Conditional expressions
 - [Modules](language/modules-lang) - Importing and organizing code
 
 ### API
@@ -170,11 +172,15 @@ Standard library and embedding:
 - [Math Module](stdlib/math) - Mathematical operations
 - [String Module](stdlib/string) - String manipulation
 - [Table Module](stdlib/table) - Table utilities
+- [Buffer Module](stdlib/buffer) - Byte buffers
 - [OS Module](stdlib/os) - Operating system interface
-- [FS Module](stdlib/fs) - File system operations
 - [Debug Module](stdlib/debug) - Debugging utilities
 - [GC Module](stdlib/gc) - Garbage collector control
 - [JIT Module](stdlib/jit) - JIT compiler control
+
+**Opt-in Modules** (security-sensitive, not loaded by `load_stdlib`):
+- [FS Module](stdlib/fs) - File system operations, requires `load_lib_fs`
+- [Process Module](stdlib/process) - Process spawning, requires `load_lib_process`
 
 **C++ Embedding:**
 - [Embedding Overview](embedding/) - Integrate Behl in C++ applications

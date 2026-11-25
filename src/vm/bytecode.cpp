@@ -216,8 +216,17 @@ namespace behl
             case OpCode::kOpToNumber:
                 opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.a(), instr.b());
                 break;
+            case OpCode::kOpTypeOf:
+                opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.a(), instr.b());
+                break;
+            case OpCode::kOpTypeId:
+                opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.a(), instr.b());
+                break;
             case OpCode::kOpJmp:
                 opcode_str = behl::format("{:<9} {}", meta.name, instr.jump_offset());
+                break;
+            case OpCode::kOpClose:
+                opcode_str = behl::format("{:<9} R{}", meta.name, instr.a());
                 break;
             case OpCode::kOpEq:
                 opcode_str = behl::format("{:<9} R{} R{}", meta.name, instr.b(), instr.c());
@@ -262,22 +271,22 @@ namespace behl
                 opcode_str = behl::format("{:<9} R{} K{}", meta.name, instr.b(), instr.c());
                 break;
             case OpCode::kOpLTImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpGeImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpLEImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpGtImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpEqImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpNeImm:
-                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.b_at_8(), instr.signed_immediate());
+                opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), instr.signed_immediate());
                 break;
             case OpCode::kOpTest:
                 opcode_str = behl::format("{:<9} R{} {}", meta.name, instr.a(), (instr.b() ? "invert" : "normal"));

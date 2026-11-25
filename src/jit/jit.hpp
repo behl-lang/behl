@@ -2,36 +2,12 @@
 
 #include "behl/export.hpp"
 #include "gc/gco_proto.hpp"
-#include "platform.hpp"
+#include "jit/jit_config.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 
 #include <cstddef>
 #include <cstdint>
-
-#if defined(_M_X64) || defined(__x86_64__)
-#    define BEHL_JIT_X86_64 1
-#    define BEHL_JIT_X86_32 0
-#elif defined(_M_IX86) || defined(__i386__)
-#    define BEHL_JIT_X86_64 0
-#    define BEHL_JIT_X86_32 1
-#else
-#    define BEHL_JIT_X86_64 0
-#    define BEHL_JIT_X86_32 0
-#endif
-
-#define BEHL_JIT_X86 (BEHL_JIT_X86_64 || BEHL_JIT_X86_32)
-
-#if defined(_M_ARM64) || defined(__aarch64__)
-#    define BEHL_JIT_AARCH64 1
-#else
-#    define BEHL_JIT_AARCH64 0
-#endif
-
-#if BEHL_JIT_X86 || BEHL_JIT_AARCH64
-#    define BEHL_JIT_SUPPORTED 1
-#else
-#    define BEHL_JIT_SUPPORTED 0
-#endif
 
 namespace behl
 {
@@ -49,14 +25,18 @@ namespace behl
     constexpr uint32_t kJitTailReturned = 0xFFFFFFFDu;
     constexpr uint32_t kJitCallPushed = 0xFFFFFFFCu;
 
+    constexpr uintptr_t kJitSetupDecline = 0;
+    constexpr uintptr_t kJitSetupError = 1;
+    constexpr uintptr_t kJitSetupPushedOther = 2;
+
     constexpr size_t kJitNestLimit = 150;
     constexpr size_t kJitMaxCallDepth = 1000000;
 
-    BEHL_API_INTERNAL bool jit_supported() noexcept;
+    bool jit_supported() noexcept;
 
-    BEHL_API_INTERNAL JitEntry jit_compile(State* S, const GCProto* proto);
+    JitEntry jit_compile(State* S, const GCProto* proto);
 
-    BEHL_API_INTERNAL void jit_release(State* S, JitEntry entry) noexcept;
+    void jit_release(State* S, JitEntry entry) noexcept;
 
     bool jit_run_or_compile(State* S, const GCProto* proto);
 

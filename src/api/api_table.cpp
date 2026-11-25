@@ -6,7 +6,10 @@
 #include "gc/gco_userdata.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
+#include "vm/vm_detail.hpp"
+#include "vm/vm_error.hpp"
 #include "vm/vm_metatable.hpp"
+#include "vm/vm_table.hpp"
 
 #include <behl/behl.hpp>
 #include <variant>
@@ -67,25 +70,7 @@ namespace behl
         auto* t = table_val.get_table();
         assert(t != nullptr);
 
-        if (key.is_integer())
-        {
-            int64_t k = key.get_integer();
-            if (k >= 0 && static_cast<size_t>(k) < t->array.size())
-            {
-                S->stack.push_back(S, t->array[static_cast<size_t>(k)]);
-                return;
-            }
-        }
-
-        auto it = t->hash.find(key);
-        if (it != t->hash.end())
-        {
-            S->stack.push_back(S, it->second);
-        }
-        else
-        {
-            push_nil(S);
-        }
+        S->stack.push_back(S, table_raw_getfield(t, key));
     }
 
     void table_rawset(State* S, int32_t idx)
@@ -117,24 +102,7 @@ namespace behl
         GCTable* t = table_val.get_table();
         assert(t != nullptr);
 
-        if (key.is_integer())
-        {
-            int64_t k = key.get_integer();
-            if (k >= 0)
-            {
-                size_t sk = static_cast<size_t>(k);
-                if (sk >= t->array.size())
-                {
-                    t->array.resize(S, sk + 1);
-                }
-
-                t->array[sk] = std::move(val);
-                return;
-            }
-        }
-
-        t->hash.insert_or_assign(S, key, val);
-        // t->hash.emplace(key, val);
+        table_raw_setfield(S, t, key, val);
     }
 
     void table_rawgetfield(State* S, int32_t idx, std::string_view k)
@@ -182,17 +150,9 @@ namespace behl
         size_t start_i = 0;
         if (!prev_key.is_nil())
         {
-            if (prev_key.is_integer())
+            if (const auto index = key_as_positive_index(prev_key); index.has_value() && *index < t->array.size())
             {
-                auto pk = prev_key.get_integer();
-                if (pk >= 0)
-                {
-                    start_i = static_cast<size_t>(pk) + 1;
-                }
-                else
-                {
-                    in_array_phase = false;
-                }
+                start_i = *index + 1;
             }
             else
             {
@@ -214,28 +174,32 @@ namespace behl
         }
 
         auto it = t->hash.begin();
-        if (!prev_key.is_nil())
+        if (!prev_key.is_nil() && !in_array_phase)
         {
-            // Try to find prev_key in hash (could be integer or non-integer)
-            auto prev_it = t->hash.find(prev_key);
-            if (prev_it != t->hash.end())
+            it = t->hash.find(prev_key);
+            if (it == t->hash.end() && prev_key.is_gcobject())
             {
-                ++prev_it;
-                it = prev_it;
+                it = t->hash.find_matching(
+                    prev_key, [&prev_key](const Value& stored) { return stored.is_dead_key_of(prev_key); });
             }
-            else if (!prev_key.is_integer())
+            if (it == t->hash.end())
             {
-                // Non-integer key not found in hash - error
-                return false;
+                raise_runtime_error(S, SourceLocation{}, "invalid key to 'next'");
             }
+            ++it;
+        }
 
-            // integer key not in hash means we just finished array part, start hash iteration
+        while (it != t->hash.end() && it->second.is_nil())
+        {
+            ++it;
         }
 
         if (it != t->hash.end())
         {
-            S->stack.push_back(S, it->first);
-            S->stack.push_back(S, it->second);
+            const Value next_key = it->first;
+            const Value next_value = it->second;
+            S->stack.push_back(S, next_key);
+            S->stack.push_back(S, next_value);
             return true;
         }
 
@@ -285,8 +249,7 @@ namespace behl
             return;
         }
 
-        const Value& table_val = S->stack[static_cast<size_t>(table_idx)];
-
+        const Value table_val = S->stack[static_cast<size_t>(table_idx)];
         if (!table_val.is_table())
         {
             pop(S, 1);
@@ -294,83 +257,10 @@ namespace behl
             return;
         }
 
-        auto* t = table_val.get_table();
-        assert(t != nullptr);
-
-        Value key = S->stack.back();
+        const Value key = S->stack.back();
+        const Value result = table_getfield_vm(S, table_val.get_table(), key);
         pop(S, 1);
-
-        // Try raw access first
-        Value result;
-        bool found = false;
-
-        if (key.is_integer())
-        {
-            int64_t k = key.get_integer();
-            if (k >= 0 && static_cast<size_t>(k) < t->array.size())
-            {
-                result = t->array[static_cast<size_t>(k)];
-                found = !result.is_nil();
-            }
-        }
-
-        if (!found)
-        {
-            auto it = t->hash.find(key);
-            if (it != t->hash.end())
-            {
-                result = it->second;
-                found = !result.is_nil();
-            }
-        }
-
-        // If found and not nil, return it
-        if (found)
-        {
-            S->stack.push_back(S, result);
-            return;
-        }
-
-        // Not found, check for __index metamethod
-        Value index_mm = metatable_get_method<MetaMethodType::kIndex>(table_val);
-
-        if (!index_mm.has_value())
-        {
-            push_nil(S);
-            return;
-        }
-
-        // If __index is a function, call it
-        if (index_mm.is_callable())
-        {
-            Value call_result = metatable_call_method_result(S, index_mm, table_val, key);
-            if (call_result.has_value())
-            {
-                S->stack.push_back(S, call_result);
-            }
-            else
-            {
-                push_nil(S);
-            }
-            return;
-        }
-
-        // If __index is a table, retry lookup in that table
-        if (index_mm.is_table())
-        {
-            S->stack.push_back(S, index_mm); // Push the __index table
-            S->stack.push_back(S, key);      // Push the key
-            table_get(S, -2);                // Recursive lookup
-            // Remove the __index table, keep the result
-            Value result_val = S->stack.back();
-            pop(S, 1);
-            pop(S, 1); // Remove __index table
-            S->stack.push_back(S, result_val);
-            return;
-        }
-
-        // __index is neither function nor table, return nil
-        push_nil(S);
+        S->stack.push_back(S, result);
     }
 
     void table_set(State* S, int32_t idx)
@@ -387,110 +277,17 @@ namespace behl
             return;
         }
 
-        Value& table_val = S->stack[static_cast<size_t>(table_idx)];
-
+        const Value table_val = S->stack[static_cast<size_t>(table_idx)];
         if (!table_val.is_table())
         {
             pop(S, 2);
             return;
         }
 
-        GCTable* t = table_val.get_table();
-        assert(t != nullptr);
-
-        Value val = S->stack.back();
-        pop(S, 1);
-        Value key = S->stack.back();
-        pop(S, 1);
-
-        // Check if key exists in the table (raw check)
-        bool exists = false;
-
-        if (key.is_integer())
-        {
-            const auto k = key.get_integer();
-            if (k >= 0 && static_cast<size_t>(k) < t->array.size())
-            {
-                if (!t->array[static_cast<size_t>(k)].is_nil())
-                {
-                    exists = true;
-                }
-            }
-        }
-
-        if (!exists)
-        {
-            auto it = t->hash.find(key);
-            if (it != t->hash.end() && !it->second.is_nil())
-            {
-                exists = true;
-            }
-        }
-
-        // If key exists, do raw set
-        if (exists)
-        {
-            if (key.is_integer())
-            {
-                const auto k = key.get_integer();
-                if (k >= 0)
-                {
-                    size_t sk = static_cast<size_t>(k);
-                    if (sk >= t->array.size())
-                    {
-                        t->array.resize(S, sk + 1);
-                    }
-                    t->array[sk] = std::move(val);
-                    return;
-                }
-            }
-            t->hash.insert_or_assign(S, key, val);
-            return;
-        }
-
-        // Key doesn't exist, check for __newindex metamethod
-        Value newindex_mm = metatable_get_method<MetaMethodType::kNewIndex>(table_val);
-
-        if (!newindex_mm.has_value())
-        {
-            // No metamethod, do raw set
-            if (key.is_integer())
-            {
-                const auto k = key.get_integer();
-                if (k >= 0)
-                {
-                    size_t sk = static_cast<size_t>(k);
-                    if (sk >= t->array.size())
-                    {
-                        t->array.resize(S, sk + 1);
-                    }
-                    t->array[sk] = std::move(val);
-                    return;
-                }
-            }
-            t->hash.insert_or_assign(S, key, val);
-            return;
-        }
-
-        // If __newindex is a function, call it
-        if (newindex_mm.is_callable())
-        {
-            metatable_call_method(S, newindex_mm, table_val, key, val);
-            return;
-        }
-
-        // If __newindex is a table, retry set in that table
-        if (newindex_mm.is_table())
-        {
-            S->stack.push_back(S, newindex_mm); // Push the __newindex table
-            S->stack.push_back(S, key);         // Push the key
-            S->stack.push_back(S, val);         // Push the value
-            table_set(S, -3);                   // Recursive set
-            pop(S, 1);                          // Remove the __newindex table
-            return;
-        }
-
-        // __newindex is neither function nor table, ignore
+        const Value val = S->stack.back();
+        const Value key = S->stack[S->stack.size() - 2];
+        table_setfield_vm(S, table_val.get_table(), key, val);
+        pop(S, 2);
     }
 
     void table_getfield(State* S, int32_t idx, std::string_view k)
@@ -526,7 +323,7 @@ namespace behl
 
         // Check for __len metamethod
         ptrdiff_t table_idx = resolve_index(S, idx);
-        const Value& table_val = S->stack[static_cast<size_t>(table_idx)];
+        const Value table_val = S->stack[static_cast<size_t>(table_idx)];
         Value len_mm = metatable_get_method<MetaMethodType::kLen>(table_val);
 
         if (len_mm.is_callable())
@@ -614,10 +411,18 @@ namespace behl
 
         if (target.is_table())
         {
+            if (metatable != nullptr)
+            {
+                gc_barrier(S, target.get_table(), Value(metatable));
+            }
             target.get_table()->metatable = metatable;
         }
         else if (target.is_userdata())
         {
+            if (metatable != nullptr)
+            {
+                gc_barrier(S, target.get_userdata(), Value(metatable));
+            }
             target.get_userdata()->metatable = metatable;
         }
     }

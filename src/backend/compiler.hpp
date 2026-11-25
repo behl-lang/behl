@@ -10,6 +10,6 @@ namespace behl
     struct Proto;
     struct GCProto;
 
-    BEHL_API_INTERNAL GCProto* compile(State* state, const AstProgram* program, std::string_view source_name = "<script>");
+    GCProto* compile(State* state, const AstProgram* program, std::string_view source_name = "<script>");
 
 } // namespace behl

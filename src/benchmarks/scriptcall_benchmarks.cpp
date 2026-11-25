@@ -8,12 +8,12 @@ static void BM_ScriptCall_SimpleReturn(benchmark::State& state)
 {
     State* S = new_state();
     std::string_view code = "return 42;";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1); // Duplicate function on stack
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1); // Pop result
     }
 
@@ -27,12 +27,12 @@ static void BM_ScriptCall_Arithmetic(benchmark::State& state)
 {
     State* S = new_state();
     std::string_view code = "return 10 + 20 * 30 - 5 / 2;";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -51,12 +51,12 @@ static void BM_ScriptCall_FunctionCall(benchmark::State& state)
         }
         return add(10, 20);
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -79,12 +79,12 @@ static void BM_ScriptCall_Factorial(benchmark::State& state)
         }
         return factorial(10);
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -104,12 +104,12 @@ static void BM_ScriptCall_ForLoop(benchmark::State& state)
         }
         return sum;
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -130,12 +130,12 @@ static void BM_ScriptCall_TableOps(benchmark::State& state)
         }
         return sum;
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -160,12 +160,12 @@ static void BM_ScriptCall_NestedCalls(benchmark::State& state)
         }
         return outer(5);
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -187,12 +187,12 @@ static void BM_ScriptCall_Closure(benchmark::State& state)
         let add5 = makeAdder(5);
         return add5(10);
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -214,12 +214,12 @@ static void BM_ScriptCall_WhileLoop(benchmark::State& state)
         }
         return sum;
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -239,12 +239,12 @@ static void BM_ScriptCall_StringConcat(benchmark::State& state)
         }
         return str;
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -266,12 +266,12 @@ static void BM_ScriptCall_TableConstruct(benchmark::State& state)
         };
         return t["value"];
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 
@@ -290,15 +290,15 @@ static void BM_ScriptCall_WithArguments(benchmark::State& state)
         }
         return multiply;
     )";
-    load_string(S, code);
-    call(S, 0, 1); // Load the function
+    static_cast<void>(load_string(S, code));
+    static_cast<void>(call(S, 0, 1)); // Load the function
 
     for (auto _ : state)
     {
         dup(S, -1); // Duplicate the multiply function
         push_integer(S, 42);
         push_integer(S, 7);
-        call(S, 2, 1);
+        static_cast<void>(call(S, 2, 1));
         pop(S, 1); // Pop result
     }
 
@@ -320,12 +320,12 @@ static void BM_ScriptCall_Fibonacci(benchmark::State& state)
         }
         return fib(15);
     )";
-    load_string(S, code);
+    static_cast<void>(load_string(S, code));
 
     for (auto _ : state)
     {
         dup(S, -1);
-        call(S, 0, 1);
+        static_cast<void>(call(S, 0, 1));
         pop(S, 1);
     }
 

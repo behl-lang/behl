@@ -133,23 +133,25 @@ let mt = {
 - `__lt` - Less than `<`
 - `__le` - Less or equal `<=`
 
-**Note**: `>` and `>=` are derived from `<` and `<=`.
+**Note**: `>` and `>=` are derived by negation, not by swapping operands. `a > b` is evaluated as `!__le(a, b)` and `a >= b` as `!__lt(a, b)`, so the metamethod always receives its operands in source order. This means `<` and `>=` both need `__lt`, while `<=` and `>` both need `__le`, in every context.
 
 ### Index Metamethods
 
 Control table access:
 
 ```cpp
+const table = import("table");
+
 let mt = {
     // Called when reading missing key
-    __index = function(table, key) {
+    __index = function(t, key) {
         return "default";
     },
     
     // Called when writing new key
-    __newindex = function(table, key, value) {
+    __newindex = function(t, key, value) {
         print("Setting " + key + " = " + tostring(value));
-        rawset(table, key, value);  // Actually set the value
+        table.rawset(t, key, value);  // Actually set the value
     }
 };
 
@@ -214,8 +216,10 @@ print(t(100));  // "Called with 100"
 ### Other Metamethods
 
 - `__tostring` - String conversion via `tostring()`
-- `__gc` - Garbage collection finalizer (cleanup when table is collected)
+- `__gc` - Garbage collection finalizer, **userdata only**
 - `__pairs` - Custom iterator for `for...in` loops
+
+**Note**: the collector only looks up `__gc` on userdata objects. Putting `__gc` in a table's metatable has no effect, it is never called when the table is collected.
 
 ---
 
@@ -306,42 +310,46 @@ print(obj.baseMethod(obj));     // "Base" (walks chain)
 
 ## Raw Table Operations
 
-Bypass metamethods with raw operations:
+Bypass metamethods with raw operations. `rawget` and `rawset` live in the `table` module and need `import("table")`. Only `rawlen` is a global.
 
-### `rawget(table, key)`
+### `table.rawget(t, key)`
 
 Get value without invoking `__index`:
 
 ```cpp
+const table = import("table");
+
 let t = { x = 10 };
 setmetatable(t, {
     __index = function() { return "default"; }
 });
 
-print(t["missing"]);           // "default" (via __index)
-print(rawget(t, "missing"));   // nil (bypasses __index)
+print(t["missing"]);              // "default" (via __index)
+print(table.rawget(t, "missing")); // nil (bypasses __index)
 ```
 
-### `rawset(table, key, value)`
+### `table.rawset(t, key, value)`
 
 Set value without invoking `__newindex`:
 
 ```cpp
+const table = import("table");
+
 let t = {};
 setmetatable(t, {
-    __newindex = function(table, key, value) {
+    __newindex = function(tbl, key, value) {
         print("Blocked: " + key);
     }
 });
 
-t["key1"] = 1;              // Prints "Blocked: key1", doesn't set
-rawset(t, "key2", 2);       // Sets directly, no print
-print(rawget(t, "key2"));   // 2
+t["key1"] = 1;                    // Prints "Blocked: key1", doesn't set
+table.rawset(t, "key2", 2);       // Sets directly, no print
+print(table.rawget(t, "key2"));   // 2
 ```
 
-### `rawlen(table)`
+### `rawlen(t)`
 
-Get length without invoking `__len`:
+Get length without invoking `__len`. This one is a global, and `table.rawlen` is the same function:
 
 ```cpp
 let t = {10, 20, 30};
@@ -396,13 +404,15 @@ print(settings.retries);  // 3 (default value)
 ### Property Tracking
 
 ```cpp
+const table = import("table");
+
 function makeTracked(t) {
     let access_log = {};
     
     let mt = {
-        __index = function(table, key) {
-            access_log[key] = (access_log[key] or 0) + 1;
-            return rawget(t, key);
+        __index = function(proxy, key) {
+            access_log[key] = (access_log[key] || 0) + 1;
+            return table.rawget(t, key);
         }
     };
     
@@ -430,20 +440,22 @@ print(log["y"]);  // 1
 3. **Avoid complex `__index` chains** - Deep inheritance can hurt performance
 4. **Don't overuse metamethods** - Use only when the abstraction adds value
 5. **Test metatable edge cases** - Especially with `nil` values and missing keys
-6. **Use `rawset` in `__newindex`** - Prevent infinite recursion
+6. **Use `table.rawset` in `__newindex`** - Prevent infinite recursion
 
 ```cpp
+const table = import("table");
+
 // Bad: Infinite recursion
 let mt = {
-    __newindex = function(table, key, value) {
-        table[key] = value;  // Triggers __newindex again!
+    __newindex = function(t, key, value) {
+        t[key] = value;  // Triggers __newindex again!
     }
 };
 
-// Good: Use rawset
+// Good: Use table.rawset
 let mt = {
-    __newindex = function(table, key, value) {
-        rawset(table, key, value);  // Direct write
+    __newindex = function(t, key, value) {
+        table.rawset(t, key, value);  // Direct write
     }
 };
 ```

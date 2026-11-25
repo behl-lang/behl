@@ -1,9 +1,12 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
 using namespace behl;
 
-class PinningTest : public ::testing::Test
+class PinningTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S;
@@ -11,6 +14,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         load_stdlib(S);
 
         ASSERT_NE(S, nullptr);
@@ -23,7 +27,7 @@ protected:
     }
 };
 
-TEST_F(PinningTest, PinInteger)
+TEST_P(PinningTest, PinInteger)
 {
     push_integer(S, 42);
     const auto handle = pin(S);
@@ -37,7 +41,7 @@ TEST_F(PinningTest, PinInteger)
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, PinString)
+TEST_P(PinningTest, PinString)
 {
     push_string(S, "hello world");
     const auto handle = pin(S);
@@ -51,7 +55,7 @@ TEST_F(PinningTest, PinString)
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, PinTable)
+TEST_P(PinningTest, PinTable)
 {
     table_new(S);
     push_string(S, "key");
@@ -73,7 +77,7 @@ TEST_F(PinningTest, PinTable)
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, PinFunction)
+TEST_P(PinningTest, PinFunction)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -82,8 +86,8 @@ TEST_F(PinningTest, PinFunction)
         return test;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     const auto handle = pin(S);
     ASSERT_EQ(get_top(S), 0);
@@ -92,14 +96,14 @@ TEST_F(PinningTest, PinFunction)
     ASSERT_EQ(get_top(S), 1);
     ASSERT_EQ(type(S, -1), Type::kClosure);
 
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(to_integer(S, -1), 123);
 
     pop(S, 1);
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, MultiplePins)
+TEST_P(PinningTest, MultiplePins)
 {
     push_integer(S, 10);
     const auto handle1 = pin(S);
@@ -129,7 +133,7 @@ TEST_F(PinningTest, MultiplePins)
     unpin(S, handle3);
 }
 
-TEST_F(PinningTest, PinSurvivesGC)
+TEST_P(PinningTest, PinSurvivesGC)
 {
     table_new(S);
     push_string(S, "data");
@@ -152,7 +156,7 @@ TEST_F(PinningTest, PinSurvivesGC)
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, UnpinAllowsGC)
+TEST_P(PinningTest, UnpinAllowsGC)
 {
     std::string large_str(1000, 'x');
     push_string(S, large_str);
@@ -165,7 +169,7 @@ TEST_F(PinningTest, UnpinAllowsGC)
     gc_collect(S);
 }
 
-TEST_F(PinningTest, PushMultipleTimes)
+TEST_P(PinningTest, PushMultipleTimes)
 {
     push_integer(S, 999);
     const auto handle = pin(S);
@@ -183,7 +187,7 @@ TEST_F(PinningTest, PushMultipleTimes)
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, PinNil)
+TEST_P(PinningTest, PinNil)
 {
     push_nil(S);
     const auto handle = pin(S);
@@ -195,7 +199,7 @@ TEST_F(PinningTest, PinNil)
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, PinBoolean)
+TEST_P(PinningTest, PinBoolean)
 {
     push_boolean(S, true);
     const auto handle = pin(S);
@@ -208,7 +212,7 @@ TEST_F(PinningTest, PinBoolean)
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, PinClosure)
+TEST_P(PinningTest, PinClosure)
 {
     constexpr std::string_view code = R"(
         let x = 100;
@@ -220,21 +224,21 @@ TEST_F(PinningTest, PinClosure)
         return make_closure();
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     const auto handle = pin(S);
     ASSERT_EQ(get_top(S), 0);
 
     pinned_push(S, handle);
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(to_integer(S, -1), 100);
 
     pop(S, 1);
     unpin(S, handle);
 }
 
-TEST_F(PinningTest, StressTestManyPins)
+TEST_P(PinningTest, StressTestManyPins)
 {
     constexpr int kNumPins = 1000;
 
@@ -264,7 +268,7 @@ TEST_F(PinningTest, StressTestManyPins)
     }
 }
 
-TEST_F(PinningTest, PinInCFunction)
+TEST_P(PinningTest, PinInCFunction)
 {
     static PinHandle callback_handle = PinHandle::kInvalid;
 
@@ -283,7 +287,10 @@ TEST_F(PinningTest, PinInCFunction)
             error(s, "No callback registered");
         }
         pinned_push(s, callback_handle);
-        call(s, 0, 1);
+        if (call(s, 0, 1) < 0)
+        {
+            error_value(s);
+        }
 
         EXPECT_EQ(type(s, -1), Type::kInteger);
         EXPECT_EQ(to_integer(s, -1), 42);
@@ -302,8 +309,8 @@ TEST_F(PinningTest, PinInCFunction)
         return invoke_callback();
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(to_integer(S, -1), 42);
 
     if (callback_handle != PinHandle::kInvalid)
@@ -313,7 +320,7 @@ TEST_F(PinningTest, PinInCFunction)
     }
 }
 
-TEST_F(PinningTest, PinTableWithMetatable)
+TEST_P(PinningTest, PinTableWithMetatable)
 {
     constexpr std::string_view code = R"(
         let t = {};
@@ -326,8 +333,8 @@ TEST_F(PinningTest, PinTableWithMetatable)
         return t;
     )";
 
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
 
     const auto handle = pin(S);
 
@@ -341,3 +348,6 @@ TEST_F(PinningTest, PinTableWithMetatable)
     pop(S, 2);
     unpin(S, handle);
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, PinningTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

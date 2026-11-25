@@ -5,6 +5,7 @@
 #include "gc/gco_table.hpp"
 #include "state.hpp"
 #include "vm/value.hpp"
+#include "vm/vm_table.hpp"
 
 #include <cassert>
 #include <variant>
@@ -25,7 +26,7 @@ namespace behl
 
         if (module_def.funcs.empty())
         {
-            error(S, "create_module: function array is empty");
+            raise_runtime_error(S, SourceLocation{}, "create_module: function array is empty");
         }
 
         // Create module table
@@ -69,7 +70,7 @@ namespace behl
         Value module_table = S->stack.back();
         if (!module_table.is_table())
         {
-            error(S, "create_module: internal error - expected table on stack");
+            raise_runtime_error(S, SourceLocation{}, "create_module: internal error - expected table on stack");
         }
 
         // Register in module cache so it can be imported
@@ -100,7 +101,7 @@ namespace behl
         auto* key_obj = gc_new_string(S, name);
 
         Value key(key_obj);
-        table->hash.insert_or_assign(S, key, value);
+        table_setfield_vm(S, table, key, value);
 
         S->stack.pop_back();
     }
@@ -118,19 +119,12 @@ namespace behl
         const Value& globals = S->globals_table;
         assert(globals.is_table() && "Globals table should be a TableData");
 
-        const auto* table = globals.get_table();
+        auto* table = globals.get_table();
         assert(table != nullptr);
 
         auto* key_obj = gc_new_string(S, name);
-        auto it = table->hash.find(Value(key_obj));
-        if (it != table->hash.end())
-        {
-            S->stack.push_back(S, it->second);
-        }
-        else
-        {
-            S->stack.push_back(S, Value{});
-        }
+        const Value result = table_getfield_vm(S, table, Value(key_obj));
+        S->stack.push_back(S, result);
     }
 
 } // namespace behl

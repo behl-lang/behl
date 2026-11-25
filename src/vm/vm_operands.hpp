@@ -2,7 +2,7 @@
 
 #include "gc/gc.hpp"
 #include "gc/gco_proto.hpp"
-#include "platform.hpp"
+#include "platform/platform.hpp"
 #include "state.hpp"
 #include "value.hpp"
 #include "vm_detail.hpp"

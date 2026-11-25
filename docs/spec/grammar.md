@@ -153,7 +153,7 @@ operator. Postfix `[] . : ()` bind tightest.
 
 ## 4. Differences from Lua's grammar
 
-For readers coming from the Lua reference grammar above, behl differs as follows:
+For readers coming from the Lua reference grammar above, Behl differs as follows:
 
 - **Blocks** are `{ ... }`, not `do/then/end`; control-flow conditions are parenthesized.
 - **No** `repeat`/`until`, `goto`/label, `global`, or `<attrib>` attributes.

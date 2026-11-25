@@ -1,12 +1,11 @@
 #pragma once
 
+#include "common/vector.hpp"
 #include "jit/jit.hpp"
 #include "jit/jit_helpers.hpp"
 #include "vm/bytecode.hpp"
 
 #include <behl/types.hpp>
-#include "common/vector.hpp"
-
 #include <cstdint>
 
 namespace behl
@@ -56,6 +55,19 @@ namespace behl
         kBranchTruthy,
         kBranchVarEqU32,
         kLoadFramePc,
+        kTailJumpNative,
+        kCallFast,
+        kFramePushFast,
+        kTailFrameFast,
+        kReturnFast,
+        kReturnSelfSite,
+        kReturnDispatch,
+        kTableGetInt,
+        kTableSetInt,
+        kBufferGetInt,
+        kBufferSetInt,
+        kTypeOf,
+        kTypeId,
         kHelperCall,
         kSyncFrame,
         kReturnResult,

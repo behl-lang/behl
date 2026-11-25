@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform.hpp"
+#include "platform/platform.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -20,36 +20,25 @@ namespace behl
         { t.size() } -> std::convertible_to<size_t>;
     };
 
-    struct StringHash
+    struct StringHash32
     {
         using is_transparent = void;
 
+        static constexpr uint32_t kFnvOffset = 2166136261U;
+        static constexpr uint32_t kFnvPrime = 16777619U;
+
         template<StringViewLike T>
-        constexpr size_t operator()(T&& str) const noexcept
+        constexpr uint32_t operator()(T&& str) const noexcept
         {
             // FNV-1a hash
-            size_t FNV_OFFSET;
-            size_t FNV_PRIME;
-
-            if constexpr (sizeof(size_t) == 8)
-            {
-                FNV_OFFSET = 14695981039346656037ULL;
-                FNV_PRIME = 1099511628211ULL;
-            }
-            else
-            {
-                FNV_OFFSET = 2166136261U;
-                FNV_PRIME = 16777619U;
-            }
-
             const char* ptr = str.data();
             const size_t len = str.size();
 
-            size_t h = FNV_OFFSET;
+            auto h = kFnvOffset;
             for (size_t i = 0; i < len; ++i)
             {
                 h ^= static_cast<unsigned char>(ptr[i]);
-                h *= FNV_PRIME;
+                h *= kFnvPrime;
             }
 
             return h;
@@ -68,6 +57,10 @@ namespace behl
             if (lhs_size != rhs_size)
             {
                 return false;
+            }
+            if (lhs_size == 0)
+            {
+                return true;
             }
             return std::memcmp(lhs.data(), rhs.data(), lhs_size) == 0;
         }

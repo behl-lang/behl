@@ -1,7 +1,10 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
-class RecursionTest : public ::testing::Test
+class RecursionTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -9,6 +12,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         ASSERT_NE(S, nullptr);
         behl::load_stdlib(S);
     }
@@ -19,7 +23,7 @@ protected:
     }
 };
 
-TEST_F(RecursionTest, BasicFunctionCall)
+TEST_P(RecursionTest, BasicFunctionCall)
 {
     constexpr std::string_view code = R"(
         function test() {
@@ -27,13 +31,13 @@ TEST_F(RecursionTest, BasicFunctionCall)
         }
         return test()
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(RecursionTest, FactorialRecursion)
+TEST_P(RecursionTest, FactorialRecursion)
 {
     constexpr std::string_view code = R"(
         function fact(n) {
@@ -46,13 +50,13 @@ TEST_F(RecursionTest, FactorialRecursion)
         }
         return fact(5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 120);
 }
 
-TEST_F(RecursionTest, FibonacciRecursion)
+TEST_P(RecursionTest, FibonacciRecursion)
 {
     constexpr std::string_view code = R"(
         function fib(n) {
@@ -67,13 +71,13 @@ TEST_F(RecursionTest, FibonacciRecursion)
         }
         return fib(10)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 55);
 }
 
-TEST_F(RecursionTest, TailRecursiveCountdown)
+TEST_P(RecursionTest, TailRecursiveCountdown)
 {
     constexpr std::string_view code = R"(
         function countdown(n) {
@@ -85,13 +89,13 @@ TEST_F(RecursionTest, TailRecursiveCountdown)
         }
         return countdown(100)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 42);
 }
 
-TEST_F(RecursionTest, TailCallMultipleParameters)
+TEST_P(RecursionTest, TailCallMultipleParameters)
 {
     constexpr std::string_view code = R"(
         function test(a, b) {
@@ -102,13 +106,13 @@ TEST_F(RecursionTest, TailCallMultipleParameters)
         }
         return test(0, 0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 20);
 }
 
-TEST_F(RecursionTest, TailCallThreeParameters)
+TEST_P(RecursionTest, TailCallThreeParameters)
 {
     constexpr std::string_view code = R"(
         function sum3(a, b, c) {
@@ -119,13 +123,13 @@ TEST_F(RecursionTest, TailCallThreeParameters)
         }
         return sum3(5, 0, 0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 15);
 }
 
-TEST_F(RecursionTest, TailCallComplexExpressions)
+TEST_P(RecursionTest, TailCallComplexExpressions)
 {
     constexpr std::string_view code = R"(
         function compute(x, y, z) {
@@ -136,14 +140,14 @@ TEST_F(RecursionTest, TailCallComplexExpressions)
         }
         return compute(0, 1, 1)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     ASSERT_EQ(behl::to_integer(S, -1), 1001);
 }
 
-TEST_F(RecursionTest, TailCallDeepRecursion)
+TEST_P(RecursionTest, TailCallDeepRecursion)
 {
     constexpr std::string_view code = R"(
         function deep(n, acc) {
@@ -154,19 +158,19 @@ TEST_F(RecursionTest, TailCallDeepRecursion)
         }
         return deep(1000, 0)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::to_integer(S, -1), 1000);
 }
 
-TEST_F(RecursionTest, TailCallToNativeFunction)
+TEST_P(RecursionTest, TailCallToNativeFunction)
 {
-    const char* check_code = R"(
+    constexpr std::string_view check_code = R"(
         return print
     )";
-    ASSERT_NO_THROW(behl::load_string(S, check_code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, check_code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kCFunction);
     behl::pop(S, 1);
@@ -180,13 +184,13 @@ TEST_F(RecursionTest, TailCallToNativeFunction)
         }
         return wrapper(3)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
     ASSERT_EQ(behl::type(S, -1), behl::Type::kNil);
 }
 
-TEST_F(RecursionTest, TailCallToNativeFunctionWithReturn)
+TEST_P(RecursionTest, TailCallToNativeFunctionWithReturn)
 {
     constexpr std::string_view code = R"(
         function get_type(n) {
@@ -197,15 +201,15 @@ TEST_F(RecursionTest, TailCallToNativeFunctionWithReturn)
         }
         return get_type(5)
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_EQ(behl::get_top(S), 1);
 
     const auto result = behl::to_string(S, -1);
     ASSERT_EQ(result, "integer");
 }
 
-TEST_F(RecursionTest, ComprehensiveHandlerCoverageDeep)
+TEST_P(RecursionTest, ComprehensiveHandlerCoverageDeep)
 {
     constexpr std::string_view code = R"(
         function test_all_ops(depth) {
@@ -266,7 +270,26 @@ TEST_F(RecursionTest, ComprehensiveHandlerCoverageDeep)
         
         return result50 == 7251 && result100 == 14501 && result200 == 29001;
     )";
-    ASSERT_NO_THROW(load_string(S, code));
-    ASSERT_NO_THROW(call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_TRUE(to_boolean(S, -1));
 }
+
+TEST_P(RecursionTest, DeepTailRecursion30000)
+{
+    constexpr std::string_view code = R"(
+        function loop(n, acc) {
+            if (n == 0) {
+                return acc
+            }
+            return loop(n - 1, acc + 1)
+        }
+        return loop(30000, 0)
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(to_integer(S, -1), 30000);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, RecursionTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

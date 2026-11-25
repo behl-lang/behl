@@ -8,7 +8,7 @@ nav_order: 2
 # Stack Operations
 {: .no_toc }
 
-Manipulate values on the behl stack.
+Manipulate values on the Behl stack.
 {: .fs-6 .fw-300 }
 
 ## Table of contents
@@ -21,17 +21,17 @@ Manipulate values on the behl stack.
 
 ## Overview
 
-The behl API uses a stack-based model similar to Lua. Values are manipulated on the stack using integer indices:
-- **Positive indices** (0, 1, 2, ...) count from bottom
+The Behl API uses a stack-based model similar to Lua. Values are manipulated on the stack using integer indices:
+- **Non-negative indices** (0, 1, 2, ...) count up from the current frame base, so inside a C function index `0` is the first argument
 - **Negative indices** (-1, -2, -3, ...) count from top
 - `-1` is the top of the stack
 
-**Stack diagram:**
+**Stack diagram, inside a C function called with two arguments that has pushed two more values:**
 ```
  4  |  value  |  <- top (index -1 or 3)
  3  |  value  |  <- index -2 or 2
- 2  |  value  |  <- index -3 or 1
- 1  |  value  |  <- bottom (index -4 or 0)
+ 2  |  arg2   |  <- index -3 or 1
+ 1  |  arg1   |  <- frame base (index -4 or 0)
 ```
 
 ---
@@ -174,6 +174,7 @@ if (t == behl::Type::kInteger) {
 - `Type::kTable`
 - `Type::kClosure` / `Type::kCFunction`
 - `Type::kUserdata`
+- `Type::kBuffer`
 
 ### `type_name(Type)` / `value_typename(State*, int32_t)`
 
@@ -220,7 +221,7 @@ std::string_view str = behl::to_string(S, -1);
 
 ## Type Checking
 
-These functions throw `TypeError` if the value is not of the expected type.
+These functions are meant to be called from C functions that Behl called. If the value is not of the expected type they raise an error with a message such as `TypeError: bad argument #1 (expected integer, got string)` and do not return. The surrounding `behl::call` or script `pcall` reports the error.
 
 ### `check_type(State*, int32_t, Type)`
 
@@ -228,7 +229,7 @@ These functions throw `TypeError` if the value is not of the expected type.
 behl::check_type(S, 0, behl::Type::kInteger);
 ```
 
-**Throws:** `TypeError` with descriptive message if type doesn't match.
+**Raises:** an error with a descriptive message if type doesn't match.
 
 ### `check_integer(State*, int32_t)`
 
@@ -237,7 +238,7 @@ behl::Integer n = behl::check_integer(S, 0);
 ```
 
 **Returns:** The integer value.
-**Throws:** `TypeError` if not an integer.
+**Raises:** an error if not an integer.
 
 ### `check_number(State*, int32_t)`
 
@@ -246,7 +247,7 @@ behl::FP f = behl::check_number(S, 0);
 ```
 
 **Returns:** The number value.
-**Throws:** `TypeError` if not a number.
+**Raises:** an error if not a number.
 
 ### `check_string(State*, int32_t)`
 
@@ -255,7 +256,7 @@ std::string_view s = behl::check_string(S, 0);
 ```
 
 **Returns:** The string value.
-**Throws:** `TypeError` if not a string.
+**Raises:** an error if not a string.
 
 ### `check_boolean(State*, int32_t)`
 
@@ -264,7 +265,7 @@ bool b = behl::check_boolean(S, 0);
 ```
 
 **Returns:** The boolean value.
-**Throws:** `TypeError` if not a boolean.
+**Raises:** an error if not a boolean.
 
 ---
 

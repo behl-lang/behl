@@ -20,6 +20,6 @@ namespace behl
     void truncate_call_frames(State* S, size_t count);
 
     // Debug utilities - internal version returns String
-    std::string build_stacktrace_internal(State* S);
+    GCString* build_stacktrace_internal(State* S);
 
 } // namespace behl

@@ -55,8 +55,8 @@ namespace
 
                 const auto instructions = static_cast<double>(proto->code.size());
                 state.counters["bytecodes"] = instructions;
-                state.counters["bytecodes/s"] =
-                    benchmark::Counter(static_cast<double>(state.iterations()) * instructions, benchmark::Counter::kIsRate);
+                state.counters["bytecodes/s"] = benchmark::Counter(
+                    static_cast<double>(state.iterations()) * instructions, benchmark::Counter::kIsRate);
             }
         }
         close(S);

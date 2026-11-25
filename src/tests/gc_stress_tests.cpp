@@ -1,15 +1,19 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 
 namespace behl
 {
-    class GCStressTest : public ::testing::Test
+    class GCStressTest : public ::testing::TestWithParam<bool>
     {
     protected:
         State* S;
         void SetUp() override
         {
             S = new_state();
+            S->jit_enabled = GetParam();
             load_stdlib(S);
         }
         void TearDown() override
@@ -18,7 +22,7 @@ namespace behl
         }
     };
 
-    TEST_F(GCStressTest, AllocateManyTables)
+    TEST_P(GCStressTest, AllocateManyTables)
     {
         constexpr std::string_view code = R"(
             let count = 0;
@@ -29,13 +33,13 @@ namespace behl
             return count;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(type(S, -1), Type::kInteger);
         EXPECT_EQ(to_integer(S, -1), 1000);
     }
 
-    TEST_F(GCStressTest, AllocateManyStrings)
+    TEST_P(GCStressTest, AllocateManyStrings)
     {
         constexpr std::string_view code = R"(
             let count = 0;
@@ -46,13 +50,13 @@ namespace behl
             return count;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(type(S, -1), Type::kInteger);
         EXPECT_EQ(to_integer(S, -1), 500);
     }
 
-    TEST_F(GCStressTest, NestedTableCreation)
+    TEST_P(GCStressTest, NestedTableCreation)
     {
         constexpr std::string_view code = R"(
             function createNested(depth) {
@@ -65,12 +69,12 @@ namespace behl
             return createNested(20);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(type(S, -1), Type::kTable);
     }
 
-    TEST_F(GCStressTest, TableChurnWithGC)
+    TEST_P(GCStressTest, TableChurnWithGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -89,12 +93,12 @@ namespace behl
             return after <= before + 5;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, ClosureRetentionAcrossGC)
+    TEST_P(GCStressTest, ClosureRetentionAcrossGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -120,12 +124,12 @@ namespace behl
             return v1 == 1 && v2 == 101;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, GlobalTablesNotCollected)
+    TEST_P(GCStressTest, GlobalTablesNotCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -140,12 +144,12 @@ namespace behl
             return global_table[0] == 1 && global_table[4] == 5;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, LargeTableArray)
+    TEST_P(GCStressTest, LargeTableArray)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -159,12 +163,12 @@ namespace behl
             return big[0] == 0 && big[10] == 100 && big[999] == 998001;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, IncrementalGCSteps)
+    TEST_P(GCStressTest, IncrementalGCSteps)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -185,12 +189,12 @@ namespace behl
             return after_steps <= after_alloc;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, CircularReferences)
+    TEST_P(GCStressTest, CircularReferences)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -214,12 +218,12 @@ namespace behl
             return after <= before + 5;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, MixedAllocationPattern)
+    TEST_P(GCStressTest, MixedAllocationPattern)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -240,12 +244,12 @@ namespace behl
             return keepers[0][0] == 0 && keepers[5][0] == 50;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, GCThresholdAdjustment)
+    TEST_P(GCStressTest, GCThresholdAdjustment)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -263,12 +267,12 @@ namespace behl
             return new_threshold == 10;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, DeepRecursionWithAllocation)
+    TEST_P(GCStressTest, DeepRecursionWithAllocation)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -286,12 +290,12 @@ namespace behl
             return result["base"] == true;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, TableMetadataPreservation)
+    TEST_P(GCStressTest, TableMetadataPreservation)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -309,12 +313,12 @@ namespace behl
             return data["key0"] == 0 && data["key50"] == 2500 && data["key99"] == 9801;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, FreePoolReuse)
+    TEST_P(GCStressTest, FreePoolReuse)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -328,12 +332,12 @@ namespace behl
             return true;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCStressTest, GCPhaseCycle)
+    TEST_P(GCStressTest, GCPhaseCycle)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -352,9 +356,12 @@ namespace behl
             return phase3 == "idle";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
+
+    INSTANTIATE_TEST_SUITE_P(Mode, GCStressTest, ::testing::Bool(),
+        [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
 } // namespace behl

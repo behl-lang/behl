@@ -84,24 +84,20 @@ if (ptr != nullptr) {
 
 ### `check_userdata(State*, int32_t, uint32_t)`
 
-Type-safe retrieval that validates the UID and throws `TypeError` if wrong type.
+Type-safe retrieval that validates the UID. Call it from a C function that Behl called; if the check fails it raises an error and does not return.
 
 ```cpp
-// Throws if not userdata or UID mismatch
+// Raises an error if not userdata or UID mismatch
 FileHandle* handle = static_cast<FileHandle*>(
     behl::check_userdata(S, 0, FileHandle_UID)
 );
 ```
 
-**Error handling:**
-```cpp
-try {
-    void* ptr = behl::check_userdata(S, 0, FileHandle_UID);
-    FileHandle* handle = static_cast<FileHandle*>(ptr);
-} catch (const behl::TypeError& e) {
-    // Handle error: "bad argument #1 (expected userdata, got string)"
-}
-```
+**Error messages:**
+- Not userdata: `TypeError: bad argument #1 (expected userdata, got string)`
+- Wrong UID: `RuntimeError: Type mismatch: userdata uid does not match expected type`
+
+The error is reported by the surrounding `behl::call` (as `behl::kErrorRuntime` with the message on the stack) or by a script-level `pcall`. There is nothing to catch in the C function itself. To handle a wrong type without raising, test with `behl::userdata_get_uid` first.
 
 **Use case:** Always use in API functions for type safety.
 
@@ -144,6 +140,8 @@ struct FileHandle {
 
 constexpr uint32_t FileHandle_UID = behl::make_uid("FileHandle");
 
+static int file_finalizer(behl::State* S);
+
 // Create a new file handle
 static int file_open(behl::State* S) {
     auto filename = behl::check_string(S, 0);
@@ -165,8 +163,8 @@ static int file_open(behl::State* S) {
     // Set up finalizer metatable (for automatic cleanup)
     behl::table_new(S);  // Create metatable
     behl::push_cfunction(S, file_finalizer);
-    behl::table_rawset_field(S, -2, "__gc");
-    behl::set_metatable(S, -2);  // Attach to userdata
+    behl::table_rawsetfield(S, -2, "__gc");
+    behl::metatable_set(S, -2);  // Attach to userdata
     
     return 1;  // Return the userdata
 }
@@ -247,6 +245,8 @@ file_read(t);  // TypeError: bad argument #1 (expected userdata, got table)
 Userdata can have metatables for operator overloading and custom behavior:
 
 ```cpp
+#include <format>
+
 // Vector2D userdata
 struct Vector2D {
     double x, y;
@@ -270,8 +270,8 @@ static int vec2_add(behl::State* S) {
     result->y = a->y + b->y;
     
     // Copy metatable from first operand
-    behl::get_metatable(S, 0);
-    behl::set_metatable(S, -2);
+    behl::metatable_get(S, 0);
+    behl::metatable_set(S, -2);
     
     return 1;
 }
@@ -281,26 +281,26 @@ static int vec2_tostring(behl::State* S) {
     Vector2D* v = static_cast<Vector2D*>(
         behl::check_userdata(S, 0, Vector2D_UID)
     );
-    std::string str = behl::format("Vector2D({}, {})", v->x, v->y);
+    std::string str = std::format("Vector2D({}, {})", v->x, v->y);
     behl::push_string(S, str);
     return 1;
 }
 
 // Create and store metatable
 void create_vector2d_metatable(behl::State* S) {
-    // Create metatable
-    behl::table_new(S);
+    // Create a named metatable, pushed onto the stack
+    behl::metatable_new(S, "Vector2D_mt");
     
     // __add metamethod
     behl::push_cfunction(S, vec2_add);
-    behl::table_rawset_field(S, -2, "__add");
+    behl::table_rawsetfield(S, -2, "__add");
     
     // __tostring metamethod
     behl::push_cfunction(S, vec2_tostring);
-    behl::table_rawset_field(S, -2, "__tostring");
+    behl::table_rawsetfield(S, -2, "__tostring");
     
-    // Store in registry for reuse
-    behl::table_rawset_field(S, behl::REGISTRY_INDEX, "Vector2D_mt");
+    // Done configuring, drop it from the stack, the name keeps it reachable
+    behl::pop(S, 1);
 }
 
 // Constructor
@@ -314,8 +314,8 @@ static int vec2_new(behl::State* S) {
     v->y = y;
     
     // Attach metatable
-    behl::table_rawget_field(S, behl::REGISTRY_INDEX, "Vector2D_mt");
-    behl::set_metatable(S, -2);
+    behl::metatable_find(S, "Vector2D_mt");
+    behl::metatable_set(S, -2);
     
     return 1;
 }
@@ -410,23 +410,24 @@ Ensures resources are cleaned up even if scripts forget.
 ```cpp
 behl::table_new(S);
 behl::push_cfunction(S, my_finalizer);
-behl::table_rawset_field(S, -2, "__gc");
-behl::set_metatable(S, -2);
+behl::table_rawsetfield(S, -2, "__gc");
+behl::metatable_set(S, -2);
 ```
 
-### 5. Store Metatables in Registry
+### 5. Use Named Metatables
 
-Reuse metatables for efficiency:
+Register a metatable under a name once and look it up for every instance:
 
 ```cpp
-// Create once
-behl::table_rawget_field(S, behl::REGISTRY_INDEX, "MyType_mt");
-if (behl::is_nil(S, -1)) {
-    behl::pop(S, 1);
-    behl::table_new(S);
+// Create once, returns false if it already exists, pushes it either way
+if (behl::metatable_new(S, "MyType_mt")) {
     // Configure metatable...
-    behl::table_rawset_field(S, behl::REGISTRY_INDEX, "MyType_mt");
 }
+behl::pop(S, 1);
+
+// Later, for each new instance
+behl::metatable_find(S, "MyType_mt");
+behl::metatable_set(S, -2);
 ```
 
 ### 6. Document UID Naming

@@ -45,7 +45,7 @@ struct ModuleReg {
 
 struct ModuleConst {
     std::string_view name;
-    Value value;  // Integer, number, string, or boolean
+    std::variant<Integer, FP, std::string_view, bool> value;
 };
 ```
 
@@ -120,8 +120,9 @@ int main() {
         print("6 * 7 = " + tostring(mathops.mul(6, 7)));
     )";
     
-    if (behl::load_string(S, script)) {
-        behl::call(S, 0, 0);
+    if (behl::load_string(S, script) != 0 || behl::call(S, 0, 0) < 0) {
+        std::cerr << "Error: " << behl::to_string(S, -1) << "\n";
+        behl::pop(S, 1);
     }
     
     behl::close(S);
@@ -265,6 +266,18 @@ int net_send(behl::State* S) {
     // Send data...
     
     return 0;
+}
+
+int net_recv(behl::State* S) {
+    Socket* sock = static_cast<Socket*>(
+        behl::check_userdata(S, 0, Socket_UID)
+    );
+    
+    // Receive data... (implementation omitted)
+    std::string received;
+    
+    behl::push_string(S, received);
+    return 1;
 }
 
 void register_network_module(behl::State* S) {

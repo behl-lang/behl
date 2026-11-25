@@ -290,4 +290,60 @@ namespace behl
         EXPECT_EQ(behl::format("{0} {2:{1}}", "Value:", 6, 123), "Value:    123");
     }
 
+#if defined(__clang__) && defined(__GLIBCXX__)
+#    define BEHL_TEST_CONSTEXPR_FORMAT 0
+#elif defined(__cpp_lib_constexpr_string) && __cpp_lib_constexpr_string >= 201907L
+#    define BEHL_TEST_CONSTEXPR_FORMAT 1
+#else
+#    define BEHL_TEST_CONSTEXPR_FORMAT 0
+#endif
+
+#if BEHL_TEST_CONSTEXPR_FORMAT
+    static_assert(
+        behl::format<"{} {:x} {:X} {:>5}|{:<4}|{:^7}|">(42, 255, 255, "ab", 7, true) == "42 ff FF    ab|7   | true  |");
+    static_assert(behl::format<"{:.2f} {:.0f} {:.3f}">(1.239, 2.5, -0.5) == "1.24 3 -0.500");
+    static_assert(behl::format<"{{{}}} {}">(-9223372036854775807LL - 1, "x") == "{-9223372036854775808} x");
+    static_assert(behl::format("{} + {} = {}", 1, 2, 3) == "1 + 2 = 3");
+    static_assert(behl::format("{0} {2:{1}}", "Value:", 6, 123) == "Value:    123");
+#endif
+
+#if BEHL_TEST_CONSTEXPR_FORMAT
+    static_assert(behl::format<"{} {} {}">(0.1, 1e21, -2.5) == "0.1 1e+21 -2.5");
+    static_assert(behl::format<"[{:>8}]">(1.5) == "[     1.5]");
+    static_assert(behl::format("{:.2f} {}", 1e20, 3.25) == "1e+20 3.25");
+#endif
+
+    TEST(FormatTest, PaddingIsAppliedInPlace)
+    {
+        EXPECT_EQ(behl::format("[{:>6}]", "abc"), "[   abc]");
+        EXPECT_EQ(behl::format("[{:<6}]", "abc"), "[abc   ]");
+        EXPECT_EQ(behl::format("[{:^6}]", "abc"), "[ abc  ]");
+        EXPECT_EQ(behl::format("[{:5}]", 42), "[   42]");
+        EXPECT_EQ(behl::format("[{:<5}]", 42), "[42   ]");
+        EXPECT_EQ(behl::format("[{:2}]", 12345), "[12345]");
+    }
+
+    TEST(FormatTest, IntegerExtremes)
+    {
+        EXPECT_EQ(behl::format("{}", -9223372036854775807LL - 1), "-9223372036854775808");
+        EXPECT_EQ(behl::format("{}", 9223372036854775807LL), "9223372036854775807");
+        EXPECT_EQ(behl::format("{:x}", -1LL), "ffffffffffffffff");
+        EXPECT_EQ(behl::format("{:x}", 0), "0");
+        EXPECT_EQ(behl::format("{}", 0), "0");
+    }
+
+    TEST(FormatTest, StdStringArgumentsStillWork)
+    {
+        const std::string owned = "owned";
+        EXPECT_EQ(behl::format("{}|{}", owned, std::string("temporary")), "owned|temporary");
+        EXPECT_EQ(behl::format<"{:>8}">(owned), "   owned");
+    }
+
+    TEST(FormatTest, FixedPrecisionSplitsExactlyNearInt64Limit)
+    {
+        EXPECT_EQ(behl::format("{:.3f}", 12345.678), "12345.678");
+        EXPECT_EQ(behl::format("{:.3f}", 0.0005), "0.001");
+        EXPECT_EQ(behl::format("{:.25f}", 1e-20), "0.0000000000000000000100000");
+    }
+
 } // namespace behl

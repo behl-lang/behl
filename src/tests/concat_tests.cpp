@@ -1,16 +1,19 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
-#include <behl/exceptions.hpp>
 #include <gtest/gtest.h>
 #include <string>
 #include <string_view>
 
-class ConcatTest : public ::testing::Test
+class ConcatTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
 
         ASSERT_NE(S, nullptr);
@@ -22,7 +25,7 @@ protected:
     }
 };
 
-TEST_F(ConcatTest, SelfAddLocalString)
+TEST_P(ConcatTest, SelfAddLocalString)
 {
     constexpr std::string_view code = R"(
         let c = "x"
@@ -32,12 +35,12 @@ TEST_F(ConcatTest, SelfAddLocalString)
         }
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "xxxx");
 }
 
-TEST_F(ConcatTest, SelfAddLocalStringOutsideLoop)
+TEST_P(ConcatTest, SelfAddLocalStringOutsideLoop)
 {
     constexpr std::string_view code = R"(
         let b = "bar"
@@ -45,12 +48,12 @@ TEST_F(ConcatTest, SelfAddLocalStringOutsideLoop)
         a = a + b
         return a
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "foobar");
 }
 
-TEST_F(ConcatTest, SelfAddLocalStillAddsIntegers)
+TEST_P(ConcatTest, SelfAddLocalStillAddsIntegers)
 {
     constexpr std::string_view code = R"(
         let c = 3
@@ -60,12 +63,12 @@ TEST_F(ConcatTest, SelfAddLocalStillAddsIntegers)
         }
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 22);
 }
 
-TEST_F(ConcatTest, SelfAddLocalStringPlusNumberThrows)
+TEST_P(ConcatTest, SelfAddLocalStringPlusNumberThrows)
 {
     constexpr std::string_view code = R"(
         let c = 1
@@ -73,11 +76,12 @@ TEST_F(ConcatTest, SelfAddLocalStringPlusNumberThrows)
         s = s + c
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
-TEST_F(ConcatTest, SelfAddLocalRespectsAddMetamethod)
+TEST_P(ConcatTest, SelfAddLocalRespectsAddMetamethod)
 {
     constexpr std::string_view code = R"(
         let mt = {}
@@ -88,23 +92,23 @@ TEST_F(ConcatTest, SelfAddLocalRespectsAddMetamethod)
         t = t + other
         return t
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_integer(S, -1), 99);
 }
 
-TEST_F(ConcatTest, AddStringConstant)
+TEST_P(ConcatTest, AddStringConstant)
 {
     constexpr std::string_view code = R"(
         let a = "foo"
         return a + "bar"
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "foobar");
 }
 
-TEST_F(ConcatTest, AddStringConstantInLoop)
+TEST_P(ConcatTest, AddStringConstantInLoop)
 {
     constexpr std::string_view code = R"(
         let s = ""
@@ -113,28 +117,30 @@ TEST_F(ConcatTest, AddStringConstantInLoop)
         }
         return s
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     EXPECT_EQ(behl::to_string(S, -1), "ababab");
 }
 
-TEST_F(ConcatTest, AddStringConstantToNumberThrows)
+TEST_P(ConcatTest, AddStringConstantToNumberThrows)
 {
     constexpr std::string_view code = R"(
         let a = 5
         return a + "bar"
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    EXPECT_THROW({ behl::call(S, 0, 1); }, behl::TypeError);
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    EXPECT_TRUE(behl_test::call_fails(S, 0, 1));
+    EXPECT_NE(behl_test::error_text(S).find("TypeError"), std::string::npos) << behl_test::error_text(S);
 }
 
-class SplitArithTest : public ::testing::Test
+class SplitArithTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
 
         ASSERT_NE(S, nullptr);
@@ -163,15 +169,15 @@ protected:
             + std::string(expr) + R"(
             return calls, r
         )";
-        ASSERT_NO_THROW(behl::load_string(S, code)) << event;
-        ASSERT_NO_THROW(behl::call(S, 0, 2)) << event;
+        ASSERT_TRUE(behl_test::load_ok(S, code)) << event;
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 2)) << event;
         EXPECT_EQ(behl::to_integer(S, -2), 1) << event << " metamethod call count";
         EXPECT_EQ(behl::to_integer(S, -1), 7) << event << " result";
         behl::set_top(S, 0);
     }
 };
 
-TEST_F(SplitArithTest, MetamethodRunsExactlyOnce)
+TEST_P(SplitArithTest, MetamethodRunsExactlyOnce)
 {
     check_called_once("__add", "t1 + t2");
     check_called_once("__sub", "t1 - t2");
@@ -186,15 +192,15 @@ TEST_F(SplitArithTest, MetamethodRunsExactlyOnce)
     check_called_once("__shr", "t1 >> t2");
 }
 
-TEST_F(SplitArithTest, NumericFastPathSkipsSlowHalf)
+TEST_P(SplitArithTest, NumericFastPathSkipsSlowHalf)
 {
     constexpr std::string_view code = R"(
         let a = 7
         let b = 3
         return a + b, a - b, a * b, a / b, a % b, a ** b, a & b, a | b, a ^ b, a << b, a >> b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 11));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 11));
     EXPECT_EQ(behl::to_integer(S, -11), 10);
     EXPECT_EQ(behl::to_integer(S, -10), 4);
     EXPECT_EQ(behl::to_integer(S, -9), 21);
@@ -208,17 +214,69 @@ TEST_F(SplitArithTest, NumericFastPathSkipsSlowHalf)
     EXPECT_EQ(behl::to_integer(S, -1), 0);
 }
 
-TEST_F(SplitArithTest, FloatOperandsTakeFastPath)
+TEST_P(SplitArithTest, FloatOperandsTakeFastPath)
 {
     constexpr std::string_view code = R"(
         let a = 7.5
         let b = 2.5
         return a + b, a - b, a * b, a / b
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 4));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 4));
     EXPECT_DOUBLE_EQ(behl::to_number(S, -4), 10.0);
     EXPECT_DOUBLE_EQ(behl::to_number(S, -3), 5.0);
     EXPECT_DOUBLE_EQ(behl::to_number(S, -2), 18.75);
     EXPECT_DOUBLE_EQ(behl::to_number(S, -1), 3.0);
 }
+
+TEST_P(ConcatTest, ConcatPreservesNulBytes)
+{
+    constexpr std::string_view code = R"(
+        const string = import("string");
+        let c = "a" + string.char(0) + "b";
+        let d = c + string.char(0);
+        let e = d + d;
+        return d, string.len(c), string.len(d), string.len(e), string.byte(d, 3);
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 5));
+    EXPECT_EQ(behl::to_string(S, -5), std::string_view("a\0b\0", 4));
+    EXPECT_EQ(behl::to_integer(S, -4), 3);
+    EXPECT_EQ(behl::to_integer(S, -3), 4);
+    EXPECT_EQ(behl::to_integer(S, -2), 8);
+    EXPECT_EQ(behl::to_integer(S, -1), 0);
+}
+
+TEST_P(ConcatTest, LengthOfParenthesisedLocalConcatAsCallArgument)
+{
+    constexpr std::string_view code = R"(
+        function id(v) { return v; }
+        let a = "xy";
+        let b = "zw";
+        return id(#(a + b));
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    EXPECT_EQ(behl::to_integer(S, -1), 4);
+}
+
+TEST_P(ConcatTest, LengthOfParenthesisedLocalConcatInTableConstructor)
+{
+    constexpr std::string_view code = R"(
+        let a = "xy";
+        let b = "zw";
+        let t = {#(a + b)};
+        return t[0];
+    )";
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+    EXPECT_EQ(behl::type(S, -1), behl::Type::kInteger);
+    EXPECT_EQ(behl::to_integer(S, -1), 4);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, ConcatTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
+
+INSTANTIATE_TEST_SUITE_P(Mode, SplitArithTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

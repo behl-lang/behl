@@ -7,6 +7,7 @@
 #include "state.hpp"
 #include "vm/value.hpp"
 
+#include <array>
 #include <cassert>
 #include <iostream>
 
@@ -25,10 +26,39 @@ namespace behl
         std::cout << output;
     }
 
+    static constexpr std::array kAllTypes = { Type::kNil, Type::kNullOpt, Type::kBoolean, Type::kInteger, Type::kNumber,
+        Type::kString, Type::kTable, Type::kUserdata, Type::kBuffer, Type::kClosure, Type::kCFunction, Type::kDeadKey };
+
+    static constexpr bool type_name_slots_unique() noexcept
+    {
+        for (size_t i = 0; i < kAllTypes.size(); ++i)
+        {
+            for (size_t j = i + 1; j < kAllTypes.size(); ++j)
+            {
+                if (type_name_slot(kAllTypes[i]) == type_name_slot(kAllTypes[j]))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    static_assert(type_name_slots_unique());
+
+    static void init_type_names(State* S)
+    {
+        for (const Type t : kAllTypes)
+        {
+            S->type_names[type_name_slot(t)] = gc_new_string(S, Value::get_type_string(t));
+        }
+    }
+
     State* new_state()
     {
         auto* state = new State();
         state->print_handler = default_print_handler;
+        state->start_time = std::chrono::steady_clock::now();
 
         gc_init(state);
         gc_pause(state);
@@ -51,6 +81,9 @@ namespace behl
 
         auto* key_obj = gc_new_string(state, "_G");
         tbl->hash.insert_or_assign(state, Value(key_obj), state->globals_table);
+
+        state->memory_error_message = gc_new_string(state, "not enough memory");
+        init_type_names(state);
 
         state->call_stack.reserve(state, 128);
 

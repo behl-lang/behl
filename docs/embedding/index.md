@@ -13,13 +13,15 @@ Learn how to embed the Behl scripting language in your C++ application.
 
 ```cpp
 #include <behl/behl.hpp>
+#include <iostream>
 
 int main() {
     behl::State* S = behl::new_state();
     behl::load_stdlib(S);
     
-    behl::load_string(S, "print('Hello from Behl!')");
-    behl::call(S, 0, 0);
+    if (behl::load_string(S, "print('Hello from Behl!')") != 0 || behl::call(S, 0, 0) < 0) {
+        std::cerr << behl::to_string(S, -1) << "\n";
+    }
     
     behl::close(S);
     return 0;
@@ -40,7 +42,7 @@ int main() {
 
 ## Philosophy
 
-The behl C++ API is designed to be:
+The Behl C++ API is designed to be:
 - **Familiar** - Similar to Lua's C API
 - **Modern** - Leverages C++20 features
 - **Type-safe** - Strong type checking with UIDs

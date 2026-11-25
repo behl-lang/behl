@@ -22,6 +22,8 @@ namespace behl
                 return "Proto";
             case GCType::kUserdata:
                 return "Userdata";
+            case GCType::kBuffer:
+                return "Buffer";
             default:
                 return "Unknown";
         }

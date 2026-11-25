@@ -30,11 +30,13 @@ namespace behl
         kString = kGCTypeBit | 5,
         kTable = kGCTypeBit | kTableLikeTypeBit | 6,
         kUserdata = kGCTypeBit | kTableLikeTypeBit | 9,
+        kBuffer = kGCTypeBit | 10,
         kClosure = kGCTypeBit | kCallableTypeBit | 7,
         kCFunction = kCallableTypeBit | 8,
 
         // Internal type, this never reaches the public API.
         kNullOpt = 1,
+        kDeadKey = 11,
     };
 
     // If the amount of returned values is variable, this should be passed as the nresults parameter when performing calls.
@@ -42,6 +44,10 @@ namespace behl
 
     // If the amount of arguments is variable (use all values on stack up to frame.top), pass this as the nargs parameter.
     constexpr int kMultArgs = -1;
+
+    constexpr int32_t kErrorRuntime = -1;
+    constexpr int32_t kErrorMemory = -2;
+    constexpr int32_t kErrorSyntax = -3;
 
     // Module registration structure
     struct ModuleReg

@@ -5,15 +5,33 @@
 #include "gc_object.hpp"
 #include "vm/value.hpp"
 
+#include <cstddef>
+#include <type_traits>
+
 namespace behl
 {
+
+    struct TableHashTraits
+    {
+        static constexpr bool kDropsEntries = true;
+
+        template<typename KeyValue>
+        static constexpr bool drop_on_rehash(const KeyValue& entry) noexcept
+        {
+            return entry.second.is_nil();
+        }
+    };
+
+    using TableHash = HashMap<Value, Value, ValueHash, ValueEq, TableHashTraits>;
 
     struct GCTable : GCObject
     {
         static constexpr auto kObjectType = GCType::kTable;
 
+        GCOHeader header{};
+
         Vector<Value> array;
-        HashMap<Value, Value, ValueHash, ValueEq> hash;
+        TableHash hash;
         GCTable* metatable{};
 
         void assign_name(std::string_view name)
@@ -33,14 +51,27 @@ namespace behl
             return internal_name_len > 0;
         }
 
+        static constexpr int32_t array_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCTable, array));
+        }
+
+        static constexpr int32_t color_offset()
+        {
+            return static_cast<int32_t>(offsetof(GCTable, header) + offsetof(GCOHeader, color));
+        }
+
         void clear_name()
         {
             internal_name_len = 0;
         }
 
-    private:
+    public:
         char internal_name[63];
         uint8_t internal_name_len{};
     };
+
+    static_assert(std::is_standard_layout_v<GCTable>);
+    static_assert(offsetof(GCTable, header) == 0);
 
 } // namespace behl

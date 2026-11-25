@@ -1,3 +1,6 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <behl/debug.hpp>
 #include <gtest/gtest.h>
@@ -27,12 +30,13 @@ struct DebugTestHarness
 
         harness->events.push_back(event);
 
-        const char* file = nullptr;
+        std::string_view file;
         int line = 0;
-        if (debug_get_location(S, &file, &line, nullptr))
+        int column = 0;
+        if (debug_get_location(S, file, line, column))
         {
             harness->breakpoint_hits.push_back(line);
-            if (file)
+            if (!file.empty())
             {
                 harness->locations.push_back(std::string(file) + ":" + std::to_string(line));
             }
@@ -95,7 +99,7 @@ struct DebugTestHarness
 
 DebugTestHarness* DebugTestHarness::current_instance = nullptr;
 
-class DebugTest : public ::testing::Test
+class DebugTest : public ::testing::TestWithParam<bool>
 {
 protected:
     State* S = nullptr;
@@ -104,6 +108,7 @@ protected:
     void SetUp() override
     {
         S = new_state();
+        S->jit_enabled = GetParam();
         load_stdlib(S);
         harness.setup(S);
     }
@@ -119,11 +124,11 @@ protected:
     }
 };
 
-TEST_F(DebugTest, BasicBreakpoint)
+TEST_P(DebugTest, BasicBreakpoint)
 {
     harness.commands.push("continue");
 
-    debug_set_breakpoint(S, nullptr, 2); // Line 2 is "let x = 1;"
+    debug_set_breakpoint(S, "<string>", 2); // Line 2 is "let x = 1;"
 
     constexpr std::string_view code = R"(
         let x = 1;
@@ -131,23 +136,23 @@ TEST_F(DebugTest, BasicBreakpoint)
         let result = x + y;
         let z = 4;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 1);
     EXPECT_EQ(harness.breakpoint_hits[0], 2);
 }
 
-TEST_F(DebugTest, MultipleBreakpoints)
+TEST_P(DebugTest, MultipleBreakpoints)
 {
     harness.commands.push("c");
     harness.commands.push("c");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 3);
-    debug_set_breakpoint(S, nullptr, 5);
-    debug_set_breakpoint(S, nullptr, 6);
+    debug_set_breakpoint(S, "<string>", 3);
+    debug_set_breakpoint(S, "<string>", 5);
+    debug_set_breakpoint(S, "<string>", 6);
 
     constexpr std::string_view code = R"(
         let x = 1;
@@ -156,9 +161,9 @@ TEST_F(DebugTest, MultipleBreakpoints)
         let a = 4;
         let b = 5;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_EQ(harness.breakpoint_hits.size(), 3);
     EXPECT_EQ(harness.breakpoint_hits[0], 3);
@@ -166,14 +171,14 @@ TEST_F(DebugTest, MultipleBreakpoints)
     EXPECT_EQ(harness.breakpoint_hits[2], 6);
 }
 
-TEST_F(DebugTest, StepInto)
+TEST_P(DebugTest, StepInto)
 {
     harness.commands.push("s");
     harness.commands.push("s");
     harness.commands.push("s");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 3);
+    debug_set_breakpoint(S, "<string>", 3);
 
     constexpr std::string_view code = R"(
         let x = 1;
@@ -181,21 +186,21 @@ TEST_F(DebugTest, StepInto)
         let z = 3;
         let a = 4;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_GE(harness.breakpoint_hits.size(), 3);
     EXPECT_EQ(harness.breakpoint_hits[0], 3);
 }
 
-TEST_F(DebugTest, StepOver)
+TEST_P(DebugTest, StepOver)
 {
     harness.commands.push("n");
     harness.commands.push("n");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 6);
+    debug_set_breakpoint(S, "<string>", 6);
 
     constexpr std::string_view code = R"(
         function foo() {
@@ -204,15 +209,15 @@ TEST_F(DebugTest, StepOver)
         let x = foo();
         let y = 10;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_GE(harness.breakpoint_hits.size(), 1);
     EXPECT_EQ(harness.breakpoint_hits[0], 6);
 }
 
-TEST_F(DebugTest, BreakpointInLoop)
+TEST_P(DebugTest, BreakpointInLoop)
 {
     harness.commands.push("c");
     harness.commands.push("c");
@@ -222,16 +227,16 @@ TEST_F(DebugTest, BreakpointInLoop)
     harness.commands.push("c");
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 3);
+    debug_set_breakpoint(S, "<string>", 3);
 
     constexpr std::string_view code = R"(
         for (let i = 0; i < 3; i++) {
             let x = i;
         }
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_GE(harness.breakpoint_hits.size(), 3);
     for (int hit : harness.breakpoint_hits)
@@ -240,26 +245,26 @@ TEST_F(DebugTest, BreakpointInLoop)
     }
 }
 
-TEST_F(DebugTest, RemoveBreakpoint)
+TEST_P(DebugTest, RemoveBreakpoint)
 {
     harness.commands.push("c");
 
-    debug_set_breakpoint(S, nullptr, 4);
-    debug_remove_breakpoint(S, nullptr, 4);
+    debug_set_breakpoint(S, "<string>", 4);
+    debug_remove_breakpoint(S, "<string>", 4);
 
     constexpr std::string_view code = R"(
         let x = 1;
         let y = 2;
         let z = 3;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 0);
 }
 
-TEST_F(DebugTest, PauseExecution)
+TEST_P(DebugTest, PauseExecution)
 {
     harness.commands.push("c");
 
@@ -269,18 +274,18 @@ TEST_F(DebugTest, PauseExecution)
         let x = 1;
         let y = 2;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     ASSERT_GE(harness.breakpoint_hits.size(), 1);
 }
 
-TEST_F(DebugTest, ClearAllBreakpoints)
+TEST_P(DebugTest, ClearAllBreakpoints)
 {
-    debug_set_breakpoint(S, nullptr, 3);
-    debug_set_breakpoint(S, nullptr, 4);
-    debug_set_breakpoint(S, nullptr, 5);
+    debug_set_breakpoint(S, "<string>", 3);
+    debug_set_breakpoint(S, "<string>", 4);
+    debug_set_breakpoint(S, "<string>", 5);
     debug_clear_breakpoints(S);
 
     constexpr std::string_view code = R"(
@@ -288,9 +293,9 @@ TEST_F(DebugTest, ClearAllBreakpoints)
         let y = 2;
         let z = 3;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     EXPECT_EQ(harness.breakpoint_hits.size(), 0);
 }
@@ -302,31 +307,31 @@ TEST(DebugStandaloneTest, GetLocation)
 
     debug_enable(S, true);
     debug_set_event_callback(S, [](State* state, DebugEvent) {
-        const char* file = nullptr;
+        std::string_view file;
         int line = 0;
         int column = 0;
 
-        bool has_location = debug_get_location(state, &file, &line, &column);
+        bool has_location = debug_get_location(state, file, line, column);
         EXPECT_TRUE(has_location);
 
         if (has_location)
         {
-            EXPECT_NE(file, nullptr);
+            EXPECT_FALSE(file.empty());
             EXPECT_GT(line, 0);
         }
 
         debug_continue(state);
     });
 
-    debug_set_breakpoint(S, nullptr, 2);
+    debug_set_breakpoint(S, "<string>", 2);
 
     constexpr std::string_view code = R"(
         let x = 1;
         let y = 2;
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code, false));
+    ASSERT_TRUE(behl_test::load_ok(S, code, false));
 
-    call(S, 0, 0);
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
 
     debug_enable(S, false);
     close(S);
@@ -346,3 +351,46 @@ TEST(DebugStandaloneTest, IsEnabled)
 
     close(S);
 }
+
+TEST_P(DebugTest, BreakpointMatchesLongSourceName)
+{
+    harness.commands.push("continue");
+
+    constexpr std::string_view chunkname = "a-source-name-that-is-longer-than-sso-capacity.behl";
+    static_assert(chunkname.size() > 31, "chunk name must exceed GCString SSO capacity");
+
+    debug_set_breakpoint(S, chunkname, 2);
+
+    constexpr std::string_view code = R"(
+        let x = 1;
+        let y = 2;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, chunkname, false));
+
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
+
+    EXPECT_EQ(harness.breakpoint_hits.size(), 1) << "breakpoint on a source name longer than 31 bytes never fired";
+}
+
+TEST_P(DebugTest, BreakpointMatchesShortSourceName)
+{
+    harness.commands.push("continue");
+
+    constexpr std::string_view chunkname = "short.behl";
+    static_assert(chunkname.size() <= 31, "chunk name must fit GCString SSO capacity");
+
+    debug_set_breakpoint(S, chunkname, 2);
+
+    constexpr std::string_view code = R"(
+        let x = 1;
+        let y = 2;
+    )";
+    ASSERT_TRUE(behl_test::load_buffer_ok(S, code, chunkname, false));
+
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 0));
+
+    EXPECT_EQ(harness.breakpoint_hits.size(), 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(Mode, DebugTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

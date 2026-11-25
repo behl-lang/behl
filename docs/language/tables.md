@@ -25,7 +25,7 @@ Tables are the primary data structure in Behl. They serve as:
 
 ## Table Literals
 
-Table literals use curly braces `{}` with comma-separated entries.
+Table literals use curly braces `{}` with entries separated by `,` or `;` (the two are interchangeable).
 
 ### Syntax Forms
 
@@ -42,14 +42,21 @@ let t = {};
 // Explicit keys ([key] = value)
 { ["key"] = "value", [0] = 10, [true] = "yes" }  // Any expression as key
 
+// Vararg expansion (only inside a vararg function, must be the last entry)
+{ ... }               // Appends every extra argument as array entries
+
 // Mixed
 { 10, 20, name = "Alice", ["x"] = 100 }  // Combines all forms
+
+// Semicolons work as separators too
+{ 10; 20; name = "Alice" }
 ```
 
 **Key syntax rules:**
 - `key = value` - Only valid when `key` is an identifier (no spaces, special chars, or keywords)
 - `[expr] = value` - Works with any expression as the key
 - Plain `value` - Auto-assigns to next array index (0, 1, 2...)
+- `...` - Expands the varargs into consecutive array indices, and must be the **last** entry in the literal
 
 ### Empty Table
 
@@ -176,7 +183,7 @@ print(t["key"]);   // "value"
 
 ### Key Types
 
-Keys can be any type except `nil`:
+Keys can be any value except `nil` and NaN:
 
 ```cpp
 let t = {};
@@ -195,7 +202,15 @@ t[false] = "no";
 // Table keys (by reference)
 let key_table = {1, 2, 3};
 t[key_table] = "value";
+
+// nil and NaN keys cannot be stored
+let z = 0.0;
+t[nil] = 1;    // RuntimeError: index is nil
+t[z / z] = 1;  // RuntimeError: index is NaN
+print(t[nil]); // nil, reading with a nil or NaN key is not an error
 ```
+
+A float key with an integral value is stored as the equal integer, so `t[5000.0]` and `t[5000]` are the same entry and `pairs()` returns the key as the integer `5000`.
 
 ## Table Length
 
@@ -322,34 +337,30 @@ if (t["name"] != nil) {
     print("name exists");
 }
 
-// Can't distinguish between nil value and missing key this way
+// A key whose value is nil does not exist
 t["value"] = nil;
-print(t["value"]);  // nil (but key exists!)
-
-// Use pairs() to check if key actually exists
-function hasKey(t, key) {
-    for (k, _ in pairs(t)) {
-        if (k == key) {
-            return true;
-        }
-    }
-    return false;
-}
+print(t["value"]);  // nil
 ```
 
-### Removing Keys
+### Clearing Keys
 
-Set key to `nil` to remove it:
+Assigning `nil` removes a key, as in Lua:
 
 ```cpp
 let t = { a = 1, b = 2, c = 3 };
 
-t["b"] = nil;  // Remove key "b"
+t["b"] = nil;
 
 for (k, v in pairs(t)) {
-    print(k);  // Prints "a" and "c" only
+    print(k, v);  // Prints "a" 1 and "c" 3, never a nil value
 }
 ```
+
+`pairs()` and `next` never return an entry whose value is `nil`, and `rawlen`/`#` are unaffected. Assigning `nil` to a key that does not exist does nothing.
+
+Clearing fields while traversing with `pairs()` is allowed, including the current key, even if the garbage collector runs in the middle of the loop. Adding new keys during a traversal is undefined behaviour, as in Lua.
+
+Internally the entry stays in the hash part with a `nil` value until the hash part is rebuilt. If its key is a collectable object (string, table, function, userdata, buffer), the garbage collector no longer keeps that object alive through the table. The memory of cleared entries is reclaimed the next time the hash part grows or is rebuilt.
 
 ## Tables as Objects
 
@@ -399,6 +410,27 @@ let mixed = {
 };
 ```
 
+
+---
+
+## The `table` Module
+
+Beyond the language syntax, extra table operations live in the `table` module, which must be imported:
+
+```cpp
+const table = import("table");
+
+let t = {10, 20};
+table.insert(t, 30);        // Appends, t is now {10, 20, 30}
+print(table.rawlen(t));     // 3
+print(table.rawget(t, 0));  // 10
+table.rawset(t, 0, 99);
+table.print(t);
+```
+
+The module provides `insert`, `unpack`, `rawget`, `rawset`, `rawlen`, `dump`, `print` and `set_name`. `table.insert(t, value)` appends and `table.insert(t, pos, value)` inserts at a 0-based position, shifting later elements up. There is no `table.remove`.
+
+See [Standard Library - table module](../stdlib/table) for the full reference.
 
 ---
 

@@ -137,6 +137,35 @@ namespace behl
         emit32(imm);
     }
 
+    void X86Emitter::mov32(Mem dst, GpReg src)
+    {
+        emit_rex_opt(reg_ext(src), mem_index_ext(dst), reg_ext(dst.base));
+        emit8(0x89);
+        emit_modrm_mem(reg_low(src), dst);
+    }
+
+    void X86Emitter::mov8(Mem dst, GpReg src)
+    {
+        if (mode64_)
+        {
+            emit_rex(false, reg_ext(src), mem_index_ext(dst), reg_ext(dst.base));
+        }
+        else
+        {
+            assert(static_cast<uint8_t>(src) < 4 && "byte register unavailable in 32 bit mode");
+        }
+        emit8(0x88);
+        emit_modrm_mem(reg_low(src), dst);
+    }
+
+    void X86Emitter::movzx8(GpReg dst, Mem src)
+    {
+        emit_rex_opt(reg_ext(dst), mem_index_ext(src), reg_ext(src.base));
+        emit8(0x0F);
+        emit8(0xB6);
+        emit_modrm_mem(reg_low(dst), src);
+    }
+
     void X86Emitter::movups(XmmReg dst, Mem src)
     {
         emit_rex_opt(false, mem_index_ext(src), reg_ext(src.base));
@@ -456,6 +485,14 @@ namespace behl
         emit8(imm);
     }
 
+    void X86Emitter::test8(Mem mem_op, uint8_t imm)
+    {
+        emit_rex_opt(false, mem_index_ext(mem_op), reg_ext(mem_op.base));
+        emit8(0xF6);
+        emit_modrm_mem(0, mem_op);
+        emit8(imm);
+    }
+
     void X86Emitter::test(GpReg lhs, GpReg rhs)
     {
         emit_rex_natural(reg_ext(rhs), false, reg_ext(lhs));
@@ -698,6 +735,17 @@ namespace behl
         }
         emit8(0xFF);
         emit_modrm(0b11, 2, reg_low(reg));
+    }
+
+    void X86Emitter::jmp(GpReg reg)
+    {
+        if (reg_ext(reg))
+        {
+            assert(mode64_ && "extended registers unavailable in 32 bit mode");
+            emit8(0x41);
+        }
+        emit8(0xFF);
+        emit_modrm(0b11, 4, reg_low(reg));
     }
 
     void X86Emitter::ret()
@@ -1020,8 +1068,8 @@ namespace behl
         if (r || x || b)
         {
             assert(mode64_ && "extended registers unavailable in 32 bit mode");
-            emit8(static_cast<uint8_t>(0x40 | (static_cast<uint8_t>(r) << 2) | (static_cast<uint8_t>(x) << 1)
-                | static_cast<uint8_t>(b)));
+            emit8(static_cast<uint8_t>(
+                0x40 | (static_cast<uint8_t>(r) << 2) | (static_cast<uint8_t>(x) << 1) | static_cast<uint8_t>(b)));
         }
     }
 

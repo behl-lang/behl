@@ -50,18 +50,22 @@ print(typeof({}));        // "table"
 print(typeof(print));     // "function"
 ```
 
-**Returns:** `"nil"`, `"boolean"`, `"integer"`, `"number"`, `"string"`, `"table"`, `"function"`, or `"userdata"`
+**Returns:** `"nil"`, `"boolean"`, `"integer"`, `"number"`, `"string"`, `"table"`, `"function"`, `"userdata"`, or `"buffer"`
+
+`typeof` is a compiler intrinsic, not a global function. A call with exactly one argument compiles to the `TYPEOF` instruction, which does not allocate: every call returns the same string object for a given type name, created once per state. Because it is not a value, `typeof` cannot be stored, passed or called indirectly (`let f = typeof` gives `nil`, and `pcall(typeof, x)` fails). A call with zero or more than one argument is a normal call of the global `typeof`, which is `nil` unless you define one. A local, parameter or upvalue named `typeof` shadows the intrinsic, and calls then go to that value.
 
 ---
 
 ## `typeid(value)`
 
-Returns the numeric type ID of a value.
+Returns the numeric type tag of a value as an integer. See [Types](../language/types) for the values.
 
 ```cpp
 let id = typeid(42);
-print(id);  // Type ID as integer
+print(id);  // 35
 ```
+
+`typeid` is a compiler intrinsic with the same rules as `typeof`: a one-argument call compiles to the `TYPEID` instruction, the bare name is not a value, other argument counts are a normal call of the global `typeid`, and a local, parameter or upvalue named `typeid` shadows it.
 
 ---
 
@@ -85,9 +89,11 @@ print(tostring(t));  // "CustomTable"
 
 ---
 
-## `error(message)`
+## `error(value)`
 
-Raises a runtime error with the given message.
+Raises an error. `value` can be any type.
+
+`value` is raised exactly as given, for every type including strings: no prefix, no location, no stack trace is added. `pcall` returns `false` plus exactly that value.
 
 ```cpp
 function validate(x) {
@@ -96,8 +102,13 @@ function validate(x) {
     }
 }
 
-validate(-5);  // RuntimeError: Value must be non-negative!
+validate(-5);  // Value must be non-negative!
+
+let ok, e = pcall(function() { error({code = 1}); });
+print(e.code);  // 1
 ```
+
+Calling `error()` with no argument raises `nil`.
 
 ---
 
@@ -120,13 +131,15 @@ if (success) {
 
 **Returns:**
 - On success: `true, return_values...`
-- On error: `false, error_message`
+- On error: `false, error_value`, where `error_value` is exactly what was raised (a string for runtime errors and `error("...")`, otherwise the value passed to `error()`)
+
+If a C++ function called inside `pcall` throws a C++ exception that was not raised through the Behl API, `pcall` returns `false` and the exception's `what()` text as a string (`"unknown C++ exception"` if it is not a `std::exception`).
 
 ---
 
 ## `pairs(table)`
 
-Returns an iterator for iterating over table key-value pairs.
+Returns an iterator for iterating over table key-value pairs. Entries whose value is `nil` are skipped. Setting existing fields (including the current one) to `nil` during the loop is allowed; adding new keys during the loop is undefined behaviour.
 
 ```cpp
 let t = {
@@ -148,7 +161,7 @@ Loads and returns a module.
 
 ```cpp
 const math = import("math");
-print(math.PI);  // 3.14159...
+print(math.pi);  // 3.14159...
 ```
 
 Modules are cached, so multiple imports return the same table. See [Module System](../modules) for details.
@@ -176,39 +189,43 @@ let retrieved = getmetatable(t);
 
 ---
 
-## `rawget(table, key)`
+## `table.rawget(table, key)`
 
-Get value from table without invoking `__index` metamethod.
+Get value from table without invoking `__index` metamethod. Not a global; available via `import("table")`.
 
 ```cpp
+const table = import("table");
+
 let t = {x = 10};
 setmetatable(t, {__index = function() { return "default"; }});
 
-print(t.missing);            // "default" (via __index)
-print(rawget(t, "missing")); // nil (bypasses __index)
+print(t.missing);                  // "default" (via __index)
+print(table.rawget(t, "missing")); // nil (bypasses __index)
 ```
 
 ---
 
-## `rawset(table, key, value)`
+## `table.rawset(table, key, value)`
 
-Set value in table without invoking `__newindex` metamethod.
+Set value in table without invoking `__newindex` metamethod. Not a global; available via `import("table")`.
 
 **Returns:** The table
 
 ```cpp
+const table = import("table");
+
 let t = {};
 setmetatable(t, {__newindex = function() { error("Read-only"); }});
 
-t.key = 1;            // Error: "Read-only"
-rawset(t, "key", 1);  // Sets directly, no error
+t.key = 1;                  // Error: "Read-only"
+table.rawset(t, "key", 1);  // Sets directly, no error
 ```
 
 ---
 
-## `rawlen(table)`
+## `rawlen(value)`
 
-Returns the length of the array part of a table (consecutive integer keys starting from 0).
+For a table, returns the length of the array part (consecutive integer keys starting from 0), ignoring `__len`. For a string or a buffer, returns its length in bytes. Raises `bad argument #1 (expected table, string or buffer, got ...)` for anything else, including a missing argument.
 
 ```cpp
 let t = {10, 20, 30};

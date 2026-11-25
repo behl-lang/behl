@@ -1,15 +1,20 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
+#include <string>
 
 namespace behl
 {
-    class GCTest : public ::testing::Test
+    class GCTest : public ::testing::TestWithParam<bool>
     {
     protected:
         State* S;
         void SetUp() override
         {
             S = new_state();
+            S->jit_enabled = GetParam();
             load_stdlib(S);
         }
         void TearDown() override
@@ -18,7 +23,7 @@ namespace behl
         }
     };
 
-    TEST_F(GCTest, CollectGarbageFreesUnreachableObjects)
+    TEST_P(GCTest, CollectGarbageFreesUnreachableObjects)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -40,12 +45,12 @@ namespace behl
             return after <= before + 2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ReachableObjectsNotCollected)
+    TEST_P(GCTest, ReachableObjectsNotCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -61,12 +66,12 @@ namespace behl
             return keeper["data"] == "important";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, UpvaluesPreservedAcrossCollection)
+    TEST_P(GCTest, UpvaluesPreservedAcrossCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -88,12 +93,12 @@ namespace behl
             return fn() == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MultipleClosuresShareUpvalue)
+    TEST_P(GCTest, MultipleClosuresShareUpvalue)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -121,12 +126,12 @@ namespace behl
             return v1 == 101 && v2 == 102 && v3 == 101;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableWithCircularReferenceCollected)
+    TEST_P(GCTest, TableWithCircularReferenceCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -148,12 +153,12 @@ namespace behl
             return after_count <= before_count + 3;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, StringInterningSurvivesCollection)
+    TEST_P(GCTest, StringInterningSurvivesCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -170,12 +175,12 @@ namespace behl
             return s1 == s2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, NestedUpvaluesPreserved)
+    TEST_P(GCTest, NestedUpvaluesPreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -202,12 +207,12 @@ namespace behl
             return fn() == 30;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableInClosurePreserved)
+    TEST_P(GCTest, TableInClosurePreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -225,12 +230,12 @@ namespace behl
             return fn() == 15;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, LargeObjectAllocationAndCollection)
+    TEST_P(GCTest, LargeObjectAllocationAndCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -254,12 +259,12 @@ namespace behl
             return after <= before + 2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, IncrementalGCMakesProgress)
+    TEST_P(GCTest, IncrementalGCMakesProgress)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -278,12 +283,12 @@ namespace behl
             return true;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCDuringTableConstruction)
+    TEST_P(GCTest, GCDuringTableConstruction)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -301,12 +306,12 @@ namespace behl
             return result[0] == 1 && result[11] == 12;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ClosureArraySurvivesCollection)
+    TEST_P(GCTest, ClosureArraySurvivesCollection)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -332,12 +337,12 @@ namespace behl
             return v0 == 1 && v1 == 11 && v2 == 21;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TemporaryClosuresCollected)
+    TEST_P(GCTest, TemporaryClosuresCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -360,12 +365,12 @@ namespace behl
             return true;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MutuallyRecursiveClosuresPreserved)
+    TEST_P(GCTest, MutuallyRecursiveClosuresPreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -390,12 +395,12 @@ namespace behl
             return even(10) && !odd(10);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableMetatablePreservedDuringGC)
+    TEST_P(GCTest, TableMetatablePreservedDuringGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -410,12 +415,12 @@ namespace behl
             return t["a"] == 1 && t["b"] == 2 && t["c"] == 3;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, FunctionPrototypesReusedCorrectly)
+    TEST_P(GCTest, FunctionPrototypesReusedCorrectly)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -434,12 +439,12 @@ namespace behl
             return f1() == 42 && f2() == 42;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCThresholdCanBeAdjusted)
+    TEST_P(GCTest, GCThresholdCanBeAdjusted)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -457,12 +462,12 @@ namespace behl
             return new_val == 50;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, EmptyTableStillCollected)
+    TEST_P(GCTest, EmptyTableStillCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -478,12 +483,12 @@ namespace behl
             return after <= before + 2;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCDuringRecursion)
+    TEST_P(GCTest, GCDuringRecursion)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -503,12 +508,12 @@ namespace behl
             return result == 210;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MultipleGCCyclesStable)
+    TEST_P(GCTest, MultipleGCCyclesStable)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -524,12 +529,12 @@ namespace behl
             return keeper["value"] == 100;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCCountAllReportsCorrectly)
+    TEST_P(GCTest, GCCountAllReportsCorrectly)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -540,12 +545,12 @@ namespace behl
             return count_all == (count_in_use + count_free);
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, FreedObjectsReportedCorrectly)
+    TEST_P(GCTest, FreedObjectsReportedCorrectly)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -559,12 +564,12 @@ namespace behl
             return free_count >= 0;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GCPhaseReturnsValidValue)
+    TEST_P(GCTest, GCPhaseReturnsValidValue)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -577,12 +582,12 @@ namespace behl
             return phase == "idle" || phase == "mark" || phase == "sweep";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ComplexNestedStructurePreserved)
+    TEST_P(GCTest, ComplexNestedStructurePreserved)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -605,12 +610,12 @@ namespace behl
             return root["level1"]["level2"]["level3"]["value"] == "deep";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, FunctionArgumentsNotPrematurelyCollected)
+    TEST_P(GCTest, FunctionArgumentsNotPrematurelyCollected)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -625,12 +630,12 @@ namespace behl
             return result == 30;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, TableArrayResizeDoesntLeak)
+    TEST_P(GCTest, TableArrayResizeDoesntLeak)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -652,12 +657,12 @@ namespace behl
             return t[0] == 0 && t[499] == 499;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, ClosureModifyingUpvalueAcrossGC)
+    TEST_P(GCTest, ClosureModifyingUpvalueAcrossGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -680,12 +685,12 @@ namespace behl
             return v1 == 5 && v2 == 15 && v3 == 18;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, GlobalsNotCollectedDuringAgressiveGC)
+    TEST_P(GCTest, GlobalsNotCollectedDuringAgressiveGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -706,12 +711,12 @@ namespace behl
                    important_data["z"] == 3;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, DeepCallStackWithGC)
+    TEST_P(GCTest, DeepCallStackWithGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -729,12 +734,12 @@ namespace behl
             return result == 31;
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
 
-    TEST_F(GCTest, MultipleStringConcatenationsWithGC)
+    TEST_P(GCTest, MultipleStringConcatenationsWithGC)
     {
         constexpr std::string_view code = R"(
             const gc = import("gc");
@@ -752,9 +757,538 @@ namespace behl
             return typeof(s) == "string";
         )";
 
-        ASSERT_NO_THROW(load_string(S, code));
-        ASSERT_NO_THROW(call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_TRUE(to_boolean(S, -1));
     }
+
+    TEST_P(GCTest, ReparentingDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) {
+                    t[i] = {id = b * 100 + i}
+                }
+                buckets[b] = t
+            }
+
+            let dst = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            dst[moved] = o
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let o = dst[k]
+                if (o == nil || o.id != ids[k]) { corrupt = corrupt + 1 }
+            }
+
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no objects were reparented during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects were swept while still referenced";
+    }
+
+    TEST_P(GCTest, InBoundsArrayStoreDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) {
+                    t[i] = {id = b * 100 + i}
+                }
+                buckets[b] = t
+            }
+
+            let dst = {}
+            for (let k = 0; k < 1200; k = k + 1) {
+                dst[k] = 0
+            }
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            dst[moved] = o
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let o = dst[k]
+                if (o == nil || o.id != ids[k]) { corrupt = corrupt + 1 }
+            }
+
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no objects were reparented during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects were swept while still referenced";
+    }
+
+    TEST_P(GCTest, RawsetDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+            const table = import("table")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {id = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let dst = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            table.rawset(dst, moved, o)
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let o = dst[k]
+                if (o == nil || o.id != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "nothing was rawset during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while referenced through rawset";
+    }
+
+    TEST_P(GCTest, ClosedUpvalueDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            function capture(o) { return function() { return o.id } }
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {id = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let fns = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let o = src[ii]
+                        if (o != nil) {
+                            fns[moved] = capture(o)
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let f = fns[k]
+                if (f == nil || f() != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no upvalues were closed during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects swept while held by a closed upvalue";
+    }
+
+    TEST_P(GCTest, MetatableAssignedDuringMarkPhaseKeepsObjectsAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) { t[i] = {tag = b * 100 + i} }
+                buckets[b] = t
+            }
+
+            let holders = {}
+            let ids = {}
+            let churn = {}
+            let moved = 0
+            let bi = 0
+            let ii = 0
+            let saw_mark = false
+
+            for (let n = 0; n < 120000; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                if (gc.phase() == "mark") {
+                    saw_mark = true
+                    if (bi < 60) {
+                        let src = buckets[bi]
+                        let mt = src[ii]
+                        if (mt != nil) {
+                            let h = {}
+                            setmetatable(h, mt)
+                            holders[moved] = h
+                            ids[moved] = bi * 100 + ii
+                            src[ii] = nil
+                            moved = moved + 1
+                        }
+                        ii = ii + 1
+                        if (ii >= 20) { ii = 0; bi = bi + 1 }
+                    }
+                }
+            }
+
+            gc.collect()
+            gc.collect()
+
+            let corrupt = 0
+            for (let k = 0; k < moved; k = k + 1) {
+                let mt = getmetatable(holders[k])
+                if (mt == nil || mt.tag != ids[k]) { corrupt = corrupt + 1 }
+            }
+            return saw_mark, moved, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never reached the mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no metatables were assigned during marking";
+        EXPECT_EQ(to_integer(S, -1), 0) << "metatable swept while still attached";
+    }
+
+    TEST_P(GCTest, ObjectMovedIntoLocalDuringMarkPhaseKeepsObjectAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) {
+                    t[i] = {id = b * 100 + i}
+                }
+                buckets[b] = t
+            }
+
+            let h0 = nil
+            let h1 = nil
+            let h2 = nil
+            let h3 = nil
+            let churn = {}
+            let grabbed = false
+            let prev = gc.phase()
+            let sweeps = 0
+
+            for (let n = 0; n < 200000 && sweeps < 3; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                let p = gc.phase()
+                if (!grabbed && p == "mark" && prev != "mark") {
+                    h0 = buckets[0][0]
+                    buckets[0][0] = nil
+                    h1 = buckets[1][1]
+                    buckets[1][1] = nil
+                    h2 = buckets[2][2]
+                    buckets[2][2] = nil
+                    h3 = buckets[3][3]
+                    buckets[3][3] = nil
+                    grabbed = true
+                }
+                if (grabbed && p == "sweep" && prev != "sweep") {
+                    sweeps = sweeps + 1
+                }
+                prev = p
+            }
+
+            gc.collect()
+
+            let corrupt = 0
+            if (h0 == nil || h0.id != 0) { corrupt = corrupt + 1 }
+            if (h1 == nil || h1.id != 101) { corrupt = corrupt + 1 }
+            if (h2 == nil || h2.id != 202) { corrupt = corrupt + 1 }
+            if (h3 == nil || h3.id != 303) { corrupt = corrupt + 1 }
+            return grabbed, sweeps, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never entered a fresh mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no sweep ran after the objects were moved";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects held only in locals were swept";
+    }
+
+    TEST_P(GCTest, ObjectStoredIntoClosedUpvalueDuringMarkPhaseKeepsObjectAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) {
+                    t[i] = {id = b * 100 + i}
+                }
+                buckets[b] = t
+            }
+
+            function make_cell() {
+                let v = nil
+                return function(x) { v = x }, function() { return v }
+            }
+
+            let set0, get0 = make_cell()
+            let set1, get1 = make_cell()
+            let set2, get2 = make_cell()
+            let set3, get3 = make_cell()
+
+            let churn = {}
+            let grabbed = false
+            let prev = gc.phase()
+            let sweeps = 0
+
+            for (let n = 0; n < 200000 && sweeps < 3; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                let p = gc.phase()
+                if (!grabbed && p == "mark" && prev != "mark") {
+                    set0(buckets[0][0])
+                    buckets[0][0] = nil
+                    set1(buckets[1][1])
+                    buckets[1][1] = nil
+                    set2(buckets[2][2])
+                    buckets[2][2] = nil
+                    set3(buckets[3][3])
+                    buckets[3][3] = nil
+                    grabbed = true
+                }
+                if (grabbed && p == "sweep" && prev != "sweep") {
+                    sweeps = sweeps + 1
+                }
+                prev = p
+            }
+
+            gc.collect()
+
+            let corrupt = 0
+            if (get0() == nil || get0().id != 0) { corrupt = corrupt + 1 }
+            if (get1() == nil || get1().id != 101) { corrupt = corrupt + 1 }
+            if (get2() == nil || get2().id != 202) { corrupt = corrupt + 1 }
+            if (get3() == nil || get3().id != 303) { corrupt = corrupt + 1 }
+            return grabbed, sweeps, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never entered a fresh mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no sweep ran after the objects were moved";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects held only in closed upvalues were swept";
+    }
+
+    TEST_P(GCTest, ObjectCapturedByNewClosureDuringMarkPhaseKeepsObjectAlive)
+    {
+        constexpr std::string_view code = R"(
+            const gc = import("gc")
+
+            let buckets = {}
+            for (let b = 0; b < 60; b = b + 1) {
+                let t = {}
+                for (let i = 0; i < 20; i = i + 1) {
+                    t[i] = {id = b * 100 + i}
+                }
+                buckets[b] = t
+            }
+
+            function capture(o) {
+                return function() { return o }
+            }
+
+            let c0 = nil
+            let c1 = nil
+            let c2 = nil
+            let c3 = nil
+            let churn = {}
+            let grabbed = false
+            let prev = gc.phase()
+            let sweeps = 0
+
+            for (let n = 0; n < 200000 && sweeps < 3; n = n + 1) {
+                churn[n % 200] = {pad = n}
+                let p = gc.phase()
+                if (!grabbed && p == "mark" && prev != "mark") {
+                    c0 = capture(buckets[0][0])
+                    buckets[0][0] = nil
+                    c1 = capture(buckets[1][1])
+                    buckets[1][1] = nil
+                    c2 = capture(buckets[2][2])
+                    buckets[2][2] = nil
+                    c3 = capture(buckets[3][3])
+                    buckets[3][3] = nil
+                    grabbed = true
+                }
+                if (grabbed && p == "sweep" && prev != "sweep") {
+                    sweeps = sweeps + 1
+                }
+                prev = p
+            }
+
+            gc.collect()
+
+            let corrupt = 0
+            if (c0() == nil || c0().id != 0) { corrupt = corrupt + 1 }
+            if (c1() == nil || c1().id != 101) { corrupt = corrupt + 1 }
+            if (c2() == nil || c2().id != 202) { corrupt = corrupt + 1 }
+            if (c3() == nil || c3().id != 303) { corrupt = corrupt + 1 }
+            return grabbed, sweeps, corrupt
+        )";
+
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 3));
+        ASSERT_TRUE(to_boolean(S, -3)) << "workload never entered a fresh mark phase";
+        ASSERT_GT(to_integer(S, -2), 0) << "no sweep ran after the objects were captured";
+        EXPECT_EQ(to_integer(S, -1), 0) << "objects held only by freshly created closures were swept";
+    }
+
+    TEST_P(GCTest, LoadedAndFailedChunksDoNotLeak)
+    {
+        gc_collect(S);
+        gc_collect(S);
+        const size_t base_objects = S->gc.gc_all_objects.count();
+        const size_t base_bytes = S->gc.gc_total_bytes;
+
+        int failures = 0;
+        for (int i = 0; i < 300; ++i)
+        {
+            const std::string good = "let t = {v = " + std::to_string(i) + "}\nfunction f(a) { return a + t.v }\nreturn f(1)";
+            ASSERT_TRUE(behl_test::load_ok(S, good));
+            ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
+            pop(S, 1);
+
+            const std::string bad = "let s" + std::to_string(i) + " = \"x\"\nfunction g(a) { return a + }\n";
+            if (load_string(S, bad) < 0)
+            {
+                ++failures;
+                pop(S, 1);
+            }
+        }
+
+        ASSERT_EQ(failures, 300) << "the malformed chunks did not all fail to load";
+        ASSERT_EQ(get_top(S), 0);
+
+        gc_collect(S);
+        gc_collect(S);
+
+        EXPECT_LE(S->gc.gc_all_objects.count(), base_objects + 64) << "loaded or failed chunks left objects behind";
+        EXPECT_LE(S->gc.gc_total_bytes, base_bytes + 256 * 1024) << "loaded or failed chunks left memory behind";
+    }
+
+    INSTANTIATE_TEST_SUITE_P(Mode, GCTest, ::testing::Bool(),
+        [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });
 
 } // namespace behl

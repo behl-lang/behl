@@ -1,5 +1,6 @@
 #include "api/api_internal.hpp"
 #include "behl.hpp"
+#include "common/ascii.hpp"
 #include "common/format.hpp"
 #include "common/vector.hpp"
 #include "gc/gc.hpp"
@@ -9,10 +10,11 @@
 #include "vm/vm_detail.hpp"
 
 #include <algorithm>
-#include <cctype>
 
 namespace behl
 {
+
+    static constexpr size_t kMaxStringLength = size_t(2) * 1024 * 1024 * 1024;
 
     // string.len(s) - returns length of string
     static int str_len(State* S)
@@ -84,7 +86,7 @@ namespace behl
 
         for (size_t i = 0; i < len; ++i)
         {
-            data[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(data[i])));
+            data[i] = ascii_to_upper(data[i]);
         }
 
         S->stack.push_back(S, Value(result));
@@ -102,7 +104,7 @@ namespace behl
 
         for (size_t i = 0; i < len; ++i)
         {
-            data[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(data[i])));
+            data[i] = ascii_to_lower(data[i]);
         }
 
         S->stack.push_back(S, Value(result));
@@ -193,14 +195,22 @@ namespace behl
         auto str = check_string(S, 0);
         const Integer n = check_integer(S, 1);
 
-        if (n <= 0)
+        const size_t str_len = str.length();
+
+        if (n <= 0 || str_len == 0)
         {
             push_string(S, "");
             return 1;
         }
 
-        const size_t str_len = str.length();
-        const size_t total_len = str_len * static_cast<size_t>(n);
+        const size_t count = static_cast<size_t>(n);
+
+        if (count > kMaxStringLength / str_len)
+        {
+            error(S, "resulting string too large");
+        }
+
+        const size_t total_len = str_len * count;
 
         AutoVector<char> buffer(S);
         buffer.reserve(total_len);
@@ -260,70 +270,65 @@ namespace behl
     static int str_format(State* S)
     {
         const auto format_str = check_string(S, 0);
-        const int nargs = get_top(S) - 1;
+        const auto arg_count = static_cast<size_t>(get_top(S) - 1);
 
-        std::vector<format_arg> args;
-        args.reserve(static_cast<size_t>(nargs));
-
-        for (int i = 0; i < nargs; ++i)
-        {
-            const int stack_idx = i + 1;
+        const auto format_argument = [S](format_buffer& out, size_t index, const format_spec& spec) {
+            const auto stack_idx = static_cast<int32_t>(index) + 1;
             switch (type(S, stack_idx))
             {
                 case Type::kNil:
-                    args.emplace_back("nil");
+                    format_value_to(out, format_arg("nil"), spec);
                     break;
                 case Type::kBoolean:
-                    args.emplace_back(to_boolean(S, stack_idx));
+                    format_value_to(out, format_arg(to_boolean(S, stack_idx)), spec);
                     break;
                 case Type::kInteger:
-                    args.emplace_back(to_integer(S, stack_idx));
+                    format_value_to(out, format_arg(to_integer(S, stack_idx)), spec);
                     break;
                 case Type::kNumber:
-                    args.emplace_back(to_number(S, stack_idx));
+                    format_value_to(out, format_arg(to_number(S, stack_idx)), spec);
                     break;
                 case Type::kString:
-                    args.emplace_back(to_string(S, stack_idx));
+                    format_value_to(out, format_arg(to_string(S, stack_idx)), spec);
                     break;
                 case Type::kUserdata:
+                case Type::kBuffer:
                 case Type::kTable:
                 case Type::kClosure:
                 case Type::kCFunction:
                 {
-                    const auto value_idx = resolve_index(S, stack_idx);
-                    const auto& val = S->stack[static_cast<size_t>(value_idx)];
-                    const auto str_val = vm_tostring(S, val, S->call_stack.back());
+                    const auto val = S->stack[static_cast<size_t>(resolve_index(S, stack_idx))];
+                    const auto str_val = vm_tostring(S, val);
                     if (str_val.is_nil())
                     {
-                        args.emplace_back("nil");
+                        format_value_to(out, format_arg("nil"), spec);
                     }
                     else if (str_val.is_string())
                     {
-                        args.emplace_back(str_val.get_string()->view());
+                        format_value_to(out, format_arg(str_val.get_string()->view()), spec);
                     }
                     else
                     {
-                        args.emplace_back("<invalid>");
+                        format_value_to(out, format_arg("<invalid>"), spec);
                     }
                     break;
                 }
                 default:
-                {
                     break;
-                }
             }
-        }
+        };
 
+        format_buffer buffer;
         try
         {
-            std::string result = vformat(format_str, args);
-            push_string(S, result);
+            vformat_to(buffer, format_str, arg_count, format_argument);
         }
-        catch (const std::exception& e)
+        catch (const std::runtime_error& e)
         {
             error(S, e.what());
         }
 
+        push_string(S, buffer.view());
         return 1;
     }
 

@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdlib>
+#include <new>
 
 namespace behl
 {
@@ -41,6 +42,10 @@ namespace behl
         check_memory_limit(S, static_cast<ptrdiff_t>(size));
 
         void* ptr = std::malloc(size);
+        if (ptr == nullptr && size != 0)
+        {
+            throw std::bad_alloc();
+        }
         if (ptr)
         {
             adjust_gc_bytes(S, static_cast<ptrdiff_t>(size));
@@ -61,6 +66,10 @@ namespace behl
         check_memory_limit(S, delta);
 
         void* new_ptr = std::realloc(ptr, new_size);
+        if (new_ptr == nullptr && new_size != 0)
+        {
+            throw std::bad_alloc();
+        }
         if (new_ptr || new_size == 0)
         {
             adjust_gc_bytes(S, delta);

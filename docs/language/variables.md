@@ -47,6 +47,15 @@ const arr = {1, 2, 3};
 arr[0] = 99;         // OK: can modify table contents
 ```
 
+### `local` is not a declaration keyword
+
+`local` is reserved by the lexer, but no parser rule consumes it. It is therefore unusable: it declares nothing, and it cannot be used as a variable name either. Use `let` or `const`.
+
+```cpp
+// local x = 10;   // Error: 'local' is not a declaration form
+// let local = 1;  // Error: 'local' is a reserved word
+```
+
 ## Scope
 
 Variables are lexically scoped. Scopes are created by braces `{}`:
@@ -94,21 +103,23 @@ inner();
 print(x);  // "outer"
 ```
 
-### Global Scope
+### Top-Level Scope
 
-Variables declared at the top level are global:
+Top-level `let` and `const` declarations are **not** globals. They are locals of the main chunk, held in registers, and never enter the globals table. Nested functions see them by capturing them as upvalues:
 
 ```cpp
-let globalVar = 42;
+let topLevel = 42;
 
-function useGlobal() {
-    print(globalVar);  // Can access global
+function useIt() {
+    print(topLevel);  // Captured as an upvalue, not read from globals
 }
 ```
 
+Because they are not in the globals table, they are invisible to code that was compiled separately, such as a chunk loaded at runtime.
+
 ### Implicit Globals
 
-Assigning to an undeclared variable creates a **global** variable:
+Outside module mode, assigning to an undeclared variable creates a **global** variable:
 
 ```cpp
 function test() {
@@ -118,6 +129,8 @@ function test() {
 test();
 print(implicitGlobal);  // 100 (accessible globally)
 ```
+
+In **module mode** (a file whose first statement is `module;`) this is not allowed at all. Assigning to, or even reading, an undeclared name is a hard compile-time error telling you to use `let`, `const`, or `import()`.
 
 **Warning**: Implicit globals can cause bugs. Always use `let` or `const` to declare variables explicitly:
 
@@ -190,7 +203,7 @@ let z = 3;
 
 // For loop allows multiple declarations
 for (let i = 0, j = 10; i < j; i++, j--) {
-    print(i + " " + tostring(j));
+    print(tostring(i) + " " + tostring(j));
 }
 ```
 
@@ -243,8 +256,8 @@ let x = 10;
 x += 5;   // x = x + 5  →  15
 x -= 3;   // x = x - 3  →  12
 x *= 2;   // x = x * 2  →  24
-x /= 4;   // x = x / 4  →  6
-x %= 5;   // x = x % 5  →  1
+x /= 4;   // x = x / 4  →  6.0 (division always yields a float)
+x %= 5;   // x = x % 5  →  1.0 (still a float)
 ```
 
 ### Increment/Decrement
@@ -253,10 +266,14 @@ x %= 5;   // x = x % 5  →  1
 let i = 0;
 i++;      // i = i + 1
 i--;      // i = i - 1
+```
 
-// Also works in expressions
+`i++` and `i--` are statements only. They produce no value, so they cannot be used inside an expression:
+
+```cpp
 let x = 5;
-let y = x++;  // y = 5, x = 6 (post-increment)
+// let y = x++;   // Syntax error
+// let y = ++x;   // Syntax error: the prefix form does not exist
 ```
 
 ## Best Practices

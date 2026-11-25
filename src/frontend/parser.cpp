@@ -2,12 +2,13 @@
 
 #include "ast/ast.hpp"
 #include "ast/ast_holder.hpp"
-#include "common/charconv_compat.hpp"
+#include "common/charconv.hpp"
 #include "frontend/lexer.hpp"
 #include "gc/gc.hpp"
+#include "vm/vm_error.hpp"
 
-#include <behl/exceptions.hpp>
-#include <charconv>
+#include <bit>
+#include <cstdint>
 #include <stdexcept>
 
 namespace behl
@@ -180,14 +181,14 @@ namespace behl
         }
         Token tok = current(P);
         SourceLocation loc(P.chunkname, tok.line, tok.column);
-        throw SyntaxError(err_msg, loc);
+        raise_syntax_error(P.holder.state(), loc, "{}", err_msg);
     }
 
     [[noreturn]] static void error(const ParserState& P, std::string_view msg)
     {
         Token tok = current(P);
         SourceLocation loc(P.chunkname, tok.line, tok.column);
-        throw SyntaxError(msg, loc);
+        raise_syntax_error(P.holder.state(), loc, "{}", msg);
     }
 
     // Helper to append a statement to a block (using linked list)
@@ -240,7 +241,8 @@ namespace behl
         out_first_param = nullptr;
         if (!check(P, TokenType::kRParen))
         {
-            AstNode** tail = reinterpret_cast<AstNode**>(&out_first_param);
+            AstNode* first_param = nullptr;
+            AstNode** tail = &first_param;
             do
             {
                 if (check(P, TokenType::kIdentifier))
@@ -260,6 +262,7 @@ namespace behl
                     error(P, "Expected parameter name or '...'");
                 }
             } while (match(P, { TokenType::kComma }));
+            out_first_param = static_cast<AstString*>(first_param);
         }
         consume(P, TokenType::kRParen, "Expected ')' after parameters");
     }
@@ -410,12 +413,21 @@ namespace behl
             if (tok.value.find('.') == tok.value.npos)
             {
                 int64_t ival = 0;
-                std::from_chars_result res;
+                behl::from_chars_result res;
 
                 if (is_hex)
                 {
                     // Parse hexadecimal (skip "0x" or "0X" prefix)
-                    res = behl::from_chars(tok.value.data() + 2, tok.value.data() + tok.value.size(), ival, 16);
+                    constexpr size_t kMaxHexDigits = 16;
+                    const char* digits = tok.value.data() + 2;
+                    const char* const digits_end = tok.value.data() + tok.value.size();
+                    if (static_cast<size_t>(digits_end - digits) > kMaxHexDigits)
+                    {
+                        digits = digits_end - kMaxHexDigits;
+                    }
+                    uint64_t bits = 0;
+                    res = behl::from_chars(digits, digits_end, bits, 16);
+                    ival = std::bit_cast<int64_t>(bits);
                 }
                 else
                 {
@@ -478,7 +490,7 @@ namespace behl
         }
         Token tok = current(P);
         SourceLocation loc(P.chunkname, tok.line, tok.column);
-        throw SyntaxError("Unexpected token in expression", loc);
+        raise_syntax_error(P.holder.state(), loc, "Unexpected token in expression");
     }
 
     static AstNode* parse_postfix(ParserState& P)
@@ -526,6 +538,7 @@ namespace behl
                     // Insert table_clone as first arg (for method call syntax)
                     table_clone->next_child = call->first_arg;
                     call->first_arg = table_clone;
+                    call->is_method_call = true;
                     left = call;
                 }
                 else
@@ -614,7 +627,8 @@ namespace behl
             return tc;
         }
         // Build linked list of TableField nodes
-        TableField** tail = &tc->first_field;
+        AstNode* first_field = nullptr;
+        AstNode** tail = &first_field;
         do
         {
             AstNode* key = nullptr;
@@ -649,8 +663,9 @@ namespace behl
             }
             auto* field = make_node<TableField>(P.holder, tok, key, val);
             *tail = field;
-            tail = reinterpret_cast<TableField**>(&field->next_child);
+            tail = &field->next_child;
         } while (match(P, { TokenType::kComma, TokenType::kSemi }));
+        tc->first_field = static_cast<TableField*>(first_field);
         consume(P, TokenType::kRBrace, "Expected '}' to close table");
         return tc;
     }
@@ -719,7 +734,8 @@ namespace behl
             match(P, { TokenType::kSemi });
         }
 
-        ElseIf** elseif_tail = &iff->first_elseif;
+        AstNode* first_elseif = nullptr;
+        AstNode** elseif_tail = &first_elseif;
         while (match(P, { TokenType::kElseIf }))
         {
             consume(P, TokenType::kLParen, "Expected '(' after 'elseif'");
@@ -743,8 +759,9 @@ namespace behl
             }
 
             *elseif_tail = elseif;
-            elseif_tail = reinterpret_cast<ElseIf**>(&elseif->next_child);
+            elseif_tail = &elseif->next_child;
         }
+        iff->first_elseif = static_cast<ElseIf*>(first_elseif);
 
         if (match(P, { TokenType::kElse }))
         {
@@ -851,14 +868,15 @@ namespace behl
                 first_init = parse_expr(P);
             }
 
-            AstString** name_tail = reinterpret_cast<AstString**>(&first_name->next_child);
+            AstNode** name_tail = &first_name->next_child;
             AstNode** init_tail = first_init ? &first_init->next_child : &first_init;
 
             // Parse additional variables if comma-separated
             while (match(P, { TokenType::kComma }))
             {
-                *name_tail = P.holder.make_string(consume(P, TokenType::kIdentifier, "Expected identifier").value);
-                name_tail = reinterpret_cast<AstString**>(&(*name_tail)->next_child);
+                auto* extra_name = P.holder.make_string(consume(P, TokenType::kIdentifier, "Expected identifier").value);
+                *name_tail = extra_name;
+                name_tail = &extra_name->next_child;
 
                 if (match(P, { TokenType::kAssign }))
                 {
@@ -1285,14 +1303,16 @@ namespace behl
             else if (match(P, { TokenType::kLBrace }))
             {
                 auto export_list = make_node<AstExportList>(P.holder, export_tok);
-                AstString** name_tail = &export_list->first_name;
+                AstNode* first_export_name = nullptr;
+                AstNode** name_tail = &first_export_name;
                 do
                 {
                     auto name_tok = consume(P, TokenType::kIdentifier, "Expected identifier in export list");
                     auto name = P.holder.make_string(name_tok.value);
                     *name_tail = name;
-                    name_tail = reinterpret_cast<AstString**>(&name->next_child);
+                    name_tail = &name->next_child;
                 } while (match(P, { TokenType::kComma }));
+                export_list->first_name = static_cast<AstString*>(first_export_name);
                 consume(P, TokenType::kRBrace, "Expected '}' after export list");
                 return export_list;
             }
@@ -1390,7 +1410,7 @@ namespace behl
             {
                 Token tok = previous(P);
                 SourceLocation loc(P.chunkname, tok.line, tok.column);
-                throw SyntaxError("Compound assignment operators do not support multiple variables", loc);
+                raise_syntax_error(P.holder.state(), loc, "Compound assignment operators do not support multiple variables");
             }
             const auto& var = first_left;
             if (var->type != AstNodeType::kIdent && var->type != AstNodeType::kIndex && var->type != AstNodeType::kMember)
@@ -1430,7 +1450,7 @@ namespace behl
             {
                 Token tok = previous(P);
                 SourceLocation loc(P.chunkname, tok.line, tok.column);
-                throw SyntaxError("Increment/decrement operators do not support multiple variables", loc);
+                raise_syntax_error(P.holder.state(), loc, "Increment/decrement operators do not support multiple variables");
             }
             const auto& var = first_left;
             if (var->type != AstNodeType::kIdent && var->type != AstNodeType::kIndex && var->type != AstNodeType::kMember)
@@ -1471,7 +1491,7 @@ namespace behl
             {
                 Token tok = current(P);
                 SourceLocation loc(P.chunkname, tok.line, tok.column);
-                throw SyntaxError("Expected '=' after variable list", loc);
+                raise_syntax_error(P.holder.state(), loc, "Expected '=' after variable list");
             }
             auto expr_st = make_node<AstExprStat>(P.holder, first_left->line, first_left->column, first_left);
             if (expr_st->expr->type != AstNodeType::kFuncCall)

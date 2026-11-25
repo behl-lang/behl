@@ -26,16 +26,18 @@ namespace behl
                 return;
             }
 
-            assert(obj->next == nullptr && "Object being appended must have null next pointer");
-            assert(obj->prev == nullptr && "Object being appended must have null prev pointer");
+            GCOHeader& header = obj->get_header();
 
-            obj->next = nullptr;
-            obj->prev = tail_;
+            assert(header.next == nullptr && "Object being appended must have null next pointer");
+            assert(header.prev == nullptr && "Object being appended must have null prev pointer");
+
+            header.next = nullptr;
+            header.prev = tail_;
 
             if (tail_)
             {
-                assert(tail_->next == nullptr && "Current tail must have null next pointer before append");
-                tail_->next = obj;
+                assert(tail_->get_header().next == nullptr && "Current tail must have null next pointer before append");
+                tail_->get_header().next = obj;
             }
             else
             {
@@ -53,15 +55,17 @@ namespace behl
                 return;
             }
 
-            assert(obj->next == nullptr && "Object being prepended must have null next pointer");
-            assert(obj->prev == nullptr && "Object being prepended must have null prev pointer");
+            GCOHeader& header = obj->get_header();
 
-            obj->next = head_;
-            obj->prev = nullptr;
+            assert(header.next == nullptr && "Object being prepended must have null next pointer");
+            assert(header.prev == nullptr && "Object being prepended must have null prev pointer");
+
+            header.next = head_;
+            header.prev = nullptr;
 
             if (head_)
             {
-                head_->prev = obj;
+                head_->get_header().prev = obj;
             }
             else
             {
@@ -79,28 +83,30 @@ namespace behl
                 return;
             }
 
-            bool was_in_list = (obj->prev != nullptr || obj->next != nullptr || obj == head_);
+            GCOHeader& header = obj->get_header();
 
-            if (obj->prev)
+            bool was_in_list = (header.prev != nullptr || header.next != nullptr || obj == head_);
+
+            if (header.prev)
             {
-                obj->prev->next = obj->next;
+                header.prev->get_header().next = header.next;
             }
             else if (obj == head_)
             {
-                head_ = obj->next;
+                head_ = header.next;
             }
 
-            if (obj->next)
+            if (header.next)
             {
-                obj->next->prev = obj->prev;
+                header.next->get_header().prev = header.prev;
             }
             else if (obj == tail_)
             {
-                tail_ = obj->prev;
+                tail_ = header.prev;
             }
 
-            obj->next = nullptr;
-            obj->prev = nullptr;
+            header.next = nullptr;
+            header.prev = nullptr;
 
             if (was_in_list)
             {
@@ -110,7 +116,7 @@ namespace behl
 
         bool contains(const GCObject* obj) const
         {
-            for (const GCObject* curr = head_; curr != nullptr; curr = curr->next)
+            for (const GCObject* curr = head_; curr != nullptr; curr = curr->get_header().next)
             {
                 if (curr == obj)
                 {
@@ -132,12 +138,12 @@ namespace behl
                 return false;
             }
 
-            if (head_->prev != nullptr)
+            if (head_->get_header().prev != nullptr)
             {
                 return false;
             }
 
-            if (tail_->next != nullptr)
+            if (tail_->get_header().next != nullptr)
             {
                 return false;
             }
@@ -147,7 +153,7 @@ namespace behl
             const GCObject* prev_obj = nullptr;
             while (curr)
             {
-                if (curr->prev != prev_obj)
+                if (curr->get_header().prev != prev_obj)
                 {
                     return false;
                 }
@@ -159,7 +165,7 @@ namespace behl
                 }
 
                 prev_obj = curr;
-                curr = curr->next;
+                curr = curr->get_header().next;
             }
 
             if (prev_obj != tail_)

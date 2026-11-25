@@ -14,6 +14,7 @@ namespace behl
         load_lib_math(S);
         load_lib_os(S);
         load_lib_string(S);
+        load_lib_buffer(S);
     }
 
 } // namespace behl

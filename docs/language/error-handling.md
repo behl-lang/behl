@@ -33,12 +33,16 @@ divide(10, 0);  // Error: Division by zero!
 
 ### Error Messages
 
-Error messages can be any value (typically strings):
+`error()` raises its argument exactly as given, for every type including strings: no prefix, no location, no stack trace is added:
 
 ```cpp
-error("Something went wrong");
+error("Something went wrong");         // Raises "Something went wrong", unchanged
 error("Error code: " + tostring(123));
+error(42);                             // Raises the integer 42
+error({code = 404, message = "Not found"});  // Raises this table
 ```
+
+Calling `error()` with no argument raises `nil`.
 
 ### Immediate Termination
 
@@ -74,8 +78,11 @@ if (success) {
 } else {
     print("Error: " + result);
 }
-// Output: "Error: Oops!"
+// Output:
+// Error: Oops!
 ```
+
+For a string, the caught value is the bare message: `error()` raises it unchanged, with no prefix, no location and no stack trace. Any other value is caught exactly as it was raised.
 
 ### pcall Return Values
 
@@ -83,7 +90,24 @@ if (success) {
 1. **Success flag** (boolean): `true` if no error, `false` if error
 2. **Result or error**:
    - If success: the function's return value(s)
-   - If error: the error message
+   - If error: the error value, exactly as raised
+
+### Errors Raised by the Runtime
+
+Errors raised by the VM are strings that start with the source location and a label:
+
+```cpp
+function addOne(x) {
+    return x + 1;
+}
+
+let ok, err = pcall(addOne, nil);
+print(err);  // "<chunk>(line,col): TypeError: attempt to perform arithmetic on a 'nil' value and a 'integer' value"
+```
+
+The labels in use are `TypeError`, `RuntimeError`, `ReferenceError`, `SyntaxError` and `SemanticError`. They are only text in the message; there are no error types to match on. "attempt to call" errors also have a stack trace appended.
+
+Errors raised by C++ functions through the embedding API arrive the same way: as a string for `behl::error` and failed argument checks (for example `TypeError: bad argument #1 (expected integer, got string)`), or as any value for `behl::error_value`. If a C++ function throws an ordinary C++ exception, `pcall()` returns `false` and the exception's `what()` text as a string.
 
 ### Examples
 
@@ -202,16 +226,18 @@ let result = tryCatch(
 Use `defer` to ensure cleanup happens even on error:
 
 ```cpp
+const fs = import("fs");
+
 function processFile(filename) {
-    let file = os.open(filename, "r");
-    defer os.close(file);  // Always executed, even on error
+    let file = fs.open(filename, "r");
+    defer file:close();  // Always executed, even on error
     
     // Risky operation
     if (someCondition) {
         error("Processing failed!");
     }
     
-    return file.read("*a");
+    return file:read(1024);
 }  // File closed here, even if error occurred
 
 let ok, result = pcall(processFile, "data.txt");
@@ -285,6 +311,8 @@ if (err != nil) {
 6. **Don't swallow errors silently** - Log or handle errors appropriately
 
 ```cpp
+const fs = import("fs");
+
 // Good: Descriptive error
 function withdraw(account, amount) {
     if (amount < 0) {
@@ -300,9 +328,9 @@ function withdraw(account, amount) {
 // Good: Using pcall for external operations
 function readConfig(filename) {
     let ok, content = pcall(function() {
-        let file = os.open(filename, "r");
-        defer os.close(file);
-        return file.read("*a");
+        let file = fs.open(filename, "r");
+        defer file:close();
+        return file:read(1024);
     });
     
     if (!ok) {
@@ -316,30 +344,27 @@ function readConfig(filename) {
 
 ## Limitations
 
-1. **No exception types** - Errors are just values (typically strings)
-2. **No stack traces by default** - Error messages don't include call stack
-3. **Single error handler** - No multiple catch blocks like try-catch-finally
-4. **Performance overhead** - `pcall` has some overhead; don't use in hot loops
+1. **No exception types** - There is no class hierarchy to catch by; inspect the error value instead
+2. **Single error handler** - No multiple catch blocks like try-catch-finally
+3. **Performance overhead** - `pcall` has some overhead; don't use in hot loops
+
+## Structured Error Values
+
+Raise a table to carry structured information. `pcall()` returns that same table:
 
 ```cpp
-// Workaround: Custom error types using tables
-function makeError(type, message) {
-    return {
-        ["type"] = type,
-        ["message"] = message
-    };
-}
-
 function doSomething() {
-    error(makeError("ValidationError", "Invalid input"));
+    error({kind = "validation", message = "Invalid input"});
 }
 
 let ok, err = pcall(doSomething);
 if (!ok) {
-    if (typeof(err) == "table" && err["type"] == "ValidationError") {
-        print("Validation failed: " + err["message"]);
+    if (typeof(err) == "table" && err.kind == "validation") {
+        print("Validation failed: " + err.message);
     } else {
         print("Unknown error: " + tostring(err));
     }
 }
 ```
+
+Errors raised by the runtime and by `error("...")` are always strings, so check `typeof(err)` before reading fields when both kinds can occur.

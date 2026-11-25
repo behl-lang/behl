@@ -1,8 +1,11 @@
+#include "state.hpp"
+#include "test_helpers.hpp"
+
 #include <behl/behl.hpp>
 #include <gtest/gtest.h>
 #include <string>
 
-class StringKeyTest : public ::testing::Test
+class StringKeyTest : public ::testing::TestWithParam<bool>
 {
 protected:
     behl::State* S;
@@ -10,6 +13,7 @@ protected:
     void SetUp() override
     {
         S = behl::new_state();
+        S->jit_enabled = GetParam();
         behl::load_stdlib(S);
         ASSERT_NE(S, nullptr);
         behl::set_top(S, 0);
@@ -22,22 +26,22 @@ protected:
 
     void run_expect_integer(const std::string& code, int64_t expected)
     {
-        ASSERT_NO_THROW(behl::load_string(S, code));
-        ASSERT_NO_THROW(behl::call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(behl::to_integer(S, -1), expected) << code;
         behl::set_top(S, 0);
     }
 
     void run_expect_string(const std::string& code, const std::string& expected)
     {
-        ASSERT_NO_THROW(behl::load_string(S, code));
-        ASSERT_NO_THROW(behl::call(S, 0, 1));
+        ASSERT_TRUE(behl_test::load_ok(S, code));
+        ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
         EXPECT_EQ(behl::to_string(S, -1), expected) << code;
         behl::set_top(S, 0);
     }
 };
 
-TEST_F(StringKeyTest, ConcatenatedKeyMatchesLiteral)
+TEST_P(StringKeyTest, ConcatenatedKeyMatchesLiteral)
 {
     run_expect_integer(R"(
         let t = {}
@@ -50,7 +54,7 @@ TEST_F(StringKeyTest, ConcatenatedKeyMatchesLiteral)
         42);
 }
 
-TEST_F(StringKeyTest, LiteralKeyReadByConcatenated)
+TEST_P(StringKeyTest, LiteralKeyReadByConcatenated)
 {
     run_expect_integer(R"(
         let t = {}
@@ -63,7 +67,7 @@ TEST_F(StringKeyTest, LiteralKeyReadByConcatenated)
         7);
 }
 
-TEST_F(StringKeyTest, TostringBuiltKey)
+TEST_P(StringKeyTest, TostringBuiltKey)
 {
     run_expect_integer(R"(
         let t = {}
@@ -76,7 +80,7 @@ TEST_F(StringKeyTest, TostringBuiltKey)
         99);
 }
 
-TEST_F(StringKeyTest, OverwriteThroughDifferentObjectKeepsOneEntry)
+TEST_P(StringKeyTest, OverwriteThroughDifferentObjectKeepsOneEntry)
 {
     run_expect_integer(R"(
         let t = {}
@@ -93,7 +97,7 @@ TEST_F(StringKeyTest, OverwriteThroughDifferentObjectKeepsOneEntry)
         1);
 }
 
-TEST_F(StringKeyTest, SsoBoundaryKeysRoundTrip)
+TEST_P(StringKeyTest, SsoBoundaryKeysRoundTrip)
 {
     for (int len = 28; len <= 34; ++len)
     {
@@ -113,7 +117,7 @@ TEST_F(StringKeyTest, SsoBoundaryKeysRoundTrip)
     }
 }
 
-TEST_F(StringKeyTest, LongKeysSharedPrefixAreDistinct)
+TEST_P(StringKeyTest, LongKeysSharedPrefixAreDistinct)
 {
     run_expect_integer(R"(
         let t = {}
@@ -130,7 +134,7 @@ TEST_F(StringKeyTest, LongKeysSharedPrefixAreDistinct)
         0);
 }
 
-TEST_F(StringKeyTest, LongKeysSharedSuffixAreDistinct)
+TEST_P(StringKeyTest, LongKeysSharedSuffixAreDistinct)
 {
     run_expect_integer(R"(
         let t = {}
@@ -145,7 +149,7 @@ TEST_F(StringKeyTest, LongKeysSharedSuffixAreDistinct)
         0);
 }
 
-TEST_F(StringKeyTest, EmptyStringKey)
+TEST_P(StringKeyTest, EmptyStringKey)
 {
     run_expect_integer(R"(
         let t = {}
@@ -159,7 +163,7 @@ TEST_F(StringKeyTest, EmptyStringKey)
         5);
 }
 
-TEST_F(StringKeyTest, ManyGeneratedKeysRoundTrip)
+TEST_P(StringKeyTest, ManyGeneratedKeysRoundTrip)
 {
     run_expect_integer(R"(
         let t = {}
@@ -171,7 +175,7 @@ TEST_F(StringKeyTest, ManyGeneratedKeysRoundTrip)
         374250);
 }
 
-TEST_F(StringKeyTest, KeysSurviveCollection)
+TEST_P(StringKeyTest, KeysSurviveCollection)
 {
     run_expect_integer(R"(
         const gc = import("gc")
@@ -185,7 +189,7 @@ TEST_F(StringKeyTest, KeysSurviveCollection)
         19900);
 }
 
-TEST_F(StringKeyTest, KeyLookupAfterManyTemporaries)
+TEST_P(StringKeyTest, KeyLookupAfterManyTemporaries)
 {
     run_expect_integer(R"(
         let t = {}
@@ -198,7 +202,7 @@ TEST_F(StringKeyTest, KeyLookupAfterManyTemporaries)
         11);
 }
 
-TEST_F(StringKeyTest, ApiStringViewLookupFindsScriptKey)
+TEST_P(StringKeyTest, ApiStringViewLookupFindsScriptKey)
 {
     constexpr std::string_view code = R"(
         let t = {}
@@ -207,8 +211,8 @@ TEST_F(StringKeyTest, ApiStringViewLookupFindsScriptKey)
         t["beta_" + tostring(2)] = 2
         return t
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     ASSERT_TRUE(behl::is_table(S, -1));
 
     behl::table_rawgetfield(S, -1, "alpha");
@@ -219,7 +223,7 @@ TEST_F(StringKeyTest, ApiStringViewLookupFindsScriptKey)
     EXPECT_EQ(behl::to_integer(S, -1), 2);
 }
 
-TEST_F(StringKeyTest, ScriptFindsKeySetThroughApi)
+TEST_P(StringKeyTest, ScriptFindsKeySetThroughApi)
 {
     behl::table_new(S);
     behl::push_integer(S, 77);
@@ -233,21 +237,21 @@ TEST_F(StringKeyTest, ScriptFindsKeySetThroughApi)
         77);
 }
 
-TEST_F(StringKeyTest, GlobalByNameMatchesScriptDefinition)
+TEST_P(StringKeyTest, GlobalByNameMatchesScriptDefinition)
 {
     constexpr std::string_view code = R"(
         globalvalue = 123
         return 0
     )";
-    ASSERT_NO_THROW(behl::load_string(S, code));
-    ASSERT_NO_THROW(behl::call(S, 0, 1));
+    ASSERT_TRUE(behl_test::load_ok(S, code));
+    ASSERT_TRUE(behl_test::call_ok(S, 0, 1));
     behl::set_top(S, 0);
 
     behl::get_global(S, "globalvalue");
     EXPECT_EQ(behl::to_integer(S, -1), 123);
 }
 
-TEST_F(StringKeyTest, KeysDifferingOnlyByCaseAreDistinct)
+TEST_P(StringKeyTest, KeysDifferingOnlyByCaseAreDistinct)
 {
     run_expect_integer(R"(
         let t = {}
@@ -263,7 +267,7 @@ TEST_F(StringKeyTest, KeysDifferingOnlyByCaseAreDistinct)
         0);
 }
 
-TEST_F(StringKeyTest, NumericAndStringKeysDoNotCollide)
+TEST_P(StringKeyTest, NumericAndStringKeysDoNotCollide)
 {
     run_expect_integer(R"(
         let t = {}
@@ -277,7 +281,7 @@ TEST_F(StringKeyTest, NumericAndStringKeysDoNotCollide)
         0);
 }
 
-TEST_F(StringKeyTest, StringValueRoundTripsThroughTable)
+TEST_P(StringKeyTest, StringValueRoundTripsThroughTable)
 {
     run_expect_string(R"(
         let t = {}
@@ -288,3 +292,6 @@ TEST_F(StringKeyTest, StringValueRoundTripsThroughTable)
     )",
         "value");
 }
+
+INSTANTIATE_TEST_SUITE_P(Mode, StringKeyTest, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& param_info) { return param_info.param ? "jit" : "nojit"; });

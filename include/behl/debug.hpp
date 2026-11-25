@@ -2,6 +2,7 @@
 
 #include <behl/export.hpp>
 #include <behl/types.hpp>
+#include <string_view>
 
 namespace behl
 {
@@ -43,8 +44,8 @@ namespace behl
     BEHL_API void debug_step_out(State* S);
 
     // Breakpoint management
-    BEHL_API void debug_set_breakpoint(State* S, const char* file, int line);
-    BEHL_API void debug_remove_breakpoint(State* S, const char* file, int line);
+    BEHL_API void debug_set_breakpoint(State* S, std::string_view file, int line);
+    BEHL_API void debug_remove_breakpoint(State* S, std::string_view file, int line);
     BEHL_API void debug_clear_breakpoints(State* S);
 
     // Pause execution at the next opportunity (issues pause command)
@@ -55,6 +56,6 @@ namespace behl
 
     // Get current source location (file, line, column)
     // Returns false if location information is not available
-    BEHL_API bool debug_get_location(State* S, const char** file, int* line, int* column);
+    BEHL_API bool debug_get_location(State* S, std::string_view& file, int& line, int& column);
 
 } // namespace behl
