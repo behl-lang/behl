@@ -482,6 +482,10 @@ namespace behl
 
         void clear()
         {
+            if (size_ == 0 && tombstones_ == 0)
+            {
+                return;
+            }
             if (ctrl_)
             {
                 // Destroy all constructed elements
@@ -501,7 +505,7 @@ namespace behl
 
         BEHL_FORCEINLINE iterator begin()
         {
-            return iterator(ctrl_, ctrl_ + capacity_, slots_);
+            return size_ == 0 ? end() : iterator(ctrl_, ctrl_ + capacity_, slots_);
         }
 
         BEHL_FORCEINLINE iterator end()
@@ -511,7 +515,7 @@ namespace behl
 
         BEHL_FORCEINLINE const_iterator begin() const
         {
-            return const_iterator(ctrl_, ctrl_ + capacity_, slots_);
+            return size_ == 0 ? end() : const_iterator(ctrl_, ctrl_ + capacity_, slots_);
         }
 
         BEHL_FORCEINLINE const_iterator end() const
